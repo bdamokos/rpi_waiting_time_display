@@ -88,12 +88,44 @@ def update_display(epd, weather_data, bus_data, error_message=None, stop_name=No
             font=font_large
         )
         
-        # Draw arrow and times
+        # Draw arrow
         draw.text((65, y_position + (BOX_HEIGHT - 24) // 2), "→", 
                   font=font_medium, fill=epd.BLACK)
-        times_text = ", ".join(bus["times"])
-        draw.text((95, y_position + (BOX_HEIGHT - 24) // 2), times_text, 
-                  font=font_medium, fill=epd.BLACK)
+
+        # Process times and messages
+        times = bus["times"]
+        messages = bus.get("messages", [None] * len(times))
+        
+        x_pos = 95
+        y_pos = y_position + (BOX_HEIGHT - 24) // 2
+        
+        # Handle different message cases
+        if messages and messages[0] == "End of service":
+            # Display end of service message
+            draw.text((x_pos, y_pos), "End of service", 
+                     font=font_medium, fill=epd.BLACK)
+        else:
+            # Display times with potential messages
+            for time, message in zip(times, messages):
+                time_bbox = draw.textbbox((0, 0), time, font=font_medium)
+                time_width = time_bbox[2] - time_bbox[0]
+                
+                # Draw time
+                draw.text((x_pos, y_pos), time, font=font_medium, fill=epd.BLACK)
+                
+                # Draw message if present
+                if message:
+                    msg_x = x_pos + time_width + 5
+                    if message == "Last":
+                        draw.text((msg_x, y_pos + 5), "Last departure", 
+                                font=font_small, fill=epd.BLACK)
+                        break  # Don't show second time for last departure
+                    elif message == "theor.":
+                        draw.text((msg_x, y_pos + 5), "(theor.)", 
+                                font=font_small, fill=epd.BLACK)
+                
+                # Move x position for next time
+                x_pos += time_width + 30  # Add some spacing between times
 
     # Draw current time aligned with bottom of second box
     current_time = time.strftime("%H:%M")

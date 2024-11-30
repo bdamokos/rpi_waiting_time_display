@@ -1,3 +1,13 @@
+# Waiting Times Pi Display
+
+A Raspberry Pi project that displays bus waiting times using an e-Paper display (Waveshare 2.13" G V2).
+![Display Example](docs/images/display_example.jpg)
+
+The display shows:
+- Current time
+- Weather conditions and temperature
+- Next bus arrival times for configured lines
+- Color-coded bus line numbers matching STIB/MIVB official colors
 
 
 # Requirements

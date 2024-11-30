@@ -42,15 +42,14 @@ def draw_dithered_box(draw, epd, x, y, width, height, text, primary_color, secon
     primary = color_map[primary_color]
     secondary = color_map[secondary_color]
     
-    # Create dithering pattern using a smaller repeating pattern
-    pattern_size = 4  # Use 4x4 pattern for more even distribution
+    # Create checkerboard pattern with offset rows to avoid diagonal lines
     for i in range(width):
         for j in range(height):
-            # Use pattern coordinates instead of simple checkerboard
-            pattern_x = i % pattern_size
-            pattern_y = j % pattern_size
-            pattern_value = (pattern_x * pattern_size + pattern_y) / (pattern_size * pattern_size)
-            use_primary = pattern_value < ratio
+            # Offset every other row by one pixel
+            offset = (j % 2) * 1
+            # Use the offset in the checkerboard calculation
+            use_primary = ((i + offset + j) % 2 == 0) if (i + j) / (width + height) < ratio else \
+                         ((i + offset + j) % 2 != 0)
             
             pixel_color = primary if use_primary else secondary
             draw.point((x + i, y + j), fill=pixel_color)

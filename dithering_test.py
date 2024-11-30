@@ -10,7 +10,7 @@ from bus_service import BusService
 logging.basicConfig(level=logging.DEBUG)
 
 def draw_checkerboard_dither(draw, epd, x, y, width, height, text, primary_color, secondary_color, ratio, font):
-    """Classic checkerboard pattern"""
+    """Classic checkerboard pattern with offset rows to avoid diagonal lines"""
     color_map = {
         'black': epd.BLACK,
         'red': epd.RED,
@@ -22,8 +22,11 @@ def draw_checkerboard_dither(draw, epd, x, y, width, height, text, primary_color
     
     for i in range(width):
         for j in range(height):
-            use_primary = ((i + j) % 2 == 0) if (i + j) / (width + height) < ratio else \
-                         ((i + j) % 2 != 0)
+            # Offset every other row by one pixel
+            offset = (j % 2) * 1
+            # Use the offset in the checkerboard calculation
+            use_primary = ((i + offset + j) % 2 == 0) if (i + j) / (width + height) < ratio else \
+                         ((i + offset + j) % 2 != 0)
             pixel_color = primary if use_primary else secondary
             draw.point((x + i, y + j), fill=pixel_color)
     

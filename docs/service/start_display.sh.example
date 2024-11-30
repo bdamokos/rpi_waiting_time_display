@@ -1,0 +1,64 @@
+#!/bin/bash
+
+# Example startup script for the display service
+# Copy this file to ~/start_display.sh and make it executable with:
+# cp start_display.sh.example ~/start_display.sh
+# chmod +x ~/start_display.sh
+
+
+# Sleep for 10 seconds to allow for network to be ready
+sleep 10
+
+# Store PIDs for cleanup
+BACKEND_PID=""
+DISPLAY_PID=""
+
+# Function to clean up on exit
+cleanup() {
+    echo "Cleaning up..."
+    
+    # Kill backend if running
+    if [ ! -z "$BACKEND_PID" ]; then
+        echo "Stopping backend server..."
+        kill $BACKEND_PID
+    fi
+    
+    # If display program is running, send SIGTERM to allow for clean shutdown
+    if [ ! -z "$DISPLAY_PID" ]; then
+        echo "Stopping display program..."
+        kill $DISPLAY_PID
+        # Wait for display program to cleanup
+        wait $DISPLAY_PID
+    fi
+    
+    exit 0
+}
+
+# Trap SIGTERM and SIGINT
+trap cleanup SIGTERM SIGINT
+
+# Activate virtual environment
+source ~/display_env/bin/activate
+
+# Download from git any updates
+cd ~/brussels_transit
+git pull origin main
+
+# Start the backend server in the background
+cd ~/brussels_transit/app
+python main.py &
+BACKEND_PID=$!
+
+# Wait for backend to start
+sleep 5
+
+# Start the display program
+cd ~/display_programme
+python basic.py &
+DISPLAY_PID=$!
+
+# Wait for any process to exit
+wait -n
+
+# Execute cleanup when any process exits
+cleanup

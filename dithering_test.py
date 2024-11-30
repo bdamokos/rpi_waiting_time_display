@@ -129,8 +129,8 @@ def main():
         
         # Load font
         logging.info("Loading fonts...")
-        font = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 24)  # Smaller font
-        small_font = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 10)  # Smaller label font
+        font = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 24)
+        small_font = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 12)  # Slightly larger for readability
         
         # Get bus colors from service
         logging.info("Getting bus colors...")
@@ -142,28 +142,27 @@ def main():
         logging.info(f"Line 56 colors: {colors_56}")
         logging.info(f"Line 59 colors: {colors_59}")
         
+        # Show fewer patterns with better spacing
         patterns = [
-            (draw_checkerboard_dither, "Checker"),
-            (draw_horizontal_lines_dither, "H-Lines"),
-            (draw_vertical_lines_dither, "V-Lines"),
-            (draw_diagonal_lines_dither, "Diagonal"),
-            (draw_dots_dither, "Dots")
+            (draw_checkerboard_dither, "Current"),
+            (draw_vertical_lines_dither, "Vertical"),
+            (draw_diagonal_lines_dither, "Diagonal")
         ]
         
         # Adjust dimensions for better fit
-        box_width = 35  # Smaller boxes
+        box_width = 35
         box_height = 30
-        x_start = 10  # Start further left
-        x_spacing = 40  # Closer together
-        y_spacing = 35  # Closer together
+        x_start = 15
+        x_spacing = 45  # More space between boxes
+        y_spacing = 40  # More space between patterns
         
         logging.info("Drawing patterns...")
         for i, (pattern_func, pattern_name) in enumerate(patterns):
-            y_pos = 5 + (i * y_spacing)
+            y_pos = 10 + (i * y_spacing)  # Start a bit lower
             logging.info(f"Drawing {pattern_name} pattern...")
             
             # Draw pattern name (vertically aligned with first box)
-            draw.text((2, y_pos + 5), pattern_name, font=small_font, fill=epd.BLACK)
+            draw.text((2, y_pos + 8), pattern_name, font=small_font, fill=epd.BLACK)
             
             # Draw line 56 sample
             pattern_func(draw, epd, x_start + x_spacing, y_pos, box_width, box_height, "56", 
@@ -174,7 +173,7 @@ def main():
                        colors_59[0], colors_59[1], colors_59[2], font)
         
         # Add title at the bottom
-        title = "Dithering Patterns"
+        title = "Alternative Patterns"
         title_bbox = draw.textbbox((0, 0), title, font=small_font)
         title_width = title_bbox[2] - title_bbox[0]
         draw.text((Himage.width - title_width - 5, Himage.height - 15), 

@@ -176,19 +176,44 @@ class BusService:
                     bus_times.append({
                         "line": line,
                         "times": ["--", "--"],
-                        "colors": ('black', 'black', 1.0)
+                        "colors": ('black', 'black', 1.0),
+                        "message": None
                     })
                     continue
 
                 # Get the first destination's times
                 first_destination = next(iter(line_data.values()))
                 logger.debug(f"First destination data: {first_destination}")
-                waiting_times = [f"{bus['minutes']}'" for bus in first_destination[:2]]
-                logger.debug(f"Extracted waiting times: {waiting_times}")
                 
-                # Pad with "--" if we have less than 2 times
-                while len(waiting_times) < 2:
-                    waiting_times.append("--")
+                # Process times and messages
+                waiting_times = []
+                messages = []
+                for bus in first_destination[:2]:
+                    time = f"{bus['minutes']}'"
+                    message = None
+                    
+                    # Check for special messages
+                    if 'message' in bus:
+                        msg = bus['message'].get('en', '')  # Use English message
+                        if "Last departure" in msg:
+                            message = "Last"
+                        elif "Theoretical time" in msg:
+                            message = "theor."
+                        elif "End of service" in msg:
+                            time = "--"
+                            message = "End of service"
+                    
+                    waiting_times.append(time)
+                    messages.append(message)
+
+                # Special handling for last departure
+                if messages and messages[0] == "Last":
+                    waiting_times = [waiting_times[0]]  # Only keep the first time
+                    messages = [messages[0]]  # Only keep the first message
+                # Normal case - pad with "--" if needed
+                elif len(waiting_times) < 2:
+                    waiting_times.extend(["--"] * (2 - len(waiting_times)))
+                    messages.extend([None] * (2 - len(messages)))
 
                 # Get colors for dithering
                 primary_color, secondary_color, ratio = self.get_line_color(line)
@@ -196,6 +221,7 @@ class BusService:
                 bus_times.append({
                     "line": line,
                     "times": waiting_times,
+                    "messages": messages,
                     "colors": (primary_color, secondary_color, ratio)
                 })
 

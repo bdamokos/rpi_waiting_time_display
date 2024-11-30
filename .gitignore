@@ -1,0 +1,11 @@
+._*.py
+.env
+__pycache__
+__pycache__/*
+.env
+.lgd-nfy0
+._.env
+._.env.example
+._.gitignore
+._readme.md
+._requirements.txt

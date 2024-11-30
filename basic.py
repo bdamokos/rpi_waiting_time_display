@@ -10,6 +10,7 @@ if os.path.exists(libdir):
 import logging
 from waveshare_epd import epd2in13g_V2
 import time
+from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
 from weather import WeatherService
 from bus_service import BusService
@@ -106,9 +107,26 @@ def update_display(epd, weather_data, bus_data, error_message=None, stop_name=No
                      font=font_medium, fill=epd.BLACK)
         else:
             # Display times with potential messages
+            max_width = Himage.width - x_pos - MARGIN  # Available width
+            times_shown = 0
+            
             for time, message in zip(times, messages):
+                # Calculate width needed for this time + message
                 time_bbox = draw.textbbox((0, 0), time, font=font_medium)
                 time_width = time_bbox[2] - time_bbox[0]
+                
+                message_width = 0
+                if message:
+                    if message == "Last":
+                        msg_text = "Last departure"
+                    elif message == "theor.":
+                        msg_text = "(theor.)"
+                    msg_bbox = draw.textbbox((0, 0), msg_text, font=font_small)
+                    message_width = msg_bbox[2] - msg_bbox[0] + 5  # 5px spacing
+                
+                # Check if we have space for this time + message + spacing
+                if x_pos + time_width + message_width + 30 > Himage.width - MARGIN:
+                    break
                 
                 # Draw time
                 draw.text((x_pos, y_pos), time, font=font_medium, fill=epd.BLACK)
@@ -119,16 +137,17 @@ def update_display(epd, weather_data, bus_data, error_message=None, stop_name=No
                     if message == "Last":
                         draw.text((msg_x, y_pos + 5), "Last departure", 
                                 font=font_small, fill=epd.BLACK)
-                        break  # Don't show second time for last departure
+                        break  # Don't show more times after "Last departure"
                     elif message == "theor.":
                         draw.text((msg_x, y_pos + 5), "(theor.)", 
                                 font=font_small, fill=epd.BLACK)
                 
                 # Move x position for next time
-                x_pos += time_width + 30  # Add some spacing between times
+                x_pos += time_width + message_width + 30  # Add spacing between times
+                times_shown += 1
 
     # Draw current time aligned with bottom of second box
-    current_time = time.strftime("%H:%M")
+    current_time = datetime.now().strftime("%H:%M")
     time_bbox = draw.textbbox((0, 0), current_time, font=font_small)
     time_width = time_bbox[2] - time_bbox[0]
     time_height = time_bbox[3] - time_bbox[1]

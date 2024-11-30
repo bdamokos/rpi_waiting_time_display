@@ -181,39 +181,59 @@ class BusService:
                     })
                     continue
 
-                # Get the first destination's times
-                first_destination = next(iter(line_data.values()))
-                logger.debug(f"First destination data: {first_destination}")
-                
-                # Process times and messages
+                # Process times and messages from all destinations
+                all_times = []
+                for destination, times in line_data.items():
+                    logger.debug(f"Processing destination: {destination}")
+                    for bus in times:
+                        time = f"{bus['minutes']}'"
+                        message = None
+                        
+                        # Check for special messages
+                        if 'message' in bus:
+                            msg = bus['message'].get('en', '')  # Use English message
+                            if "Last departure" in msg:
+                                message = "Last"
+                            elif "Theoretical time" in msg:
+                                message = "theor."
+                            elif "End of service" in msg:
+                                time = "--"
+                                message = "End of service"
+                        
+                        all_times.append({
+                            'time': time,
+                            'message': message,
+                            'minutes': bus['minutes'],
+                            'destination': destination
+                        })
+
+                # Sort times by minutes
+                all_times.sort(key=lambda x: x['minutes'])
+                logger.debug(f"All sorted times for line {line}: {all_times}")
+
+                # Take all available times
                 waiting_times = []
                 messages = []
-                for bus in first_destination[:2]:
-                    time = f"{bus['minutes']}'"
-                    message = None
-                    
-                    # Check for special messages
-                    if 'message' in bus:
-                        msg = bus['message'].get('en', '')  # Use English message
-                        if "Last departure" in msg:
-                            message = "Last"
-                        elif "Theoretical time" in msg:
-                            message = "theor."
-                        elif "End of service" in msg:
-                            time = "--"
-                            message = "End of service"
-                    
-                    waiting_times.append(time)
-                    messages.append(message)
+                if all_times:
+                    # Special handling for end of service
+                    if any(t['message'] == "End of service" for t in all_times):
+                        waiting_times = ["--"]
+                        messages = ["End of service"]
+                    # Special handling for last departure
+                    elif any(t['message'] == "Last" for t in all_times):
+                        last_bus = next(t for t in all_times if t['message'] == "Last")
+                        waiting_times = [last_bus['time']]
+                        messages = [last_bus['message']]
+                    else:
+                        # Take all times
+                        for time_data in all_times:
+                            waiting_times.append(time_data['time'])
+                            messages.append(time_data['message'])
 
-                # Special handling for last departure
-                if messages and messages[0] == "Last":
-                    waiting_times = [waiting_times[0]]  # Only keep the first time
-                    messages = [messages[0]]  # Only keep the first message
-                # Normal case - pad with "--" if needed
-                elif len(waiting_times) < 2:
-                    waiting_times.extend(["--"] * (2 - len(waiting_times)))
-                    messages.extend([None] * (2 - len(messages)))
+                # Ensure at least one slot
+                if not waiting_times:
+                    waiting_times = ["--"]
+                    messages = [None]
 
                 # Get colors for dithering
                 primary_color, secondary_color, ratio = self.get_line_color(line)

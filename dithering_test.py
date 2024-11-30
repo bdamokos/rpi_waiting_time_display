@@ -6,115 +6,15 @@ import logging
 from waveshare_epd import epd2in13g_V2
 from PIL import Image, ImageDraw, ImageFont
 from bus_service import BusService
+from dithering import (
+    draw_dithered_box,  # Our current production pattern
+    draw_horizontal_lines_dither,
+    draw_vertical_lines_dither,
+    draw_diagonal_lines_dither,
+    draw_dots_dither
+)
 
 logging.basicConfig(level=logging.DEBUG)
-
-def draw_checkerboard_dither(draw, epd, x, y, width, height, text, primary_color, secondary_color, ratio, font):
-    """Classic checkerboard pattern with offset rows to avoid diagonal lines"""
-    color_map = {
-        'black': epd.BLACK,
-        'red': epd.RED,
-        'yellow': epd.YELLOW,
-        'white': epd.WHITE
-    }
-    primary = color_map[primary_color]
-    secondary = color_map[secondary_color]
-    
-    for i in range(width):
-        for j in range(height):
-            # Offset every other row by one pixel
-            offset = (j % 2) * 1
-            # Use the offset in the checkerboard calculation
-            use_primary = ((i + offset + j) % 2 == 0) if (i + j) / (width + height) < ratio else \
-                         ((i + offset + j) % 2 != 0)
-            pixel_color = primary if use_primary else secondary
-            draw.point((x + i, y + j), fill=pixel_color)
-    
-    draw.rectangle([x, y, x + width - 1, y + height - 1], outline=primary)
-    text_bbox = draw.textbbox((0, 0), text, font=font)
-    text_x = x + (width - (text_bbox[2] - text_bbox[0])) // 2
-    text_y = y + (height - (text_bbox[3] - text_bbox[1])) // 2
-    draw.text((text_x, text_y), text, font=font, fill=epd.WHITE)
-
-def draw_horizontal_lines_dither(draw, epd, x, y, width, height, text, primary_color, secondary_color, ratio, font):
-    """Horizontal line pattern"""
-    color_map = {'black': epd.BLACK, 'red': epd.RED, 'yellow': epd.YELLOW, 'white': epd.WHITE}
-    primary, secondary = color_map[primary_color], color_map[secondary_color]
-    
-    line_height = 2
-    for j in range(0, height, line_height):
-        color = primary if (j / height) < ratio else secondary
-        for i in range(width):
-            for k in range(line_height):
-                if j + k < height:
-                    draw.point((x + i, y + j + k), fill=color)
-    
-    draw.rectangle([x, y, x + width - 1, y + height - 1], outline=primary)
-    text_bbox = draw.textbbox((0, 0), text, font=font)
-    text_x = x + (width - (text_bbox[2] - text_bbox[0])) // 2
-    text_y = y + (height - (text_bbox[3] - text_bbox[1])) // 2
-    draw.text((text_x, text_y), text, font=font, fill=epd.WHITE)
-
-def draw_vertical_lines_dither(draw, epd, x, y, width, height, text, primary_color, secondary_color, ratio, font):
-    """Vertical line pattern"""
-    color_map = {'black': epd.BLACK, 'red': epd.RED, 'yellow': epd.YELLOW, 'white': epd.WHITE}
-    primary, secondary = color_map[primary_color], color_map[secondary_color]
-    
-    line_width = 2
-    for i in range(0, width, line_width):
-        color = primary if (i / width) < ratio else secondary
-        for j in range(height):
-            for k in range(line_width):
-                if i + k < width:
-                    draw.point((x + i + k, y + j), fill=color)
-    
-    draw.rectangle([x, y, x + width - 1, y + height - 1], outline=primary)
-    text_bbox = draw.textbbox((0, 0), text, font=font)
-    text_x = x + (width - (text_bbox[2] - text_bbox[0])) // 2
-    text_y = y + (height - (text_bbox[3] - text_bbox[1])) // 2
-    draw.text((text_x, text_y), text, font=font, fill=epd.WHITE)
-
-def draw_diagonal_lines_dither(draw, epd, x, y, width, height, text, primary_color, secondary_color, ratio, font):
-    """Diagonal line pattern"""
-    color_map = {'black': epd.BLACK, 'red': epd.RED, 'yellow': epd.YELLOW, 'white': epd.WHITE}
-    primary, secondary = color_map[primary_color], color_map[secondary_color]
-    
-    for i in range(width):
-        for j in range(height):
-            # Create diagonal pattern
-            pattern_value = ((i + j) % 8) / 8  # 8 pixel wide diagonal stripes
-            use_primary = pattern_value < ratio
-            pixel_color = primary if use_primary else secondary
-            draw.point((x + i, y + j), fill=pixel_color)
-    
-    draw.rectangle([x, y, x + width - 1, y + height - 1], outline=primary)
-    text_bbox = draw.textbbox((0, 0), text, font=font)
-    text_x = x + (width - (text_bbox[2] - text_bbox[0])) // 2
-    text_y = y + (height - (text_bbox[3] - text_bbox[1])) // 2
-    draw.text((text_x, text_y), text, font=font, fill=epd.WHITE)
-
-def draw_dots_dither(draw, epd, x, y, width, height, text, primary_color, secondary_color, ratio, font):
-    """Dot pattern"""
-    color_map = {'black': epd.BLACK, 'red': epd.RED, 'yellow': epd.YELLOW, 'white': epd.WHITE}
-    primary, secondary = color_map[primary_color], color_map[secondary_color]
-    
-    # Fill background with secondary color
-    for i in range(width):
-        for j in range(height):
-            draw.point((x + i, y + j), fill=secondary)
-    
-    # Draw dots in primary color
-    dot_spacing = 4
-    for i in range(0, width, dot_spacing):
-        for j in range(0, height, dot_spacing):
-            if (i/width + j/height)/2 < ratio:
-                draw.point((x + i, y + j), fill=primary)
-    
-    draw.rectangle([x, y, x + width - 1, y + height - 1], outline=primary)
-    text_bbox = draw.textbbox((0, 0), text, font=font)
-    text_x = x + (width - (text_bbox[2] - text_bbox[0])) // 2
-    text_y = y + (height - (text_bbox[3] - text_bbox[1])) // 2
-    draw.text((text_x, text_y), text, font=font, fill=epd.WHITE)
 
 def main():
     epd = None
@@ -147,7 +47,7 @@ def main():
         
         # Show fewer patterns with better spacing
         patterns = [
-            (draw_checkerboard_dither, "Current"),
+            (draw_dithered_box, "Current"),
             (draw_vertical_lines_dither, "Vertical"),
             (draw_diagonal_lines_dither, "Diagonal")
         ]

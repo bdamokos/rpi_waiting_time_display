@@ -13,6 +13,7 @@ import time
 from PIL import Image, ImageDraw, ImageFont
 from weather import WeatherService
 from bus_service import BusService
+from dithering import draw_dithered_box
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -26,48 +27,6 @@ WEATHER_ICONS = {
     'Drizzle': '🌦',
     'Mist': '🌫',
 }
-
-def draw_dithered_box(draw, epd, x, y, width, height, text, primary_color, secondary_color, ratio, font):
-    """Draw a box with dithered background and centered text"""
-    logging.debug(f"Drawing dithered box with colors: {primary_color} ({ratio:.2f}) and {secondary_color} ({1-ratio:.2f})")
-    
-    # Map color names to epd colors
-    color_map = {
-        'black': epd.BLACK,
-        'red': epd.RED,
-        'yellow': epd.YELLOW,
-        'white': epd.WHITE
-    }
-    
-    primary = color_map[primary_color]
-    secondary = color_map[secondary_color]
-    
-    # Create checkerboard pattern with offset rows to avoid diagonal lines
-    for i in range(width):
-        for j in range(height):
-            # Offset every other row by one pixel
-            offset = (j % 2) * 1
-            # Use the offset in the checkerboard calculation
-            use_primary = ((i + offset + j) % 2 == 0) if (i + j) / (width + height) < ratio else \
-                         ((i + offset + j) % 2 != 0)
-            
-            pixel_color = primary if use_primary else secondary
-            draw.point((x + i, y + j), fill=pixel_color)
-    
-    # Draw border in primary color
-    draw.rectangle([x, y, x + width - 1, y + height - 1], outline=primary)
-    
-    # Calculate text position to center it
-    text_bbox = draw.textbbox((0, 0), text, font=font)
-    text_width = text_bbox[2] - text_bbox[0]
-    text_height = text_bbox[3] - text_bbox[1]
-    
-    text_x = x + (width - text_width) // 2
-    text_y = y + (height - text_height) // 2
-    
-    # Draw text in contrasting color
-    text_color = epd.BLACK if primary_color == 'white' and secondary_color == 'white' else epd.WHITE
-    draw.text((text_x, text_y), text, font=font, fill=text_color)
 
 def update_display(epd, weather_data, bus_data, error_message=None, stop_name=None, first_run=False):
     """Update the display with new weather data"""

@@ -4,6 +4,7 @@ from typing import List, Dict, Tuple
 import os
 import dotenv
 from colorsys import rgb_to_hsv
+from dithering import draw_dithered_box
 
 logger = logging.getLogger(__name__)
 dotenv.load_dotenv()

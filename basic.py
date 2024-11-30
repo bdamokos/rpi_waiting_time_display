@@ -188,7 +188,7 @@ def update_display(epd, weather_data, bus_data, error_message=None, stop_name=No
     logging.debug("About to call epd.display() with new buffer")
     epd.display(buffer)
 
-def draw_weather_display(epd, weather_data):
+def draw_weather_display(epd, weather_data, last_weather_data=None):
     """Draw a weather-focused display when no bus times are available"""
     # Create a new image with white background
     Himage = Image.new('RGB', (epd.height, epd.width), epd.WHITE)
@@ -203,57 +203,84 @@ def draw_weather_display(epd, weather_data):
         font_xl = ImageFont.load_default()
         font_large = font_medium = font_small = font_xl
 
-    # Draw current time
-    current_time = datetime.now().strftime("%H:%M")
-    draw.text((10, 5), current_time, font=font_large, fill=epd.BLACK)
+    MARGIN = 10
 
-    # Draw current temperature (large)
+    # Draw current temperature (large) and weather icon
     temp_text = f"{weather_data['current']['temperature']}°C"
-    draw.text((10, 45), temp_text, font=font_xl, fill=epd.BLACK)
-
-    # Draw weather icon
+    temp_bbox = draw.textbbox((0, 0), temp_text, font=font_xl)
+    temp_width = temp_bbox[2] - temp_bbox[0]
+    
     weather_icon = WEATHER_ICONS.get(weather_data['current']['description'], '?')
-    draw.text((120, 45), weather_icon, font=font_xl, fill=epd.BLACK)
-
-    # Draw additional weather info
-    y_pos = 100
-    info_text = [
-        f"Feels like: {weather_data['feels_like']}°C",
-        f"Humidity: {weather_data['humidity']}%",
-        f"Wind: {weather_data['wind_speed']} km/h",
-        f"Rain: {weather_data['precipitation_chance']}%"
-    ]
     
-    for text in info_text:
-        draw.text((10, y_pos), text, font=font_small, fill=epd.BLACK)
-        y_pos += 20
-
-    # Draw next hours forecast
-    y_pos = 180
-    draw.text((10, y_pos), "Next hours:", font=font_small, fill=epd.BLACK)
-    y_pos += 20
+    # Center temperature and icon at the top
+    total_width = temp_width + 40  # Add some spacing between temp and icon
+    start_x = (Himage.width - total_width) // 2
     
-    for forecast in weather_data['forecast']:
-        text = f"{forecast['time']}: {forecast['temp']}°C"
-        draw.text((10, y_pos), text, font=font_small, fill=epd.BLACK)
-        y_pos += 20
+    draw.text((start_x, MARGIN), temp_text, font=font_xl, fill=epd.BLACK)
+    draw.text((start_x + temp_width + 20, MARGIN), weather_icon, font=font_xl, fill=epd.BLACK)
+
+    # Draw "feels like" temperature
+    feels_like_text = f"Feels like: {weather_data['feels_like']}°C"
+    feels_like_bbox = draw.textbbox((0, 0), feels_like_text, font=font_medium)
+    feels_like_width = feels_like_bbox[2] - feels_like_bbox[0]
+    feels_like_x = (Himage.width - feels_like_width) // 2
+    draw.text((feels_like_x, MARGIN + 60), feels_like_text, font=font_medium, fill=epd.BLACK)
+
+    # Draw current conditions in a grid layout
+    y_pos = MARGIN + 100
+    left_column = MARGIN
+    right_column = Himage.width // 2 + MARGIN
+
+    # Left column
+    draw.text((left_column, y_pos), "Humidity", font=font_small, fill=epd.BLACK)
+    draw.text((left_column, y_pos + 20), f"{weather_data['humidity']}%", font=font_medium, fill=epd.BLACK)
+    
+    draw.text((left_column, y_pos + 50), "Wind", font=font_small, fill=epd.BLACK)
+    draw.text((left_column, y_pos + 70), f"{weather_data['wind_speed']} km/h", font=font_medium, fill=epd.BLACK)
+
+    # Right column
+    draw.text((right_column, y_pos), "Rain chance", font=font_small, fill=epd.BLACK)
+    draw.text((right_column, y_pos + 20), f"{weather_data['precipitation_chance']}%", font=font_medium, fill=epd.BLACK)
+    
+    # Draw forecast section
+    y_pos = y_pos + 110
+    draw.text((MARGIN, y_pos), "Forecast:", font=font_medium, fill=epd.BLACK)
+    y_pos += 25
+
+    # Draw forecast in a grid (3 columns)
+    if weather_data['forecast']:
+        col_width = (Himage.width - (2 * MARGIN)) // 3
+        for idx, forecast in enumerate(weather_data['forecast'][:3]):
+            x_pos = MARGIN + (idx * col_width)
+            
+            # Time
+            draw.text((x_pos, y_pos), forecast['time'], font=font_small, fill=epd.BLACK)
+            # Temperature
+            draw.text((x_pos, y_pos + 20), f"{forecast['temp']}°C", font=font_medium, fill=epd.BLACK)
+            # Weather icon
+            icon = WEATHER_ICONS.get(forecast['description'], '?')
+            draw.text((x_pos + 50, y_pos + 20), icon, font=font_medium, fill=epd.BLACK)
 
     # Generate and draw QR code
     qr = qrcode.QRCode(version=1, box_size=2, border=1)
     qr.add_data('http://raspberrypi.local:5001')
     qr.make(fit=True)
     qr_img = qr.make_image(fill_color="black", back_color="white")
-    
-    # Convert PIL image to RGB
     qr_img = qr_img.convert('RGB')
     
     # Calculate position for QR code (bottom right corner)
     qr_size = qr_img.size[0]
-    qr_x = Himage.width - qr_size - 10
-    qr_y = Himage.height - qr_size - 10
-    
-    # Paste QR code onto main image
+    qr_x = Himage.width - qr_size - MARGIN
+    qr_y = Himage.height - qr_size - MARGIN
     Himage.paste(qr_img, (qr_x, qr_y))
+
+    # Draw current time (small, bottom right, under QR code)
+    current_time = datetime.now().strftime("%H:%M")
+    time_bbox = draw.textbbox((0, 0), current_time, font=font_small)
+    time_width = time_bbox[2] - time_bbox[0]
+    time_height = time_bbox[3] - time_bbox[1]
+    draw.text((Himage.width - time_width - MARGIN, qr_y + qr_size + 5), 
+              current_time, font=font_small, fill=epd.BLACK)
 
     # Draw a border around the display
     draw.rectangle([(0, 0), (Himage.width-1, Himage.height-1)], outline=epd.BLACK)
@@ -293,6 +320,12 @@ def main():
         update_count = 0
         FULL_REFRESH_INTERVAL = 60  # Number of updates before doing a full refresh
         
+        # Add variables for weather display
+        last_weather_data = None
+        last_weather_update = datetime.now()
+        WEATHER_UPDATE_INTERVAL = 600  # 10 minutes in seconds
+        in_weather_mode = False  # Track which mode we're in
+        
         # Main loop
         while True:
             try:
@@ -306,25 +339,58 @@ def main():
                     if any(time != "--" for time in bus["times"])
                 ]
                 
+                current_time = datetime.now()
+                
+                # Determine if we need a full refresh
+                needs_full_refresh = update_count >= FULL_REFRESH_INTERVAL
+                
+                if needs_full_refresh:
+                    logging.info("Performing hourly full refresh...")
+                    logging.debug("About to call epd.init()")
+                    epd.init()
+                    logging.debug("About to call epd.Clear()")
+                    epd.Clear()
+                    logging.debug("About to call epd.init_Fast()")
+                    epd.init_Fast()
+                    update_count = 0
+                
                 # Determine display mode
                 if valid_bus_data:
-                    # Update display with only the valid bus lines
+                    # Bus display mode
+                    in_weather_mode = False
+                    last_weather_data = None  # Reset weather tracking
+                    last_weather_update = current_time
                     update_display(epd, weather_data['current'], valid_bus_data, error_message, stop_name)
+                    wait_time = 60 if not error_message else 10
+                    update_count += 1
                 else:
-                    draw_weather_display(epd, weather_data)
+                    # Weather display mode
+                    in_weather_mode = True
+                    weather_changed = (
+                        last_weather_data is None or
+                        weather_data['current'] != last_weather_data['current'] or
+                        weather_data['forecast'] != last_weather_data['forecast']
+                    )
+                    
+                    time_since_update = (current_time - last_weather_update).total_seconds()
+                    
+                    if (weather_changed and time_since_update >= WEATHER_UPDATE_INTERVAL) or time_since_update >= 3600:
+                        draw_weather_display(epd, weather_data)
+                        last_weather_data = weather_data
+                        last_weather_update = current_time
+                    
+                    # In weather mode, we wait longer between checks
+                    wait_time = WEATHER_UPDATE_INTERVAL
                 
-                # If there was an error, wait less time before retry
-                wait_time = 60 if not error_message else 10
+                # Log next update info
+                if in_weather_mode:
+                    next_update = f"weather update in {wait_time} seconds"
+                else:
+                    updates_until_refresh = FULL_REFRESH_INTERVAL - update_count - 1
+                    next_update = f"bus update in {wait_time} seconds ({updates_until_refresh} until full refresh)"
                 
-                # Log next refresh type
-                updates_until_refresh = FULL_REFRESH_INTERVAL - update_count - 1
-                next_update = f"full refresh" if updates_until_refresh == 0 else f"fast refresh ({updates_until_refresh} until full refresh)"
                 logging.info(f"Waiting {wait_time} seconds until next update ({next_update})")
                 time.sleep(wait_time)
-                
-                # Only increment counter if there was no error
-                if not error_message:
-                    update_count += 1
                 
             except Exception as e:
                 logging.error(f"Error in main loop: {e}")

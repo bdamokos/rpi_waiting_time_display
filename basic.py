@@ -39,23 +39,31 @@ def update_display(epd, weather_data, bus_data, error_message=None, stop_name=No
     Himage = Image.new('RGB', (epd.height, epd.width), epd.WHITE)
     draw = ImageDraw.Draw(Himage)
     
-    # Load fonts
     try:
         font_large = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 32)
         font_medium = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 24)
         font_small = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 16)
     except:
         font_large = ImageFont.load_default()
-        font_medium = ImageFont.load_default()
-        font_small = ImageFont.load_default()
+        font_medium = font_small = font_large
 
     # Calculate layout
-    MARGIN = 8  # Space at top and bottom
-    HEADER_HEIGHT = 20  # Height for stop name and weather
-    BOX_HEIGHT = 40  # Height of bus line boxes
-    SPACING = (epd.width - (2 * MARGIN) - HEADER_HEIGHT - (2 * BOX_HEIGHT)) // 2  # Equal spacing between elements
+    MARGIN = 8
+    HEADER_HEIGHT = 20
+    BOX_HEIGHT = 40
+    
+    # Adjust spacing based on number of bus lines
+    if len(bus_data) == 1:
+        # Center the single bus line vertically
+        first_box_y = (epd.width - HEADER_HEIGHT - BOX_HEIGHT) // 2
+        second_box_y = first_box_y  # Not used but kept for consistency
+    else:
+        # Original spacing for two lines
+        SPACING = (epd.width - (2 * MARGIN) - HEADER_HEIGHT - (2 * BOX_HEIGHT)) // 2
+        first_box_y = MARGIN + HEADER_HEIGHT + SPACING
+        second_box_y = first_box_y + BOX_HEIGHT + SPACING
 
-    # Draw stop name in top left and weather in top right
+    # Draw stop name and weather (rest of the header remains the same)
     if stop_name:
         draw.text((MARGIN, MARGIN), stop_name, font=font_small, fill=epd.BLACK)
 
@@ -66,10 +74,6 @@ def update_display(epd, weather_data, bus_data, error_message=None, stop_name=No
     weather_width = weather_bbox[2] - weather_bbox[0]
     draw.text((Himage.width - weather_width - MARGIN, MARGIN), 
               weather_text, font=font_small, fill=epd.BLACK)
-
-    # Calculate Y positions for bus info
-    first_box_y = MARGIN + HEADER_HEIGHT + SPACING
-    second_box_y = first_box_y + BOX_HEIGHT + SPACING
 
     # Draw bus information
     for idx, bus in enumerate(bus_data):
@@ -148,13 +152,19 @@ def update_display(epd, weather_data, bus_data, error_message=None, stop_name=No
                 x_pos += time_width + message_width + 30  # Add spacing between times
                 times_shown += 1
 
-    # Draw current time aligned with bottom of second box
+    # Draw current time at the bottom
     current_time = datetime.now().strftime("%H:%M")
     time_bbox = draw.textbbox((0, 0), current_time, font=font_small)
     time_width = time_bbox[2] - time_bbox[0]
     time_height = time_bbox[3] - time_bbox[1]
-    draw.text((Himage.width - time_width - MARGIN, 
-               second_box_y + BOX_HEIGHT - time_height), 
+    
+    # Adjust time position based on number of bus lines
+    if len(bus_data) == 1:
+        time_y = first_box_y + BOX_HEIGHT + MARGIN
+    else:
+        time_y = second_box_y + BOX_HEIGHT - time_height
+    
+    draw.text((Himage.width - time_width - MARGIN, time_y), 
               current_time, font=font_small, fill=epd.BLACK)
 
     # Draw error message if present
@@ -162,8 +172,8 @@ def update_display(epd, weather_data, bus_data, error_message=None, stop_name=No
         error_bbox = draw.textbbox((0, 0), error_message, font=font_small)
         error_width = error_bbox[2] - error_bbox[0]
         error_x = (Himage.width - error_width) // 2
-        draw.text((error_x, second_box_y + BOX_HEIGHT + MARGIN), 
-                 error_message, font=font_small, fill=epd.RED)
+        error_y = time_y + time_height + MARGIN if len(bus_data) == 1 else second_box_y + BOX_HEIGHT + MARGIN
+        draw.text((error_x, error_y), error_message, font=font_small, fill=epd.RED)
 
     # Draw a border around the display
     draw.rectangle([(0, 0), (Himage.width-1, Himage.height-1)], outline=epd.BLACK)
@@ -287,31 +297,19 @@ def main():
         while True:
             try:
                 # Get data
-                weather_data = weather.get_detailed_weather()  # Use new detailed weather
+                weather_data = weather.get_detailed_weather()
                 bus_data, error_message, stop_name = bus.get_waiting_times()
                 
-                # Check if we have any valid bus times
-                has_valid_times = any(
-                    any(time != "--" for time in bus["times"])
-                    for bus in bus_data
-                )
+                # Filter out bus lines with no valid times
+                valid_bus_data = [
+                    bus for bus in bus_data 
+                    if any(time != "--" for time in bus["times"])
+                ]
                 
-                # Check if we need a full refresh
-                needs_full_refresh = update_count >= FULL_REFRESH_INTERVAL
-                
-                if needs_full_refresh:
-                    logging.info("Performing hourly full refresh...")
-                    logging.debug("About to call epd.init()")
-                    epd.init()
-                    logging.debug("About to call epd.Clear()")
-                    epd.Clear()
-                    logging.debug("About to call epd.init_Fast()")
-                    epd.init_Fast()
-                    update_count = 0
-                
-                # Choose display mode based on bus data availability
-                if has_valid_times:
-                    update_display(epd, weather_data['current'], bus_data, error_message, stop_name)
+                # Determine display mode
+                if valid_bus_data:
+                    # Update display with only the valid bus lines
+                    update_display(epd, weather_data['current'], valid_bus_data, error_message, stop_name)
                 else:
                     draw_weather_display(epd, weather_data)
                 

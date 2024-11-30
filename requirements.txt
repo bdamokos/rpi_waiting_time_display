@@ -10,3 +10,4 @@ requests==2.32.3
 RPi.GPIO==0.7.1
 spidev==3.6urllib3==2.2.3
 git+https://github.com/waveshare/e-Paper.git#subdirectory=RaspberryPi_JetsonNano/python
+qrcode==7.4.2

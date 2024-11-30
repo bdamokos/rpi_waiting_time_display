@@ -43,6 +43,7 @@ source ~/display_env/bin/activate
 # Download from git any updates
 cd ~/brussels_transit
 git pull origin main
+pip install -r requirements.txt
 
 # Start the backend server in the background
 cd ~/brussels_transit/app
@@ -54,6 +55,8 @@ sleep 5
 
 # Start the display program
 cd ~/display_programme
+git pull origin main
+pip install -r requirements.txt
 python basic.py &
 DISPLAY_PID=$!
 

@@ -15,6 +15,8 @@ from PIL import Image, ImageDraw, ImageFont
 from weather import WeatherService
 from bus_service import BusService
 from dithering import draw_dithered_box
+import qrcode
+from io import BytesIO
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -176,6 +178,83 @@ def update_display(epd, weather_data, bus_data, error_message=None, stop_name=No
     logging.debug("About to call epd.display() with new buffer")
     epd.display(buffer)
 
+def draw_weather_display(epd, weather_data):
+    """Draw a weather-focused display when no bus times are available"""
+    # Create a new image with white background
+    Himage = Image.new('RGB', (epd.height, epd.width), epd.WHITE)
+    draw = ImageDraw.Draw(Himage)
+    
+    try:
+        font_xl = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 48)
+        font_large = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 32)
+        font_medium = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 24)
+        font_small = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 16)
+    except:
+        font_xl = ImageFont.load_default()
+        font_large = font_medium = font_small = font_xl
+
+    # Draw current time
+    current_time = datetime.now().strftime("%H:%M")
+    draw.text((10, 5), current_time, font=font_large, fill=epd.BLACK)
+
+    # Draw current temperature (large)
+    temp_text = f"{weather_data['current']['temperature']}°C"
+    draw.text((10, 45), temp_text, font=font_xl, fill=epd.BLACK)
+
+    # Draw weather icon
+    weather_icon = WEATHER_ICONS.get(weather_data['current']['description'], '?')
+    draw.text((120, 45), weather_icon, font=font_xl, fill=epd.BLACK)
+
+    # Draw additional weather info
+    y_pos = 100
+    info_text = [
+        f"Feels like: {weather_data['feels_like']}°C",
+        f"Humidity: {weather_data['humidity']}%",
+        f"Wind: {weather_data['wind_speed']} km/h",
+        f"Rain: {weather_data['precipitation_chance']}%"
+    ]
+    
+    for text in info_text:
+        draw.text((10, y_pos), text, font=font_small, fill=epd.BLACK)
+        y_pos += 20
+
+    # Draw next hours forecast
+    y_pos = 180
+    draw.text((10, y_pos), "Next hours:", font=font_small, fill=epd.BLACK)
+    y_pos += 20
+    
+    for forecast in weather_data['forecast']:
+        text = f"{forecast['time']}: {forecast['temp']}°C"
+        draw.text((10, y_pos), text, font=font_small, fill=epd.BLACK)
+        y_pos += 20
+
+    # Generate and draw QR code
+    qr = qrcode.QRCode(version=1, box_size=2, border=1)
+    qr.add_data('http://raspberrypi.local:5001')
+    qr.make(fit=True)
+    qr_img = qr.make_image(fill_color="black", back_color="white")
+    
+    # Convert PIL image to RGB
+    qr_img = qr_img.convert('RGB')
+    
+    # Calculate position for QR code (bottom right corner)
+    qr_size = qr_img.size[0]
+    qr_x = Himage.width - qr_size - 10
+    qr_y = Himage.height - qr_size - 10
+    
+    # Paste QR code onto main image
+    Himage.paste(qr_img, (qr_x, qr_y))
+
+    # Draw a border around the display
+    draw.rectangle([(0, 0), (Himage.width-1, Himage.height-1)], outline=epd.BLACK)
+
+    # Rotate the image 90 degrees
+    Himage = Himage.rotate(90, expand=True)
+    
+    # Display the image
+    buffer = epd.getbuffer(Himage)
+    epd.display(buffer)
+
 def main():
     epd = None
     try:
@@ -208,10 +287,16 @@ def main():
         while True:
             try:
                 # Get data
-                weather_data = weather.get_weather()
+                weather_data = weather.get_detailed_weather()  # Use new detailed weather
                 bus_data, error_message, stop_name = bus.get_waiting_times()
                 
-                # Check if we need a full refresh (every FULL_REFRESH_INTERVAL updates)
+                # Check if we have any valid bus times
+                has_valid_times = any(
+                    any(time != "--" for time in bus["times"])
+                    for bus in bus_data
+                )
+                
+                # Check if we need a full refresh
                 needs_full_refresh = update_count >= FULL_REFRESH_INTERVAL
                 
                 if needs_full_refresh:
@@ -224,8 +309,11 @@ def main():
                     epd.init_Fast()
                     update_count = 0
                 
-                # Update the display
-                update_display(epd, weather_data, bus_data, error_message, stop_name)
+                # Choose display mode based on bus data availability
+                if has_valid_times:
+                    update_display(epd, weather_data['current'], bus_data, error_message, stop_name)
+                else:
+                    draw_weather_display(epd, weather_data)
                 
                 # If there was an error, wait less time before retry
                 wait_time = 60 if not error_message else 10

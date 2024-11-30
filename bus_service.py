@@ -19,13 +19,63 @@ DISPLAY_COLORS = {
     'yellow': (255, 255, 0)
 }
 
+def _parse_lines(lines_str: str) -> list:
+    """
+    Parse bus line numbers from environment variable.
+    Handles different formats:
+    - Single number: "64"
+    - Comma-separated list: "64,59"
+    - Space-separated list: "64 59"
+    - Mixed format: "64, 59"
+    - List format: [59, 64]
+    - String list format: ["59", "64"]
+    """
+    if not lines_str:
+        logging.error("No bus lines configured")
+        return []
+    
+    # Remove any whitespace
+    lines_str = lines_str.strip()
+    
+    # Handle list-like formats
+    if lines_str.startswith('[') and lines_str.endswith(']'):
+        # Remove brackets and split
+        content = lines_str[1:-1].strip()
+        # Handle empty list
+        if not content:
+            return []
+        # Split on comma and handle quotes
+        items = [item.strip().strip('"\'') for item in content.split(',')]
+        try:
+            return [str(int(item)) for item in items]
+        except ValueError as e:
+            logging.error(f"Invalid number in list format: {e}")
+            return []
+    
+    try:
+        # Try to parse as a single number
+        return [str(int(lines_str))]
+    except ValueError:
+        # If that fails, try to split and parse as list
+        # Remove all whitespace and split on comma
+        cleaned = ''.join(lines_str.split())  # Remove all whitespace
+        cleaned = cleaned.replace(',', ' ').split()  # Split on comma or space
+        
+        # Convert to integers and back to strings to validate and normalize
+        try:
+            return [str(int(line)) for line in cleaned]
+        except ValueError as e:
+            logging.error(f"Invalid bus line number format: {e}")
+            return []
+
 class BusService:
     def __init__(self):
         self.base_url = bus_api_base_url
         self.api_url = f"{self.base_url}/api/stib/waiting_times"
         self.colors_url = f"{self.base_url}/api/stib/colors"
         self.stop_id = Stop
-        self.lines_of_interest = [line.strip() for line in Lines.split(",")]
+        self.lines_of_interest = _parse_lines(Lines)
+        logging.info(f"Monitoring bus lines: {self.lines_of_interest}")
         
     def _hex_to_rgb(self, hex_color: str) -> Tuple[int, int, int]:
         """Convert hex color to RGB tuple"""

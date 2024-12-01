@@ -195,57 +195,69 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
     draw = ImageDraw.Draw(Himage)
     
     try:
-        font_xl = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 36)
-        font_large = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 24)
-        font_medium = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 18)
-        font_small = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 14)
+        font_xl = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 42)
+        font_large = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 28)
+        font_medium = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 20)
+        font_small = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 16)
     except:
         font_xl = ImageFont.load_default()
         font_large = font_medium = font_small = font_xl
 
-    MARGIN = 5
-    BLOCK_WIDTH = 63
-    BLOCK_HEIGHT = 40
-
-    # Top row: Temperature and Weather Icon (0-40px height)
+    MARGIN = 8
+    
+    # Top row: Large temperature and weather icon
     temp_text = f"{weather_data['current']['temperature']}°C"
     weather_icon = WEATHER_ICONS.get(weather_data['current']['description'], '?')
     
-    # Center temperature in left half
+    # Center temperature and icon
     temp_bbox = draw.textbbox((0, 0), temp_text, font=font_xl)
     temp_width = temp_bbox[2] - temp_bbox[0]
-    temp_x = (Himage.width//2 - temp_width) // 2
-    draw.text((temp_x, MARGIN), temp_text, font=font_xl, fill=epd.BLACK)
+    icon_bbox = draw.textbbox((0, 0), weather_icon, font=font_xl)
+    icon_width = icon_bbox[2] - icon_bbox[0]
     
-    # Center weather icon in right half
-    icon_x = Himage.width//2 + (Himage.width//4 - 20)  # Approximate center of right half
-    draw.text((icon_x, MARGIN), weather_icon, font=font_xl, fill=epd.BLACK)
+    total_width = temp_width + icon_width + 20  # 20px spacing between temp and icon
+    start_x = (Himage.width - total_width) // 2
+    
+    draw.text((start_x, MARGIN), temp_text, font=font_xl, fill=epd.BLACK)
+    draw.text((start_x + temp_width + 20, MARGIN), weather_icon, font=font_xl, fill=epd.BLACK)
 
-    # Middle row: Current conditions and QR code (40-80px height)
-    y_pos = BLOCK_HEIGHT + MARGIN
+    # Middle row: Next sun event and tomorrow's temperatures
+    y_pos = 55
     
-    # Current conditions in three columns
-    conditions = [
-        (f"Humidity\n{weather_data['humidity']}%", 0),
-        (f"Wind\n{weather_data['wind_speed']} km/h", BLOCK_WIDTH),
-        (f"Rain\n{weather_data['precipitation_chance']}%", BLOCK_WIDTH * 2)
-    ]
+    # Show either sunrise or sunset based on time of day
+    if weather_data['is_daytime']:
+        sun_text = f"Sunset: {weather_data['sunset']}"
+        sun_icon = "🌅"
+    else:
+        sun_text = f"Sunrise: {weather_data['sunrise']}"
+        sun_icon = "🌄"
     
-    for text, x_offset in conditions:
-        draw.text((MARGIN + x_offset, y_pos), text, font=font_medium, fill=epd.BLACK)
+    # Center sun information
+    sun_bbox = draw.textbbox((0, 0), f"{sun_icon} {sun_text}", font=font_large)
+    sun_width = sun_bbox[2] - sun_bbox[0]
+    sun_x = (Himage.width - sun_width) // 2
+    draw.text((sun_x, y_pos), f"{sun_icon} {sun_text}", font=font_large, fill=epd.BLACK)
 
-    # Generate and draw QR code in rightmost block
-    qr = qrcode.QRCode(version=1, box_size=1, border=1)
+    # Bottom row: Tomorrow's forecast
+    y_pos = 90
+    tomorrow_text = f"Tomorrow: {weather_data['tomorrow']['min']}°C to {weather_data['tomorrow']['max']}°C"
+    tomorrow_bbox = draw.textbbox((0, 0), tomorrow_text, font=font_medium)
+    tomorrow_width = tomorrow_bbox[2] - tomorrow_bbox[0]
+    tomorrow_x = (Himage.width - tomorrow_width) // 2
+    draw.text((tomorrow_x, y_pos), tomorrow_text, font=font_medium, fill=epd.BLACK)
+
+    # Generate and draw QR code (larger size)
+    qr = qrcode.QRCode(version=1, box_size=2, border=1)
     qr.add_data('http://raspberrypi.local:5001')
     qr.make(fit=True)
     qr_img = qr.make_image(fill_color="black", back_color="white")
     qr_img = qr_img.convert('RGB')
     
-    # Scale QR code to fit in the block (slightly smaller than BLOCK_HEIGHT)
-    qr_size = 35
+    # Scale QR code to larger size
+    qr_size = 45
     qr_img = qr_img.resize((qr_size, qr_size))
     qr_x = Himage.width - qr_size - MARGIN
-    qr_y = y_pos
+    qr_y = MARGIN
     Himage.paste(qr_img, (qr_x, qr_y))
 
     # Draw time under QR code
@@ -254,19 +266,6 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
     time_width = time_bbox[2] - time_bbox[0]
     draw.text((qr_x + (qr_size - time_width)//2, qr_y + qr_size + 2), 
               current_time, font=font_small, fill=epd.BLACK)
-
-    # Bottom row: Forecast (80-120px height)
-    y_pos = 2 * BLOCK_HEIGHT + MARGIN
-    if weather_data['forecast']:
-        for idx, forecast in enumerate(weather_data['forecast'][:3]):
-            x_pos = MARGIN + (idx * BLOCK_WIDTH)
-            
-            # Time
-            draw.text((x_pos, y_pos), forecast['time'], font=font_small, fill=epd.BLACK)
-            # Temperature and icon
-            temp_text = f"{forecast['temp']}°C"
-            icon = WEATHER_ICONS.get(forecast['description'], '?')
-            draw.text((x_pos, y_pos + 15), f"{temp_text} {icon}", font=font_medium, fill=epd.BLACK)
 
     # Draw a border around the display
     draw.rectangle([(0, 0), (Himage.width-1, Himage.height-1)], outline=epd.BLACK)

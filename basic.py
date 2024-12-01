@@ -43,6 +43,9 @@ def find_closest_colors(pixel_rgb, epd):
     """Find the two closest EPD colors and optimal ratio to represent an RGB color"""
     r, g, b = pixel_rgb[:3]  # Get RGB values, ignore alpha if present
     
+    # Calculate luminance
+    luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0
+    
     # Available EPD colors and their RGB values
     epd_colors = {
         'white': ((255, 255, 255), epd.WHITE),
@@ -54,17 +57,30 @@ def find_closest_colors(pixel_rgb, epd):
     # Calculate color distances and find two closest colors
     distances = []
     for name, ((cr, cg, cb), _) in epd_colors.items():
-        distance = ((r - cr) ** 2 + (g - cg) ** 2 + (b - cb) ** 2) ** 0.5
+        # Use weighted color distance to better handle light colors
+        distance = (
+            (3 * (r - cr) ** 2) +  # Increased weight for red
+            (4 * (g - cg) ** 2) +  # Increased weight for green
+            (2 * (b - cb) ** 2)    # Lower weight for blue
+        ) ** 0.5
         distances.append((distance, name))
     
     distances.sort()  # Sort by distance
     color1, color2 = distances[0][1], distances[1][1]
     
-    # Calculate optimal ratio between the two closest colors
+    # Calculate ratio with enhanced contrast for light colors
     total_distance = distances[0][0] + distances[1][0]
-    ratio = 1 - (distances[0][0] / total_distance) if total_distance > 0 else 1
+    base_ratio = 1 - (distances[0][0] / total_distance) if total_distance > 0 else 1
     
-    return color1, color2, ratio  # primary_color_name, secondary_color_name, ratio
+    # Enhance contrast for light colors
+    if luminance > 0.7:  # For very light colors
+        ratio = max(base_ratio, 0.3)  # Ensure at least 30% coverage
+    elif luminance > 0.4:  # For medium-light colors
+        ratio = max(base_ratio, 0.5)  # Ensure at least 50% coverage
+    else:
+        ratio = base_ratio
+    
+    return color1, color2, ratio
 
 def process_icon_for_epd(icon, epd):
     """Process icon using dithering for optimal color representation"""
@@ -72,45 +88,67 @@ def process_icon_for_epd(icon, epd):
     processed = Image.new('RGB', icon.size, epd.WHITE)
     draw = ImageDraw.Draw(processed)
     
-    # Process the icon in smaller blocks for better color averaging
+    # First pass: Process main colors
     block_size = 4
+    outline_points = set()  # Keep track of edges
+    
     for x in range(0, width, block_size):
         for y in range(0, height, block_size):
-            # Get average color of the block
             block = icon.crop((x, y, min(x + block_size, width), min(y + block_size, height)))
             
             # Calculate average color and alpha
             r, g, b, a = 0, 0, 0, 0
             pixels = list(block.getdata())
             valid_pixels = 0
+            has_transparent = False
             
             for px in pixels:
-                if len(px) == 4 and px[3] > 128:  # Only consider mostly opaque pixels
-                    r += px[0]
-                    g += px[1]
-                    b += px[2]
-                    valid_pixels += 1
+                if len(px) == 4:
+                    if px[3] > 128:  # Opaque pixel
+                        r += px[0]
+                        g += px[1]
+                        b += px[2]
+                        valid_pixels += 1
+                    else:
+                        has_transparent = True
             
-            # Skip transparent blocks
             if valid_pixels == 0:
                 continue
                 
-            # Calculate average of valid pixels
             avg_color = (r//valid_pixels, g//valid_pixels, b//valid_pixels)
             
-            # Find closest EPD colors and ratio
-            primary, secondary, ratio = find_closest_colors(avg_color, epd)
+            # Calculate luminance
+            luminance = (0.299 * avg_color[0] + 0.587 * avg_color[1] + 0.114 * avg_color[2]) / 255.0
             
-            # Apply dithering to the block
-            draw_dithered_box(
-                draw, epd,
-                x, y,
-                min(block_size, width - x),
-                min(block_size, height - y),
-                "",  # No text
-                primary, secondary, ratio,
-                None  # No font needed
-            )
+            # If this is an edge (has both transparent and opaque pixels)
+            if has_transparent and valid_pixels > 0:
+                outline_points.add((x, y))
+                outline_points.add((x + block_size - 1, y))
+                outline_points.add((x, y + block_size - 1))
+                outline_points.add((x + block_size - 1, y + block_size - 1))
+            
+            # Adjust dithering based on luminance
+            if luminance > 0.7:  # Very light
+                # Use black dots for definition
+                for i in range(x, min(x + block_size, width), 2):
+                    for j in range(y, min(y + block_size, height), 2):
+                        draw.point((i, j), fill=epd.BLACK)
+            else:
+                # Normal color processing
+                primary, secondary, ratio = find_closest_colors(avg_color, epd)
+                draw_dithered_box(
+                    draw, epd,
+                    x, y,
+                    min(block_size, width - x),
+                    min(block_size, height - y),
+                    "",
+                    primary, secondary, ratio,
+                    None
+                )
+    
+    # Second pass: Draw outlines
+    for x, y in outline_points:
+        draw.point((x, y), fill=epd.BLACK)
     
     return processed
 

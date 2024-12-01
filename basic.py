@@ -42,6 +42,15 @@ CURRENT_ICON_SIZE = (50, 50)  # Size for current weather icon
 FORECAST_ICON_SIZE = (20, 20)  # Smaller size for forecast icons
 CACHE_DIR = Path(os.path.dirname(os.path.realpath(__file__))) / "cache" / "weather_icons"
 
+DISPLAY_REFRESH_INTERVAL = int(os.getenv("refresh_interval", 90))
+DISPLAY_REFRESH_MINIMAL_TIME = int(os.getenv("refresh_minimal_time", 30))
+DISPLAY_REFRESH_FULL_INTERVAL = int(os.getenv("refresh_full_interval", 3600))
+DISPLAY_REFRESH_WEATHER_INTERVAL = int(os.getenv("refresh_weather_interval", 600))
+
+weather_enabled = True if os.getenv("OPENWEATHER_API_KEY") else False
+if not weather_enabled:
+    logger.warning("Weather is not enabled, weather data will not be displayed. Please set OPENWEATHER_API_KEY in .env to enable it.")
+
 def find_optimal_colors(pixel_rgb, epd):
     """Find optimal combination of available colors to represent an RGB value"""
     r, g, b = pixel_rgb[:3]
@@ -233,8 +242,9 @@ def update_display(epd, weather_data, bus_data, error_message=None, stop_name=No
     weather_text = f"{weather_icon} {temp_text}"
     weather_bbox = draw.textbbox((0, 0), weather_text, font=font_small)
     weather_width = weather_bbox[2] - weather_bbox[0]
-    draw.text((Himage.width - weather_width - MARGIN, MARGIN), 
-              weather_text, font=font_small, fill=epd.BLACK)
+    if weather_enabled:
+        draw.text((Himage.width - weather_width - MARGIN, MARGIN), 
+                  weather_text, font=font_small, fill=epd.BLACK)
 
     # Draw bus information
     for idx, bus in enumerate(bus_data):
@@ -478,7 +488,7 @@ def main():
         logger.info("E-ink Display Starting")
         
         # Initialize services
-        weather = WeatherService()
+        weather = WeatherService() if weather_enabled else None
         bus = BusService()
         
         # Initialize display using adapter
@@ -499,19 +509,23 @@ def main():
         
         # Counter for full refresh every hour
         update_count = 0
-        FULL_REFRESH_INTERVAL = 60  # Number of updates before doing a full refresh
+        FULL_REFRESH_INTERVAL = DISPLAY_REFRESH_FULL_INTERVAL // DISPLAY_REFRESH_INTERVAL  # Number of updates before doing a full refresh
         
         # Add variables for weather display
         last_weather_data = None
         last_weather_update = datetime.now()
-        WEATHER_UPDATE_INTERVAL = 600  # 10 minutes in seconds
+        WEATHER_UPDATE_INTERVAL = DISPLAY_REFRESH_WEATHER_INTERVAL  # 10 minutes in seconds
         in_weather_mode = False  # Track which mode we're in
         
         # Main loop
         while True:
             try:
                 # Get data
-                weather_data = weather.get_detailed_weather()
+                if weather_enabled:
+                    weather_data = weather.get_detailed_weather()
+                else:
+                    weather_data = None
+                
                 bus_data, error_message, stop_name = bus.get_waiting_times()
                 
                 # Filter out bus lines with no valid times
@@ -542,9 +556,9 @@ def main():
                     last_weather_data = None  # Reset weather tracking
                     last_weather_update = current_time
                     update_display(epd, weather_data['current'], valid_bus_data, error_message, stop_name)
-                    wait_time = 60 if not error_message else 10
+                    wait_time = DISPLAY_REFRESH_INTERVAL if not error_message else DISPLAY_REFRESH_MINIMAL_TIME
                     update_count += 1
-                else:
+                elif weather_enabled:
                     # Weather display mode
                     in_weather_mode = True
                     weather_changed = (

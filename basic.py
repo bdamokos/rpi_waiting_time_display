@@ -197,7 +197,7 @@ def update_display(epd, weather_data, bus_data, error_message=None, stop_name=No
 def draw_weather_display(epd, weather_data, last_weather_data=None):
     """Draw a weather-focused display when no bus times are available"""
     # Create a new image with white background
-    Himage = Image.new('RGB', (epd.height, epd.width), epd.WHITE)  # 250x120
+    Himage = Image.new('RGB', (epd.height, epd.width), epd.WHITE)  # 250x120 width x height
     draw = ImageDraw.Draw(Himage)
     
     try:
@@ -232,10 +232,10 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
     
     # Show either sunrise or sunset based on time of day
     if weather_data['is_daytime']:
-        sun_text = f"Sunset: {weather_data['sunset']}"
+        sun_text = f"{weather_data['sunset']}"
         sun_icon = "🌅"
     else:
-        sun_text = f"Sunrise: {weather_data['sunrise']}"
+        sun_text = f"{weather_data['sunrise']}"
         sun_icon = "🌄"
     
     # Add AQI if available

@@ -5,7 +5,9 @@ A Raspberry Pi project that displays bus waiting times using an e-Paper display 
 
 The display shows:
 - Current time
-- Weather conditions and temperature
+- Weather conditions and temperature (including a weather mode when no bus is coming soon)
+![Weather Mode](docs/images/weather%20mode%20with%20dithered%20weather%20icons.png)
+
 - Next bus arrival times for configured lines
 - Color-coded bus line numbers matching STIB/MIVB official colors
 

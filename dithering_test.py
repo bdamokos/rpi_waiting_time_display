@@ -13,8 +13,9 @@ from dithering import (
     draw_diagonal_lines_dither,
     draw_dots_dither
 )
+import log_config
 
-logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 def main():
     epd = None

@@ -1,5 +1,7 @@
 from typing import Tuple
 import logging
+import log_config
+logger = logging.getLogger(__name__)
 
 def calculate_brightness(rgb: Tuple[int, int, int]) -> float:
     """

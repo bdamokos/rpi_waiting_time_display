@@ -21,7 +21,11 @@ Tested with:
 - Waveshare 2.13" G V2 e-Paper display (black, white, red, yellow; no partial refresh support)
 
 # Configuration
-The .env file is used to configure the application. It contains the API keys and the parameters for the weather and bus services.
+The .env file is used to configure the application:
+- Add your openweather API key
+- Input your location
+- Configure the monitored transit stops
+- Configure your display model
 
 The [start_display.sh](docs/service/start_display.sh.example) script is used to start the display service. It should be copied to the home directory and made executable.
 

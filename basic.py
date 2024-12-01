@@ -19,6 +19,7 @@ import qrcode
 from io import BytesIO
 import importlib
 import log_config
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,107 @@ WEATHER_ICONS = {
     'Drizzle': '🌦',
     'Mist': '🌫',
 }
+
+# Add to top of file with other constants
+WEATHER_ICON_URL = "https://openweathermap.org/img/wn/{}@4x.png"
+CURRENT_ICON_SIZE = (50, 50)  # Size for current weather icon
+FORECAST_ICON_SIZE = (20, 20)  # Smaller size for forecast icons
+
+def find_closest_colors(pixel_rgb, epd):
+    """Find the two closest EPD colors and optimal ratio to represent an RGB color"""
+    r, g, b = pixel_rgb[:3]  # Get RGB values, ignore alpha if present
+    
+    # Available EPD colors and their RGB values
+    epd_colors = {
+        'white': ((255, 255, 255), epd.WHITE),
+        'black': ((0, 0, 0), epd.BLACK),
+        'red': ((255, 0, 0), epd.RED),
+        'yellow': ((255, 255, 0), epd.YELLOW)
+    }
+    
+    # Calculate color distances and find two closest colors
+    distances = []
+    for name, ((cr, cg, cb), _) in epd_colors.items():
+        distance = ((r - cr) ** 2 + (g - cg) ** 2 + (b - cb) ** 2) ** 0.5
+        distances.append((distance, name))
+    
+    distances.sort()  # Sort by distance
+    color1, color2 = distances[0][1], distances[1][1]
+    
+    # Calculate optimal ratio between the two closest colors
+    total_distance = distances[0][0] + distances[1][0]
+    ratio = 1 - (distances[0][0] / total_distance) if total_distance > 0 else 1
+    
+    return color1, color2, ratio  # primary_color_name, secondary_color_name, ratio
+
+def process_icon_for_epd(icon, epd):
+    """Process icon using dithering for optimal color representation"""
+    width, height = icon.size
+    processed = Image.new('RGB', icon.size, epd.WHITE)
+    draw = ImageDraw.Draw(processed)
+    
+    # Process the icon in smaller blocks for better color averaging
+    block_size = 4
+    for x in range(0, width, block_size):
+        for y in range(0, height, block_size):
+            # Get average color of the block
+            block = icon.crop((x, y, min(x + block_size, width), min(y + block_size, height)))
+            
+            # Calculate average color and alpha
+            r, g, b, a = 0, 0, 0, 0
+            pixels = list(block.getdata())
+            valid_pixels = 0
+            
+            for px in pixels:
+                if len(px) == 4 and px[3] > 128:  # Only consider mostly opaque pixels
+                    r += px[0]
+                    g += px[1]
+                    b += px[2]
+                    valid_pixels += 1
+            
+            # Skip transparent blocks
+            if valid_pixels == 0:
+                continue
+                
+            # Calculate average of valid pixels
+            avg_color = (r//valid_pixels, g//valid_pixels, b//valid_pixels)
+            
+            # Find closest EPD colors and ratio
+            primary, secondary, ratio = find_closest_colors(avg_color, epd)
+            
+            # Apply dithering to the block
+            draw_dithered_box(
+                draw, epd,
+                x, y,
+                min(block_size, width - x),
+                min(block_size, height - y),
+                "",  # No text
+                primary, secondary, ratio,
+                None  # No font needed
+            )
+    
+    return processed
+
+def get_weather_icon(icon_code, size, epd):
+    """Fetch and process weather icon from OpenWeatherMap"""
+    try:
+        response = requests.get(WEATHER_ICON_URL.format(icon_code))
+        if response.status_code == 200:
+            icon = Image.open(BytesIO(response.content))
+            icon = icon.resize(size, Image.Resampling.LANCZOS)
+            
+            # Convert to RGBA if not already
+            if icon.mode != 'RGBA':
+                icon = icon.convert('RGBA')
+            
+            # Process the icon using our dithering approach
+            processed_icon = process_icon_for_epd(icon, epd)
+            
+            return processed_icon
+            
+    except Exception as e:
+        logger.error(f"Error processing weather icon: {e}")
+    return None
 
 def update_display(epd, weather_data, bus_data, error_message=None, stop_name=None, first_run=False):
     """Update the display with new weather data"""
@@ -211,60 +313,78 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
     
     # Top row: Large temperature and weather icon
     temp_text = f"{weather_data['current']['temperature']}°C"
-    weather_icon = WEATHER_ICONS.get(weather_data['current']['description'], '?')
+    
+    # Get and draw weather icon
+    icon = get_weather_icon(weather_data['current']['icon'], CURRENT_ICON_SIZE, epd)
     
     # Center temperature and icon
     temp_bbox = draw.textbbox((0, 0), temp_text, font=font_xl)
     temp_width = temp_bbox[2] - temp_bbox[0]
-    icon_bbox = draw.textbbox((0, 0), weather_icon, font=font_xl)
-    icon_width = icon_bbox[2] - icon_bbox[0]
     
-    total_width = temp_width + icon_width + 20
+    total_width = temp_width + CURRENT_ICON_SIZE[0] + 20
     start_x = (Himage.width - total_width) // 2
     
+    # Draw temperature
     draw.text((start_x, MARGIN), temp_text, font=font_xl, fill=epd.BLACK)
-    draw.text((start_x + temp_width + 20, MARGIN), weather_icon, font=font_xl, fill=epd.BLACK)
+    
+    # Draw icon
+    if icon:
+        icon_x = start_x + temp_width + 20
+        icon_y = MARGIN
+        Himage.paste(icon, (icon_x, icon_y))
+    else:
+        # Fallback to text icon if image loading fails
+        weather_icon = WEATHER_ICONS.get(weather_data['current']['description'], '?')
+        draw.text((start_x + temp_width + 20, MARGIN), weather_icon, 
+                  font=font_xl, fill=epd.BLACK)
 
-    # Middle row: Next sun event and air quality
+    # Middle row: Next sun event (moved left and smaller)
     y_pos = 55
     
     # Show either sunrise or sunset based on time of day
     if weather_data['is_daytime']:
         sun_text = f"{weather_data['sunset']}"
-        sun_icon = "🌅"
+        sun_icon = "☀"
     else:
         sun_text = f"{weather_data['sunrise']}"
-        sun_icon = "🌄"
+        sun_icon = "☀"
     
-    # Add AQI if available
-    if weather_data.get('air_quality'):
-        aqi_text = f"AQI: {weather_data['air_quality']['aqi']} ({weather_data['air_quality']['aqi_label']})"
-        
-        # Draw sun info and AQI on same line
-        sun_full = f"{sun_icon} {sun_text}"
-        sun_bbox = draw.textbbox((0, 0), sun_full, font=font_large)
-        aqi_bbox = draw.textbbox((0, 0), aqi_text, font=font_medium)
-        
-        # Calculate positions to center both pieces of text
-        total_width = sun_bbox[2] - sun_bbox[0] + 30 + (aqi_bbox[2] - aqi_bbox[0])  # 30px spacing
-        start_x = (Himage.width - total_width) // 2
-        
-        draw.text((start_x, y_pos), sun_full, font=font_large, fill=epd.BLACK)
-        draw.text((start_x + (sun_bbox[2] - sun_bbox[0]) + 30, y_pos + 5), aqi_text, font=font_medium, fill=epd.BLACK)
-    else:
-        # Center sun information only
-        sun_bbox = draw.textbbox((0, 0), f"{sun_icon} {sun_text}", font=font_large)
-        sun_width = sun_bbox[2] - sun_bbox[0]
-        sun_x = (Himage.width - sun_width) // 2
-        draw.text((sun_x, y_pos), f"{sun_icon} {sun_text}", font=font_large, fill=epd.BLACK)
+    # Draw sun info on left side with smaller font
+    sun_full = f"{sun_icon} {sun_text}"
+    draw.text((MARGIN + 5, y_pos), sun_full, font=font_medium, fill=epd.BLACK)
 
-    # Bottom row: Tomorrow's forecast
+    # Bottom row: Three day forecast
     y_pos = 90
-    tomorrow_text = f"Tomorrow: {weather_data['tomorrow']['min']}°C to {weather_data['tomorrow']['max']}°C"
-    tomorrow_bbox = draw.textbbox((0, 0), tomorrow_text, font=font_medium)
-    tomorrow_width = tomorrow_bbox[2] - tomorrow_bbox[0]
-    tomorrow_x = (Himage.width - tomorrow_width) // 2
-    draw.text((tomorrow_x, y_pos), tomorrow_text, font=font_medium, fill=epd.BLACK)
+    forecasts = weather_data['forecasts'][:3]
+    
+    # Calculate available width
+    available_width = Himage.width - (2 * MARGIN)
+    # Width for each forecast block (icon + temp)
+    forecast_block_width = available_width // 3
+    
+    for idx, forecast in enumerate(forecasts):
+        # Calculate starting x position for this forecast block
+        current_x = MARGIN + (idx * forecast_block_width)
+        
+        # Get and draw icon
+        icon = get_weather_icon(forecast['icon'], FORECAST_ICON_SIZE, epd)
+        if icon:
+            # Center icon and text within their block
+            forecast_text = f"{forecast['min']}-{forecast['max']}°"
+            text_bbox = draw.textbbox((0, 0), forecast_text, font=font_medium)
+            text_width = text_bbox[2] - text_bbox[0]
+            total_element_width = FORECAST_ICON_SIZE[0] + 5 + text_width
+            
+            # Center the whole block
+            block_start_x = current_x + (forecast_block_width - total_element_width) // 2
+            
+            # Draw icon and text
+            icon_y = y_pos + (font_medium.size - FORECAST_ICON_SIZE[1]) // 2
+            Himage.paste(icon, (block_start_x, icon_y))
+            
+            # Draw temperature
+            text_x = block_start_x + FORECAST_ICON_SIZE[0] + 5
+            draw.text((text_x, y_pos), forecast_text, font=font_medium, fill=epd.BLACK)
 
     # Generate and draw QR code (larger size)
     qr = qrcode.QRCode(version=1, box_size=2, border=1)

@@ -370,9 +370,10 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
         font_large = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 28)
         font_medium = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 20)
         font_small = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 16)
+        font_tiny = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 10)
     except:
         font_xl = ImageFont.load_default()
-        font_large = font_medium = font_small = font_xl
+        font_large = font_medium = font_small = font_tiny = font_xl 
 
     MARGIN = 8
     
@@ -386,11 +387,12 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
     temp_bbox = draw.textbbox((0, 0), temp_text, font=font_xl)
     temp_width = temp_bbox[2] - temp_bbox[0]
     
-    total_width = temp_width + CURRENT_ICON_SIZE[0] + 20
-    start_x = (Himage.width - total_width) // 2
+    total_width = temp_width + CURRENT_ICON_SIZE[0] + 65
+    # start_x = (Himage.width - total_width) // 2
+    start_x = MARGIN
     
     # Draw temperature
-    draw.text((start_x, MARGIN), temp_text, font=font_xl, fill=epd.BLACK)
+    draw.text((start_x, MARGIN), temp_text, font=font_xl, fill=epd.BLACK, align="left")
     
     # Draw icon
     if icon:
@@ -416,10 +418,10 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
     
     # Draw sun info on left side with smaller font
     sun_full = f"{sun_icon} {sun_text}"
-    draw.text((MARGIN + 5, y_pos), sun_full, font=font_medium, fill=epd.BLACK)
+    draw.text((MARGIN , y_pos), sun_full, font=font_medium, fill=epd.BLACK)
 
     # Bottom row: Three day forecast
-    y_pos = 90
+    y_pos = 85
     forecasts = weather_data['forecasts'][:3]
     
     # Calculate available width
@@ -459,7 +461,7 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
     qr_img = qr_img.convert('RGB')
     
     # Scale QR code to larger size
-    qr_size = 45
+    qr_size = 60
     qr_img = qr_img.resize((qr_size, qr_size))
     qr_x = Himage.width - qr_size - MARGIN
     qr_y = MARGIN
@@ -467,13 +469,15 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
 
     # Draw time under QR code
     current_time = datetime.now().strftime("%H:%M")
-    time_bbox = draw.textbbox((0, 0), current_time, font=font_small)
+    time_bbox = draw.textbbox((0, 0), current_time, font=font_tiny)
     time_width = time_bbox[2] - time_bbox[0]
-    draw.text((qr_x + (qr_size - time_width)//2, qr_y + qr_size + 2), 
-              current_time, font=font_small, fill=epd.BLACK)
+    time_x = Himage.width - time_width - MARGIN
+    time_y = Himage.height - time_bbox[3]- (MARGIN // 2)
+    draw.text((time_x, time_y), 
+              current_time, font=font_tiny, fill=epd.BLACK, align="right")
 
     # Draw a border around the display
-    draw.rectangle([(0, 0), (Himage.width-1, Himage.height-1)], outline=epd.BLACK)
+    draw.rectangle([(0, 0), (Himage.width-1, Himage.height-1)], outline=epd.RED)
 
     # Rotate the image 90 degrees
     Himage = Himage.rotate(90, expand=True)

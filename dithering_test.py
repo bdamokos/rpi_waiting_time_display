@@ -3,7 +3,7 @@
 import sys
 import os
 import logging
-from waveshare_epd import epd2in13g_V2
+from display_adapter import DisplayAdapter
 from PIL import Image, ImageDraw, ImageFont
 from bus_service import BusService
 from dithering import (
@@ -22,7 +22,7 @@ def main():
     try:
         # Initialize display
         logging.info("Initializing display...")
-        epd = epd2in13g_V2.EPD()
+        epd = DisplayAdapter.get_display()
         epd.init()
         epd.Clear()
         
@@ -98,7 +98,7 @@ def main():
         if epd is not None:
             try:
                 logging.info("Cleanup in finally block...")
-                epd2in13g_V2.epdconfig.module_exit()
+                epd.epdconfig.module_exit()
             except Exception as e:
                 logging.error(f"Error during cleanup: {e}")
 

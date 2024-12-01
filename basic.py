@@ -21,6 +21,7 @@ from io import BytesIO
 import importlib
 import log_config
 import requests
+import random
 
 logger = logging.getLogger(__name__)
 
@@ -41,14 +42,50 @@ CURRENT_ICON_SIZE = (50, 50)  # Size for current weather icon
 FORECAST_ICON_SIZE = (20, 20)  # Smaller size for forecast icons
 CACHE_DIR = Path(os.path.dirname(os.path.realpath(__file__))) / "cache" / "weather_icons"
 
-def find_closest_colors(pixel_rgb, epd):
-    """Find the two closest EPD colors and optimal ratio to represent an RGB color"""
-    r, g, b = pixel_rgb[:3]  # Get RGB values, ignore alpha if present
+def find_optimal_colors(pixel_rgb, epd):
+    """Find optimal combination of available colors to represent an RGB value"""
+    r, g, b = pixel_rgb[:3]
     
-    # Calculate luminance
+    # Add debug logging
+    logger.debug(f"Processing pixel RGB: ({r}, {g}, {b})")
+    
+    # Calculate color characteristics
     luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0
+    saturation = max(r, g, b) - min(r, g, b)
+    red_ratio = r / 255.0
+    yellow_ratio = min(r, g) / 255.0  # Yellow needs both red and green
     
-    # Available EPD colors and their RGB values
+    logger.debug(f"Luminance: {luminance:.2f}, Saturation: {saturation}, Red ratio: {red_ratio:.2f}, Yellow ratio: {yellow_ratio:.2f}")
+    
+    # More aggressive color selection
+    if r > 200 and g < 100:  # Strong red
+        logger.debug("Selected: Strong red pattern")
+        return [('red', 0.7), ('black', 0.2), ('white', 0.1)]
+    elif r > 200 and g > 200:  # Strong yellow
+        logger.debug("Selected: Strong yellow pattern")
+        return [('yellow', 0.7), ('black', 0.2), ('white', 0.1)]
+    elif saturation < 30:  # Grayscale
+        if luminance > 0.7:
+            logger.debug("Selected: Light gray pattern")
+            return [('white', 0.7), ('black', 0.3)]
+        elif luminance > 0.3:
+            logger.debug("Selected: Medium gray pattern")
+            return [('white', 0.5), ('black', 0.5)]
+        else:
+            logger.debug("Selected: Dark gray pattern")
+            return [('black', 0.7), ('white', 0.3)]
+    elif r > g and r > b:  # Reddish
+        logger.debug("Selected: Reddish pattern")
+        return [('red', 0.6), ('black', 0.2), ('white', 0.2)]
+    elif r > 100 and g > 100:  # Yellowish
+        logger.debug("Selected: Yellowish pattern")
+        return [('yellow', 0.6), ('black', 0.2), ('white', 0.2)]
+    else:
+        logger.debug("Selected: Default pattern")
+        return [('black', 0.6), ('white', 0.4)]
+
+def draw_multicolor_dither(draw, epd, x, y, width, height, colors_with_ratios):
+    """Draw a block using multiple colors with specified ratios"""
     epd_colors = {
         'white': ((255, 255, 255), epd.WHITE),
         'black': ((0, 0, 0), epd.BLACK),
@@ -56,101 +93,63 @@ def find_closest_colors(pixel_rgb, epd):
         'yellow': ((255, 255, 0), epd.YELLOW)
     }
     
-    # Calculate color distances and find two closest colors
-    distances = []
-    for name, ((cr, cg, cb), _) in epd_colors.items():
-        # Use weighted color distance to better handle light colors
-        distance = (
-            (3 * (r - cr) ** 2) +  # Increased weight for red
-            (4 * (g - cg) ** 2) +  # Increased weight for green
-            (2 * (b - cb) ** 2)    # Lower weight for blue
-        ) ** 0.5
-        distances.append((distance, name))
+    total_pixels = width * height
     
-    distances.sort()  # Sort by distance
-    color1, color2 = distances[0][1], distances[1][1]
+    # Ensure we're actually using the colors we selected
+    logger.debug(f"Dithering with colors: {colors_with_ratios}")
     
-    # Calculate ratio with enhanced contrast for light colors
-    total_distance = distances[0][0] + distances[1][0]
-    base_ratio = 1 - (distances[0][0] / total_distance) if total_distance > 0 else 1
-    
-    # Enhance contrast for light colors
-    if luminance > 0.7:  # For very light colors
-        ratio = max(base_ratio, 0.3)  # Ensure at least 30% coverage
-    elif luminance > 0.4:  # For medium-light colors
-        ratio = max(base_ratio, 0.5)  # Ensure at least 50% coverage
-    else:
-        ratio = base_ratio
-    
-    return color1, color2, ratio
+    for i in range(width):
+        for j in range(height):
+            pos = (i + j * width) / total_pixels
+            
+            # Simplified color selection - more deterministic
+            cumulative_ratio = 0
+            chosen_color = 'white'  # default
+            
+            for color_name, ratio in colors_with_ratios:
+                cumulative_ratio += ratio
+                if pos <= cumulative_ratio:
+                    chosen_color = color_name
+                    break
+            
+            draw.point((x + i, y + j), fill=epd_colors[chosen_color][1])
 
 def process_icon_for_epd(icon, epd):
-    """Process icon using dithering for optimal color representation"""
+    """Process icon using multi-color dithering"""
     width, height = icon.size
     processed = Image.new('RGB', icon.size, epd.WHITE)
     draw = ImageDraw.Draw(processed)
     
-    # First pass: Process main colors
     block_size = 4
-    outline_points = set()  # Keep track of edges
-    
     for x in range(0, width, block_size):
         for y in range(0, height, block_size):
             block = icon.crop((x, y, min(x + block_size, width), min(y + block_size, height)))
             
-            # Calculate average color and alpha
-            r, g, b, a = 0, 0, 0, 0
-            pixels = list(block.getdata())
-            valid_pixels = 0
-            has_transparent = False
-            
-            for px in pixels:
-                if len(px) == 4:
-                    if px[3] > 128:  # Opaque pixel
-                        r += px[0]
-                        g += px[1]
-                        b += px[2]
-                        valid_pixels += 1
-                    else:
-                        has_transparent = True
+            # Calculate average color of non-transparent pixels
+            r, g, b, valid_pixels = 0, 0, 0, 0
+            for px in block.getdata():
+                if len(px) == 4 and px[3] > 128:
+                    r += px[0]
+                    g += px[1]
+                    b += px[2]
+                    valid_pixels += 1
             
             if valid_pixels == 0:
                 continue
                 
             avg_color = (r//valid_pixels, g//valid_pixels, b//valid_pixels)
             
-            # Calculate luminance
-            luminance = (0.299 * avg_color[0] + 0.587 * avg_color[1] + 0.114 * avg_color[2]) / 255.0
+            # Get optimal color combination
+            colors_with_ratios = find_optimal_colors(avg_color, epd)
             
-            # If this is an edge (has both transparent and opaque pixels)
-            if has_transparent and valid_pixels > 0:
-                outline_points.add((x, y))
-                outline_points.add((x + block_size - 1, y))
-                outline_points.add((x, y + block_size - 1))
-                outline_points.add((x + block_size - 1, y + block_size - 1))
-            
-            # Adjust dithering based on luminance
-            if luminance > 0.7:  # Very light
-                # Use black dots for definition
-                for i in range(x, min(x + block_size, width), 2):
-                    for j in range(y, min(y + block_size, height), 2):
-                        draw.point((i, j), fill=epd.BLACK)
-            else:
-                # Normal color processing
-                primary, secondary, ratio = find_closest_colors(avg_color, epd)
-                draw_dithered_box(
-                    draw, epd,
-                    x, y,
-                    min(block_size, width - x),
-                    min(block_size, height - y),
-                    "",
-                    primary, secondary, ratio,
-                    None
-                )
-    
-    # Second pass: Draw outlines
-    for x, y in outline_points:
-        draw.point((x, y), fill=epd.BLACK)
+            # Apply multi-color dithering
+            draw_multicolor_dither(
+                draw, epd,
+                x, y,
+                min(block_size, width - x),
+                min(block_size, height - y),
+                colors_with_ratios
+            )
     
     return processed
 

@@ -188,6 +188,7 @@ class WeatherService:
                     if day_forecasts:
                         min_temp = min(float(item['main']['temp_min']) for item in day_forecasts)
                         max_temp = max(float(item['main']['temp_max']) for item in day_forecasts)
+                        icon = day_forecasts[0]['weather'][0]['icon']
                         # Get the most common weather condition for the day
                         conditions = [item['weather'][0]['main'] for item in day_forecasts]
                         condition = max(set(conditions), key=conditions.count)
@@ -196,7 +197,8 @@ class WeatherService:
                             'date': target_date.strftime('%Y-%m-%d'),
                             'min': round(min_temp),
                             'max': round(max_temp),
-                            'condition': condition
+                            'condition': condition,
+                            'icon': icon
                         })
                 
                 # Get sunrise/sunset from current weather data
@@ -214,6 +216,7 @@ class WeatherService:
                     'forecasts': forecasts,  # Add the 3-day forecast
                     'tomorrow': {
                         'min': forecasts[0]['min'] if forecasts else '--',
+                        'icon': forecasts[0]['icon'] if forecasts else '',
                         'max': forecasts[0]['max'] if forecasts else '--',
                         'air_quality': air_quality
                     }

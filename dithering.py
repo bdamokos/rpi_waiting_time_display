@@ -26,7 +26,7 @@ def draw_dithered_box(draw, epd, x, y, width, height, text, primary_color, secon
         'yellow': (epd.YELLOW, (255, 255, 0)),
         'white': (epd.WHITE, (255, 255, 255))
     }
-    
+    # TO DO: check if the color is valid with the given epd display, and if not, remove it from the color_map; conversely, if there is a color missing, add it to the color_map
     primary_epd, primary_rgb = color_map[primary_color]
     secondary_epd, secondary_rgb = color_map[secondary_color]
     

@@ -1,6 +1,6 @@
 import requests
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 import dotenv
 import qrcode
 from io import BytesIO
@@ -94,7 +94,9 @@ class WeatherService:
                 'description': weather_data['weather'][0]['main'],
                 'humidity': weather_data['main']['humidity'],
                 'time': datetime.now().strftime('%H:%M'),
-                'icon': weather_data['weather'][0]['icon']
+                'icon': weather_data['weather'][0]['icon'],
+                'feels_like': round(weather_data['main']['feels_like']),
+                'pressure': weather_data['main']['pressure']
             }
             
         except Exception as e:
@@ -110,59 +112,97 @@ class WeatherService:
     def get_detailed_weather(self):
         """Get current weather and forecast data"""
         try:
-            # Get current weather
-            current = self.get_weather()
-            logger.debug(f"Current weather data: {current}")
-            
-            # Get air quality
-            air_quality = None
-            if self.lat and self.lon:
-                air_quality = self.get_air_quality()
-                logger.debug(f"Air quality data: {air_quality}")
-            
-            # Get daily forecast and sun data
+            # Get current weather with sunrise/sunset
             if self.lat and self.lon:
                 params = {
                     'lat': self.lat,
                     'lon': self.lon,
                     'appid': self.api_key,
-                    'units': 'metric',
-                    'exclude': 'minutely,hourly,alerts'
+                    'units': 'metric'
                 }
-                url = "http://api.openweathermap.org/data/3.0/onecall"
             else:
                 params = {
                     'q': f"{self.city},{self.country}",
                     'appid': self.api_key,
                     'units': 'metric'
                 }
-                url = self.base_url
             
-            logger.debug(f"Fetching detailed weather from URL: {url}")
+            response = requests.get(self.base_url, params=params)
+            response.raise_for_status()
+            current_data = response.json()
+            logger.debug(f"Current weather data: {current_data}")
+            
+            current = {
+                'temperature': round(current_data['main']['temp']),
+                'description': current_data['weather'][0]['main'],
+                'humidity': current_data['main']['humidity'],
+                'time': datetime.now().strftime('%H:%M'),
+                'icon': current_data['weather'][0]['icon'],
+                'sunrise': current_data['sys']['sunrise'],
+                'sunset': current_data['sys']['sunset'],
+                'pressure': current_data['main']['pressure'],
+                'feels_like': round(current_data['main']['feels_like'])
+            }
+
+            # Get air quality
+            air_quality = None
+            if self.lat and self.lon:
+                air_quality = self.get_air_quality()
+                logger.debug(f"Air quality data: {air_quality}")
+            
+            # Get forecast data for tomorrow using 5 day/3 hour forecast API
+            if self.lat and self.lon:
+                params = {
+                    'lat': self.lat,
+                    'lon': self.lon,
+                    'appid': self.api_key,
+                    'units': 'metric'
+                }
+                url = self.forecast_url
+            else:
+                params = {
+                    'q': f"{self.city},{self.country}",
+                    'appid': self.api_key,
+                    'units': 'metric'
+                }
+                url = self.forecast_url
+            
+            logger.debug(f"Fetching forecast from URL: {url}")
             response = requests.get(url, params=params)
             response.raise_for_status()
-            weather_data = response.json()
-            logger.debug(f"Received weather data: {weather_data}")
+            forecast_data = response.json()
+            logger.debug(f"Received forecast data: {forecast_data}")
             
             try:
-                # Convert sunrise/sunset to local time
-                sunrise = datetime.fromtimestamp(weather_data['current']['sunrise'])
-                sunset = datetime.fromtimestamp(weather_data['current']['sunset'])
-                current_time = datetime.now()
+                # Get tomorrow's min/max from forecast data
+                # Group forecasts by day and calculate min/max
+                tomorrow = datetime.now().date() + timedelta(days=1)
+                tomorrow_forecasts = [
+                    item for item in forecast_data['list'] 
+                    if datetime.fromtimestamp(item['dt']).date() == tomorrow
+                ]
                 
-                # Get tomorrow's forecast
-                tomorrow = weather_data['daily'][1]
+                if tomorrow_forecasts:
+                    min_temp = min(float(item['main']['temp_min']) for item in tomorrow_forecasts)
+                    max_temp = max(float(item['main']['temp_max']) for item in tomorrow_forecasts)
+                else:
+                    min_temp = max_temp = None
+                
+                # Get sunrise/sunset from current weather data
+                sunrise = datetime.fromtimestamp(current.get('sunrise', 0))
+                sunset = datetime.fromtimestamp(current.get('sunset', 0))
+                current_time = datetime.now()
                 
                 result = {
                     'current': current,
-                    'humidity': current['humidity'],
-                    'wind_speed': round(weather_data['current']['wind_speed'] * 3.6),
-                    'sunrise': sunrise.strftime('%H:%M'),
-                    'sunset': sunset.strftime('%H:%M'),
+                    'humidity': current.get('humidity', '--'),
+                    'wind_speed': round(float(current_data.get('wind', {}).get('speed', 0)) * 3.6),  # Convert m/s to km/h
+                    'sunrise': datetime.fromtimestamp(current['sunrise']).strftime('%H:%M'),
+                    'sunset': datetime.fromtimestamp(current['sunset']).strftime('%H:%M'),
                     'is_daytime': sunrise < current_time < sunset,
                     'tomorrow': {
-                        'min': round(tomorrow['temp']['min']),
-                        'max': round(tomorrow['temp']['max']),
+                        'min': round(min_temp) if min_temp is not None else '--',
+                        'max': round(max_temp) if max_temp is not None else '--',
                         'air_quality': air_quality
                     }
                 }
@@ -171,7 +211,7 @@ class WeatherService:
                 
             except KeyError as ke:
                 logger.error(f"Missing key in weather data: {ke}")
-                logger.error(f"Weather data structure: {weather_data}")
+                logger.error(f"Weather data structure: {forecast_data}")
                 raise
                 
         except requests.exceptions.RequestException as e:

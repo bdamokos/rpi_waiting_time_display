@@ -8,7 +8,7 @@ import os
 #     sys.path.append(libdir)
 
 import logging
-from waveshare_epd import epd2in13g_V2
+from display_adapter import DisplayAdapter
 import time
 from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
@@ -32,8 +32,6 @@ WEATHER_ICONS = {
     'Drizzle': '🌦',
     'Mist': '🌫',
 }
-
-display_model = os.getenv('display_model')
 
 def update_display(epd, weather_data, bus_data, error_message=None, stop_name=None, first_run=False):
     """Update the display with new weather data"""
@@ -308,10 +306,11 @@ def main():
         weather = WeatherService()
         bus = BusService()
         
-        # Add debug logs before EPD commands
-        logger.debug("About to initialize EPD")
-        epd = epd2in13g_V2.EPD()   
+        # Initialize display using adapter
+        logger.debug("About to initialize display")
+        epd = DisplayAdapter.get_display()
         
+        # Add debug logs before EPD commands
         logger.debug("About to call epd.init()")
         epd.init()
         
@@ -424,7 +423,7 @@ def main():
                 logger.debug("About to call epd.sleep()")
                 epd.sleep()
                 logger.debug("About to call module_exit")
-                epd2in13g_V2.epdconfig.module_exit(cleanup=True)
+                epd.epdconfig.module_exit(cleanup=True)
                 logger.info("Display cleanup completed")
             except Exception as e:
                 logger.error(f"Error during cleanup: {e}")

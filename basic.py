@@ -377,7 +377,7 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
     MARGIN = 8
     
     # Top row: Large temperature and weather icon
-    temp_text = f"{weather_data['current']['temperature']}��C"
+    temp_text = f"{weather_data['current']['temperature']}°C"
     
     # Get and draw weather icon
     icon = get_weather_icon(weather_data['current']['icon'], CURRENT_ICON_SIZE, epd)

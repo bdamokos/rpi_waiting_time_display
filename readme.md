@@ -41,7 +41,42 @@ To set up the service with systemd, copy the [start_display.service](docs/servic
 sudo systemctl enable start_display.service
 sudo systemctl start start_display.service
 ```
+If you don't already have the DejaVuSans font installed, you can install it with:
+```
+sudo apt-get install ttf-dejavu
+```
 
+To setup watchdog (in case the display freezes, it will reboot the Pi):
+
+Add these parameters to /boot/firmware/config.txt:
+```
+dtparam=watchdog=on
+```
+
+Then install watchdog:
+```
+sudo apt-get install watchdog
+```
+
+Edit the watchdog configuration file:
+```
+sudo nano /etc/watchdog.conf
+```
+Put in the following:
+```
+# Add or uncomment these lines:
+watchdog-device = /dev/watchdog
+watchdog-timeout = 15
+interval = 10
+max-load-1 = 3.0
+max-load-5 = 2.8
+```
+
+Then enable the watchdog service:
+```
+sudo systemctl enable watchdog
+sudo systemctl start watchdog
+```
 
 # Specific workarounds (Waveshare 2.13 inch display with 4 colours, revision 2)
 To get the display working, I needed to copy a specific file from the E-Paper library from 

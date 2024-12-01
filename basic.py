@@ -191,96 +191,82 @@ def update_display(epd, weather_data, bus_data, error_message=None, stop_name=No
 def draw_weather_display(epd, weather_data, last_weather_data=None):
     """Draw a weather-focused display when no bus times are available"""
     # Create a new image with white background
-    Himage = Image.new('RGB', (epd.height, epd.width), epd.WHITE)
+    Himage = Image.new('RGB', (epd.height, epd.width), epd.WHITE)  # 250x120
     draw = ImageDraw.Draw(Himage)
     
     try:
-        font_xl = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 48)
-        font_large = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 32)
-        font_medium = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 24)
-        font_small = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 16)
+        font_xl = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 36)
+        font_large = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 24)
+        font_medium = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 18)
+        font_small = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 14)
     except:
         font_xl = ImageFont.load_default()
         font_large = font_medium = font_small = font_xl
 
-    MARGIN = 10
+    MARGIN = 5
+    BLOCK_WIDTH = 63
+    BLOCK_HEIGHT = 40
 
-    # Draw current temperature (large) and weather icon
+    # Top row: Temperature and Weather Icon (0-40px height)
     temp_text = f"{weather_data['current']['temperature']}°C"
-    temp_bbox = draw.textbbox((0, 0), temp_text, font=font_xl)
-    temp_width = temp_bbox[2] - temp_bbox[0]
-    
     weather_icon = WEATHER_ICONS.get(weather_data['current']['description'], '?')
     
-    # Center temperature and icon at the top
-    total_width = temp_width + 40  # Add some spacing between temp and icon
-    start_x = (Himage.width - total_width) // 2
+    # Center temperature in left half
+    temp_bbox = draw.textbbox((0, 0), temp_text, font=font_xl)
+    temp_width = temp_bbox[2] - temp_bbox[0]
+    temp_x = (Himage.width//2 - temp_width) // 2
+    draw.text((temp_x, MARGIN), temp_text, font=font_xl, fill=epd.BLACK)
     
-    draw.text((start_x, MARGIN), temp_text, font=font_xl, fill=epd.BLACK)
-    draw.text((start_x + temp_width + 20, MARGIN), weather_icon, font=font_xl, fill=epd.BLACK)
+    # Center weather icon in right half
+    icon_x = Himage.width//2 + (Himage.width//4 - 20)  # Approximate center of right half
+    draw.text((icon_x, MARGIN), weather_icon, font=font_xl, fill=epd.BLACK)
 
-    # Draw "feels like" temperature
-    feels_like_text = f"Feels like: {weather_data['feels_like']}°C"
-    feels_like_bbox = draw.textbbox((0, 0), feels_like_text, font=font_medium)
-    feels_like_width = feels_like_bbox[2] - feels_like_bbox[0]
-    feels_like_x = (Himage.width - feels_like_width) // 2
-    draw.text((feels_like_x, MARGIN + 60), feels_like_text, font=font_medium, fill=epd.BLACK)
-
-    # Draw current conditions in a grid layout
-    y_pos = MARGIN + 100
-    left_column = MARGIN
-    right_column = Himage.width // 2 + MARGIN
-
-    # Left column
-    draw.text((left_column, y_pos), "Humidity", font=font_small, fill=epd.BLACK)
-    draw.text((left_column, y_pos + 20), f"{weather_data['humidity']}%", font=font_medium, fill=epd.BLACK)
+    # Middle row: Current conditions and QR code (40-80px height)
+    y_pos = BLOCK_HEIGHT + MARGIN
     
-    draw.text((left_column, y_pos + 50), "Wind", font=font_small, fill=epd.BLACK)
-    draw.text((left_column, y_pos + 70), f"{weather_data['wind_speed']} km/h", font=font_medium, fill=epd.BLACK)
-
-    # Right column
-    draw.text((right_column, y_pos), "Rain chance", font=font_small, fill=epd.BLACK)
-    draw.text((right_column, y_pos + 20), f"{weather_data['precipitation_chance']}%", font=font_medium, fill=epd.BLACK)
+    # Current conditions in three columns
+    conditions = [
+        (f"Humidity\n{weather_data['humidity']}%", 0),
+        (f"Wind\n{weather_data['wind_speed']} km/h", BLOCK_WIDTH),
+        (f"Rain\n{weather_data['precipitation_chance']}%", BLOCK_WIDTH * 2)
+    ]
     
-    # Draw forecast section
-    y_pos = y_pos + 110
-    draw.text((MARGIN, y_pos), "Forecast:", font=font_medium, fill=epd.BLACK)
-    y_pos += 25
+    for text, x_offset in conditions:
+        draw.text((MARGIN + x_offset, y_pos), text, font=font_medium, fill=epd.BLACK)
 
-    # Draw forecast in a grid (3 columns)
-    if weather_data['forecast']:
-        col_width = (Himage.width - (2 * MARGIN)) // 3
-        for idx, forecast in enumerate(weather_data['forecast'][:3]):
-            x_pos = MARGIN + (idx * col_width)
-            
-            # Time
-            draw.text((x_pos, y_pos), forecast['time'], font=font_small, fill=epd.BLACK)
-            # Temperature
-            draw.text((x_pos, y_pos + 20), f"{forecast['temp']}°C", font=font_medium, fill=epd.BLACK)
-            # Weather icon
-            icon = WEATHER_ICONS.get(forecast['description'], '?')
-            draw.text((x_pos + 50, y_pos + 20), icon, font=font_medium, fill=epd.BLACK)
-
-    # Generate and draw QR code
-    qr = qrcode.QRCode(version=1, box_size=2, border=1)
+    # Generate and draw QR code in rightmost block
+    qr = qrcode.QRCode(version=1, box_size=1, border=1)
     qr.add_data('http://raspberrypi.local:5001')
     qr.make(fit=True)
     qr_img = qr.make_image(fill_color="black", back_color="white")
     qr_img = qr_img.convert('RGB')
     
-    # Calculate position for QR code (bottom right corner)
-    qr_size = qr_img.size[0]
+    # Scale QR code to fit in the block (slightly smaller than BLOCK_HEIGHT)
+    qr_size = 35
+    qr_img = qr_img.resize((qr_size, qr_size))
     qr_x = Himage.width - qr_size - MARGIN
-    qr_y = Himage.height - qr_size - MARGIN
+    qr_y = y_pos
     Himage.paste(qr_img, (qr_x, qr_y))
 
-    # Draw current time (small, bottom right, under QR code)
+    # Draw time under QR code
     current_time = datetime.now().strftime("%H:%M")
     time_bbox = draw.textbbox((0, 0), current_time, font=font_small)
     time_width = time_bbox[2] - time_bbox[0]
-    time_height = time_bbox[3] - time_bbox[1]
-    draw.text((Himage.width - time_width - MARGIN, qr_y + qr_size + 5), 
+    draw.text((qr_x + (qr_size - time_width)//2, qr_y + qr_size + 2), 
               current_time, font=font_small, fill=epd.BLACK)
+
+    # Bottom row: Forecast (80-120px height)
+    y_pos = 2 * BLOCK_HEIGHT + MARGIN
+    if weather_data['forecast']:
+        for idx, forecast in enumerate(weather_data['forecast'][:3]):
+            x_pos = MARGIN + (idx * BLOCK_WIDTH)
+            
+            # Time
+            draw.text((x_pos, y_pos), forecast['time'], font=font_small, fill=epd.BLACK)
+            # Temperature and icon
+            temp_text = f"{forecast['temp']}°C"
+            icon = WEATHER_ICONS.get(forecast['description'], '?')
+            draw.text((x_pos, y_pos + 15), f"{temp_text} {icon}", font=font_medium, fill=epd.BLACK)
 
     # Draw a border around the display
     draw.rectangle([(0, 0), (Himage.width-1, Himage.height-1)], outline=epd.BLACK)

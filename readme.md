@@ -17,8 +17,8 @@ An API key for OpenWeatherMap is required to get the weather data.
 
 ## Hardware
 Tested with:
-- Raspberry Pi Zero 2W
-- Waveshare 2.13" G V2 e-Paper display (black, white, red, yellow; no partial refresh support)
+- Raspberry Pi Zero 2W (~€20 for the board, €10-15 for microSD card, €8 for charger)
+- Waveshare 2.13" G V2 e-Paper display (black, white, red, yellow; no partial refresh support; ~€20)
 
 # Configuration
 The .env file is used to configure the application:

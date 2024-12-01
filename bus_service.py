@@ -5,6 +5,7 @@ import os
 import dotenv
 from colorsys import rgb_to_hsv
 from dithering import draw_dithered_box
+import log_config
 
 logger = logging.getLogger(__name__)
 dotenv.load_dotenv()
@@ -32,7 +33,7 @@ def _parse_lines(lines_str: str) -> list:
     - String list format: ["59", "64"]
     """
     if not lines_str:
-        logging.error("No bus lines configured")
+        logger.error("No bus lines configured")
         return []
     
     # Remove any whitespace
@@ -50,7 +51,7 @@ def _parse_lines(lines_str: str) -> list:
         try:
             return [str(int(item)) for item in items]
         except ValueError as e:
-            logging.error(f"Invalid number in list format: {e}")
+            logger.error(f"Invalid number in list format: {e}")
             return []
     
     try:
@@ -66,7 +67,7 @@ def _parse_lines(lines_str: str) -> list:
         try:
             return [str(int(line)) for line in cleaned]
         except ValueError as e:
-            logging.error(f"Invalid bus line number format: {e}")
+            logger.error(f"Invalid bus line number format: {e}")
             return []
 
 class BusService:
@@ -76,7 +77,7 @@ class BusService:
         self.colors_url = f"{self.base_url}/api/stib/colors"
         self.stop_id = Stop
         self.lines_of_interest = _parse_lines(Lines)
-        logging.info(f"Monitoring bus lines: {self.lines_of_interest}")
+        logger.info(f"Monitoring bus lines: {self.lines_of_interest}")
         
     def _hex_to_rgb(self, hex_color: str) -> Tuple[int, int, int]:
         """Convert hex color to RGB tuple"""
@@ -190,8 +191,12 @@ class BusService:
                         message = None
                         
                         # Check for special messages
-                        if 'message' in bus:
-                            msg = bus['message'].get('en', '')  # Use English message
+                        if 'message' in bus and bus['message']:  # Only process if message exists and is non-empty
+                            if isinstance(bus['message'], dict):
+                                msg = bus['message'].get('en', '')
+                            else:
+                                msg = bus['message']
+                                
                             if "Last departure" in msg:
                                 message = "Last"
                             elif "Theoretical time" in msg:

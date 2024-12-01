@@ -1,0 +1,15 @@
+#As certain packages don't seem to work, these ones should be available in a dev environment on a Mac
+certifi==2024.8.30
+charset-normalizer==3.4.0
+colorzero==2.0
+gpiozero==2.0.1
+idna==3.10
+# lgpio==0.2.2.0
+pillow==11.0.0
+python-dotenv==1.0.1
+requests==2.32.3
+# RPi.GPIO==0.7.1
+# spidev==3.6
+urllib3==2.2.3
+# git+https://github.com/waveshare/e-Paper.git#subdirectory=RaspberryPi_JetsonNano/python
+qrcode==7.4.2

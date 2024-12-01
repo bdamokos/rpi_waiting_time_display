@@ -2,10 +2,10 @@
 # -*- coding:utf-8 -*-
 import sys
 import os
-picdir = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'pic')
-libdir = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'lib')
-if os.path.exists(libdir):
-    sys.path.append(libdir)
+# picdir = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'pic')
+# libdir = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'lib')
+# if os.path.exists(libdir):
+#     sys.path.append(libdir)
 
 import logging
 from waveshare_epd import epd2in13g_V2
@@ -17,8 +17,10 @@ from bus_service import BusService
 from dithering import draw_dithered_box
 import qrcode
 from io import BytesIO
+import importlib
+import log_config
 
-logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 # Weather icon mapping
 WEATHER_ICONS = {
@@ -31,9 +33,11 @@ WEATHER_ICONS = {
     'Mist': '🌫',
 }
 
+display_model = os.getenv('display_model')
+
 def update_display(epd, weather_data, bus_data, error_message=None, stop_name=None, first_run=False):
     """Update the display with new weather data"""
-    logging.info(f"Display dimensions: {epd.height}x{epd.width} (height x width)")
+    logger.info(f"Display dimensions: {epd.height}x{epd.width} (height x width)")
     
     # Create a new image with white background
     Himage = Image.new('RGB', (epd.height, epd.width), epd.WHITE)
@@ -43,9 +47,11 @@ def update_display(epd, weather_data, bus_data, error_message=None, stop_name=No
         font_large = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 32)
         font_medium = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 24)
         font_small = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 16)
+        logger.info(f"Found DejaVu fonts: {font_large}, {font_medium}, {font_small}")
     except:
         font_large = ImageFont.load_default()
         font_medium = font_small = font_large
+        logger.info(f"No DejaVu fonts found, using default: {font_large}, {font_medium}, {font_small}")
 
     # Calculate layout
     MARGIN = 8
@@ -185,7 +191,7 @@ def update_display(epd, weather_data, bus_data, error_message=None, stop_name=No
     buffer = epd.getbuffer(Himage)
     
     # Add debug log before display command
-    logging.debug("About to call epd.display() with new buffer")
+    logger.debug("About to call epd.display() with new buffer")
     epd.display(buffer)
 
 def draw_weather_display(epd, weather_data, last_weather_data=None):
@@ -296,26 +302,26 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
 def main():
     epd = None
     try:
-        logging.info("E-ink Display Starting")
+        logger.info("E-ink Display Starting")
         
         # Initialize services
         weather = WeatherService()
         bus = BusService()
         
         # Add debug logs before EPD commands
-        logging.debug("About to initialize EPD")
+        logger.debug("About to initialize EPD")
         epd = epd2in13g_V2.EPD()   
         
-        logging.debug("About to call epd.init()")
+        logger.debug("About to call epd.init()")
         epd.init()
         
-        logging.debug("About to call epd.Clear()")
+        logger.debug("About to call epd.Clear()")
         epd.Clear()
-        logging.info("Display initialized")
+        logger.info("Display initialized")
         
-        logging.debug("About to call epd.init_Fast()")
+        logger.debug("About to call epd.init_Fast()")
         epd.init_Fast()
-        logging.info("Fast mode initialized")
+        logger.info("Fast mode initialized")
         
         # Counter for full refresh every hour
         update_count = 0
@@ -346,12 +352,12 @@ def main():
                 needs_full_refresh = update_count >= FULL_REFRESH_INTERVAL
                 
                 if needs_full_refresh:
-                    logging.info("Performing hourly full refresh...")
-                    logging.debug("About to call epd.init()")
+                    logger.info("Performing hourly full refresh...")
+                    logger.debug("About to call epd.init()")
                     epd.init()
-                    logging.debug("About to call epd.Clear()")
+                    logger.debug("About to call epd.Clear()")
                     epd.Clear()
-                    logging.debug("About to call epd.init_Fast()")
+                    logger.debug("About to call epd.init_Fast()")
                     epd.init_Fast()
                     update_count = 0
                 
@@ -393,35 +399,35 @@ def main():
                     updates_until_refresh = FULL_REFRESH_INTERVAL - update_count - 1
                     next_update = f"bus update in {wait_time} seconds ({updates_until_refresh} until full refresh)"
                 
-                logging.info(f"Waiting {wait_time} seconds until next update ({next_update})")
+                logger.info(f"Waiting {wait_time} seconds until next update ({next_update})")
                 time.sleep(wait_time)
                 
             except Exception as e:
-                logging.error(f"Error in main loop: {e}")
+                logger.error(f"Error in main loop: {e}")
                 time.sleep(10)
                 continue
             
     except KeyboardInterrupt:
-        logging.info("Ctrl+C pressed - Cleaning up...")
+        logger.info("Ctrl+C pressed - Cleaning up...")
         
     except Exception as e:
-        logging.error(f"Main error: {e}")
+        logger.error(f"Main error: {e}")
         
     finally:
-        logging.info("Cleaning up...")
+        logger.info("Cleaning up...")
         if epd is not None:
             try:
-                logging.debug("About to call final epd.init()")
+                logger.debug("About to call final epd.init()")
                 epd.init()
-                logging.debug("About to call final epd.Clear()")
+                logger.debug("About to call final epd.Clear()")
                 epd.Clear()
-                logging.debug("About to call epd.sleep()")
+                logger.debug("About to call epd.sleep()")
                 epd.sleep()
-                logging.debug("About to call module_exit")
+                logger.debug("About to call module_exit")
                 epd2in13g_V2.epdconfig.module_exit(cleanup=True)
-                logging.info("Display cleanup completed")
+                logger.info("Display cleanup completed")
             except Exception as e:
-                logging.error(f"Error during cleanup: {e}")
+                logger.error(f"Error during cleanup: {e}")
         sys.exit(0)
 
 if __name__ == "__main__":

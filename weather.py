@@ -5,8 +5,11 @@ import dotenv
 import qrcode
 from io import BytesIO
 import logging
+import log_config
 
 logger = logging.getLogger(__name__)
+
+
 
 dotenv.load_dotenv()
 weather_api_key = os.getenv('OPENWEATHER_API_KEY')
@@ -109,7 +112,13 @@ class WeatherService:
         try:
             # Get current weather
             current = self.get_weather()
-            air_quality = self.get_air_quality() if self.lat and self.lon else None
+            logger.debug(f"Current weather data: {current}")
+            
+            # Get air quality
+            air_quality = None
+            if self.lat and self.lon:
+                air_quality = self.get_air_quality()
+                logger.debug(f"Air quality data: {air_quality}")
             
             # Get daily forecast and sun data
             if self.lat and self.lon:
@@ -118,7 +127,7 @@ class WeatherService:
                     'lon': self.lon,
                     'appid': self.api_key,
                     'units': 'metric',
-                    'exclude': 'minutely,hourly,alerts'  # Get daily forecast only
+                    'exclude': 'minutely,hourly,alerts'
                 }
                 url = "http://api.openweathermap.org/data/3.0/onecall"
             else:
@@ -129,46 +138,66 @@ class WeatherService:
                 }
                 url = self.base_url
             
+            logger.debug(f"Fetching detailed weather from URL: {url}")
             response = requests.get(url, params=params)
             response.raise_for_status()
             weather_data = response.json()
+            logger.debug(f"Received weather data: {weather_data}")
             
-            # Convert sunrise/sunset to local time
-            sunrise = datetime.fromtimestamp(weather_data['current']['sunrise'])
-            sunset = datetime.fromtimestamp(weather_data['current']['sunset'])
-            current_time = datetime.now()
-            
-            # Get tomorrow's forecast
-            tomorrow = weather_data['daily'][1]
-            
-            return {
-                'current': current,
-                'humidity': current['humidity'],
-                'wind_speed': round(weather_data['current']['wind_speed'] * 3.6),  # Convert m/s to km/h
-                'sunrise': sunrise.strftime('%H:%M'),
-                'sunset': sunset.strftime('%H:%M'),
-                'is_daytime': sunrise < current_time < sunset,
-                'tomorrow': {
-                    'min': round(tomorrow['temp']['min']),
-                    'max': round(tomorrow['temp']['max']),
-                'air_quality': air_quality
+            try:
+                # Convert sunrise/sunset to local time
+                sunrise = datetime.fromtimestamp(weather_data['current']['sunrise'])
+                sunset = datetime.fromtimestamp(weather_data['current']['sunset'])
+                current_time = datetime.now()
+                
+                # Get tomorrow's forecast
+                tomorrow = weather_data['daily'][1]
+                
+                result = {
+                    'current': current,
+                    'humidity': current['humidity'],
+                    'wind_speed': round(weather_data['current']['wind_speed'] * 3.6),
+                    'sunrise': sunrise.strftime('%H:%M'),
+                    'sunset': sunset.strftime('%H:%M'),
+                    'is_daytime': sunrise < current_time < sunset,
+                    'tomorrow': {
+                        'min': round(tomorrow['temp']['min']),
+                        'max': round(tomorrow['temp']['max']),
+                        'air_quality': air_quality
+                    }
                 }
-            }
-            
+                logger.debug(f"Processed weather result: {result}")
+                return result
+                
+            except KeyError as ke:
+                logger.error(f"Missing key in weather data: {ke}")
+                logger.error(f"Weather data structure: {weather_data}")
+                raise
+                
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Network error fetching detailed weather: {e}")
+            return self._get_error_weather_data()
         except Exception as e:
-            logger.error(f"Error fetching detailed weather: {e}")
-            return {
-                'current': self.get_weather(),
-                'humidity': '--',
-                'wind_speed': '--',
-                'sunrise': '--:--',
-                'sunset': '--:--',
-                'is_daytime': True,  # Default to daytime on error
-                'tomorrow': {
-                    'min': '--',
-                    'max': '--'
-                }
-            }
+            logger.error(f"Error fetching detailed weather: {e}", exc_info=True)
+            return self._get_error_weather_data()
+
+    def _get_error_weather_data(self):
+        """Return default error data structure"""
+        error_data = {
+            'current': self.get_weather(),  # This has its own error handling
+            'humidity': '--',
+            'wind_speed': '--',
+            'sunrise': '--:--',
+            'sunset': '--:--',
+            'is_daytime': True,  # Default to daytime on error
+            'tomorrow': {
+                'min': '--',
+                'max': '--'
+            },
+            'air_quality': None
+        }
+        logger.debug(f"Returning error weather data: {error_data}")
+        return error_data
 
 if __name__ == "__main__":
     # Test the module

@@ -150,7 +150,7 @@ class WeatherService:
                 air_quality = self.get_air_quality()
                 logger.debug(f"Air quality data: {air_quality}")
             
-            # Get forecast data for tomorrow using 5 day/3 hour forecast API
+            # Get forecast data for next 3 days using 5 day/3 hour forecast API
             if self.lat and self.lon:
                 params = {
                     'lat': self.lat,
@@ -174,19 +174,30 @@ class WeatherService:
             logger.debug(f"Received forecast data: {forecast_data}")
             
             try:
-                # Get tomorrow's min/max from forecast data
-                # Group forecasts by day and calculate min/max
-                tomorrow = datetime.now().date() + timedelta(days=1)
-                tomorrow_forecasts = [
-                    item for item in forecast_data['list'] 
-                    if datetime.fromtimestamp(item['dt']).date() == tomorrow
-                ]
+                # Get forecasts for next 3 days
+                today = datetime.now().date()
+                forecasts = []
                 
-                if tomorrow_forecasts:
-                    min_temp = min(float(item['main']['temp_min']) for item in tomorrow_forecasts)
-                    max_temp = max(float(item['main']['temp_max']) for item in tomorrow_forecasts)
-                else:
-                    min_temp = max_temp = None
+                for day_offset in range(1, 4):  # Next 3 days
+                    target_date = today + timedelta(days=day_offset)
+                    day_forecasts = [
+                        item for item in forecast_data['list'] 
+                        if datetime.fromtimestamp(item['dt']).date() == target_date
+                    ]
+                    
+                    if day_forecasts:
+                        min_temp = min(float(item['main']['temp_min']) for item in day_forecasts)
+                        max_temp = max(float(item['main']['temp_max']) for item in day_forecasts)
+                        # Get the most common weather condition for the day
+                        conditions = [item['weather'][0]['main'] for item in day_forecasts]
+                        condition = max(set(conditions), key=conditions.count)
+                        
+                        forecasts.append({
+                            'date': target_date.strftime('%Y-%m-%d'),
+                            'min': round(min_temp),
+                            'max': round(max_temp),
+                            'condition': condition
+                        })
                 
                 # Get sunrise/sunset from current weather data
                 sunrise = datetime.fromtimestamp(current.get('sunrise', 0))
@@ -200,9 +211,10 @@ class WeatherService:
                     'sunrise': datetime.fromtimestamp(current['sunrise']).strftime('%H:%M'),
                     'sunset': datetime.fromtimestamp(current['sunset']).strftime('%H:%M'),
                     'is_daytime': sunrise < current_time < sunset,
+                    'forecasts': forecasts,  # Add the 3-day forecast
                     'tomorrow': {
-                        'min': round(min_temp) if min_temp is not None else '--',
-                        'max': round(max_temp) if max_temp is not None else '--',
+                        'min': forecasts[0]['min'] if forecasts else '--',
+                        'max': forecasts[0]['max'] if forecasts else '--',
                         'air_quality': air_quality
                     }
                 }

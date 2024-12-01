@@ -302,8 +302,8 @@ def update_display(epd, weather_data, bus_data, error_message=None, stop_name=No
                     message_width = msg_bbox[2] - msg_bbox[0] + 5  # 5px spacing
                 
                 # Check if we have space for this time + message + spacing
-                if x_pos + time_width + message_width + 30 > Himage.width - MARGIN:
-                    break
+                # if x_pos + time_width + message_width + 30 > Himage.width - MARGIN:
+                #     break
                 
                 # Draw time
                 draw.text((x_pos, y_pos), time, font=font_medium, fill=epd.BLACK)

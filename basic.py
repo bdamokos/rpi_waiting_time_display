@@ -215,13 +215,13 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
     icon_bbox = draw.textbbox((0, 0), weather_icon, font=font_xl)
     icon_width = icon_bbox[2] - icon_bbox[0]
     
-    total_width = temp_width + icon_width + 20  # 20px spacing between temp and icon
+    total_width = temp_width + icon_width + 20
     start_x = (Himage.width - total_width) // 2
     
     draw.text((start_x, MARGIN), temp_text, font=font_xl, fill=epd.BLACK)
     draw.text((start_x + temp_width + 20, MARGIN), weather_icon, font=font_xl, fill=epd.BLACK)
 
-    # Middle row: Next sun event and tomorrow's temperatures
+    # Middle row: Next sun event and air quality
     y_pos = 55
     
     # Show either sunrise or sunset based on time of day
@@ -232,11 +232,27 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
         sun_text = f"Sunrise: {weather_data['sunrise']}"
         sun_icon = "🌄"
     
-    # Center sun information
-    sun_bbox = draw.textbbox((0, 0), f"{sun_icon} {sun_text}", font=font_large)
-    sun_width = sun_bbox[2] - sun_bbox[0]
-    sun_x = (Himage.width - sun_width) // 2
-    draw.text((sun_x, y_pos), f"{sun_icon} {sun_text}", font=font_large, fill=epd.BLACK)
+    # Add AQI if available
+    if weather_data.get('air_quality'):
+        aqi_text = f"AQI: {weather_data['air_quality']['aqi']} ({weather_data['air_quality']['aqi_label']})"
+        
+        # Draw sun info and AQI on same line
+        sun_full = f"{sun_icon} {sun_text}"
+        sun_bbox = draw.textbbox((0, 0), sun_full, font=font_large)
+        aqi_bbox = draw.textbbox((0, 0), aqi_text, font=font_medium)
+        
+        # Calculate positions to center both pieces of text
+        total_width = sun_bbox[2] - sun_bbox[0] + 30 + (aqi_bbox[2] - aqi_bbox[0])  # 30px spacing
+        start_x = (Himage.width - total_width) // 2
+        
+        draw.text((start_x, y_pos), sun_full, font=font_large, fill=epd.BLACK)
+        draw.text((start_x + (sun_bbox[2] - sun_bbox[0]) + 30, y_pos + 5), aqi_text, font=font_medium, fill=epd.BLACK)
+    else:
+        # Center sun information only
+        sun_bbox = draw.textbbox((0, 0), f"{sun_icon} {sun_text}", font=font_large)
+        sun_width = sun_bbox[2] - sun_bbox[0]
+        sun_x = (Himage.width - sun_width) // 2
+        draw.text((sun_x, y_pos), f"{sun_icon} {sun_text}", font=font_large, fill=epd.BLACK)
 
     # Bottom row: Tomorrow's forecast
     y_pos = 90

@@ -26,7 +26,43 @@ class WeatherService:
         self.country = country
         self.base_url = "http://api.openweathermap.org/data/2.5/weather"
         self.forecast_url = "http://api.openweathermap.org/data/2.5/forecast"
+        self.air_pollution_url = "http://api.openweathermap.org/data/2.5/air_pollution"
+        self.aqi_labels = {
+            1: "Good",
+            2: "Fair",
+            3: "Moderate",
+            4: "Poor",
+            5: "Very Poor"
+        }
+    def get_air_quality(self):
+        """Get current air quality data"""
+        try:
+            if not (self.lat and self.lon):
+                return None
 
+            params = {
+                'lat': self.lat,
+                'lon': self.lon,
+                'appid': self.api_key
+            }
+            
+            response = requests.get(self.air_pollution_url, params=params)
+            response.raise_for_status()
+            data = response.json()
+            
+            aqi = data['list'][0]['main']['aqi']
+            components = data['list'][0]['components']
+            
+            return {
+                'aqi': aqi,
+                'aqi_label': self.aqi_labels.get(aqi, "Unknown"),
+                'components': components
+            }
+            
+        except Exception as e:
+            logger.error(f"Error fetching air quality: {e}")
+            return None
+        
     def get_weather(self):
         try:
             if self.lat and self.lon:
@@ -73,6 +109,7 @@ class WeatherService:
         try:
             # Get current weather
             current = self.get_weather()
+            air_quality = self.get_air_quality() if self.lat and self.lon else None
             
             # Get daily forecast and sun data
             if self.lat and self.lon:
@@ -113,7 +150,8 @@ class WeatherService:
                 'is_daytime': sunrise < current_time < sunset,
                 'tomorrow': {
                     'min': round(tomorrow['temp']['min']),
-                    'max': round(tomorrow['temp']['max'])
+                    'max': round(tomorrow['temp']['max']),
+                'air_quality': air_quality
                 }
             }
             

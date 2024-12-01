@@ -374,7 +374,10 @@ def main():
                     
                     time_since_update = (current_time - last_weather_update).total_seconds()
                     
-                    if (weather_changed and time_since_update >= WEATHER_UPDATE_INTERVAL) or time_since_update >= 3600:
+                    # Always display on first run (when last_weather_data is None)
+                    if (last_weather_data is None or 
+                        (weather_changed and time_since_update >= WEATHER_UPDATE_INTERVAL) or 
+                        time_since_update >= 3600):
                         draw_weather_display(epd, weather_data)
                         last_weather_data = weather_data
                         last_weather_update = current_time

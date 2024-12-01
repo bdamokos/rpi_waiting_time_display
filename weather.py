@@ -4,6 +4,9 @@ from datetime import datetime
 import dotenv
 import qrcode
 from io import BytesIO
+import logging
+
+logger = logging.getLogger(__name__)
 
 dotenv.load_dotenv()
 weather_api_key = os.getenv('OPENWEATHER_API_KEY')
@@ -46,7 +49,7 @@ class WeatherService:
             response.raise_for_status()
             
             weather_data = response.json()
-            
+            logger.info(f"Weather data: {weather_data}")
             return {
                 'temperature': round(weather_data['main']['temp']),
                 'description': weather_data['weather'][0]['main'],
@@ -56,7 +59,7 @@ class WeatherService:
             }
             
         except Exception as e:
-            print(f"Error fetching weather: {e}")
+            logger.error(f"Error fetching weather: {e}")
             return {
                 'temperature': '--',
                 'description': 'Error',
@@ -101,7 +104,7 @@ class WeatherService:
                     'description': item['weather'][0]['main'],
                     'precipitation': item['pop'] * 100  # Probability of precipitation in %
                 })
-            
+            logger.info(f"Forecast data: {next_hours}")
             return {
                 'current': current,
                 'forecast': next_hours,
@@ -112,7 +115,7 @@ class WeatherService:
             }
             
         except Exception as e:
-            print(f"Error fetching detailed weather: {e}")
+            logger.error(f"Error fetching detailed weather: {e}")
             return {
                 'current': self.get_weather(),
                 'forecast': [],

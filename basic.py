@@ -228,25 +228,13 @@ def update_display(epd, weather_data, bus_data, error_message=None, stop_name=No
     if stop_name:
         draw.text((MARGIN, MARGIN), stop_name, font=font_small, fill=epd.BLACK)
 
-    # Get weather icon and temperature
-    weather_icon = get_weather_icon(weather_data['icon'], FORECAST_ICON_SIZE, epd)
+    weather_icon = WEATHER_ICONS.get(weather_data['description'], '?')
     temp_text = f"{weather_data['temperature']}°"
-    
-    # Calculate total width needed for icon + text
-    weather_bbox = draw.textbbox((0, 0), temp_text, font=font_small)
+    weather_text = f"{weather_icon} {temp_text}"
+    weather_bbox = draw.textbbox((0, 0), weather_text, font=font_small)
     weather_width = weather_bbox[2] - weather_bbox[0]
-    total_width = weather_width + FORECAST_ICON_SIZE[0] + 5  # 5px spacing between icon and text
-    
-    # Calculate starting position
-    x_pos = Himage.width - total_width - MARGIN
-    
-    # Draw icon
-    if weather_icon:
-        Himage.paste(weather_icon, (x_pos, MARGIN))
-        x_pos += FORECAST_ICON_SIZE[0] + 5
-    
-    # Draw temperature
-    draw.text((x_pos, MARGIN), temp_text, font=font_small, fill=epd.BLACK)
+    draw.text((Himage.width - weather_width - MARGIN, MARGIN), 
+              weather_text, font=font_small, fill=epd.BLACK)
 
     # Draw bus information
     for idx, bus in enumerate(bus_data):
@@ -379,7 +367,7 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
     MARGIN = 8
     
     # Top row: Large temperature and weather icon
-    temp_text = f"{weather_data['current']['temperature']}°C"
+    temp_text = f"{weather_data['current']['temperature']}��C"
     
     # Get and draw weather icon
     icon = get_weather_icon(weather_data['current']['icon'], CURRENT_ICON_SIZE, epd)

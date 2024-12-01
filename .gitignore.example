@@ -5,3 +5,4 @@ __pycache__/*
 .gitignore
 logs/*
 debug_output.png
+cache/*

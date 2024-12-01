@@ -2,6 +2,7 @@
 # -*- coding:utf-8 -*-
 import sys
 import os
+from pathlib import Path
 # picdir = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'pic')
 # libdir = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'lib')
 # if os.path.exists(libdir):
@@ -38,6 +39,7 @@ WEATHER_ICONS = {
 WEATHER_ICON_URL = "https://openweathermap.org/img/wn/{}@4x.png"
 CURRENT_ICON_SIZE = (50, 50)  # Size for current weather icon
 FORECAST_ICON_SIZE = (20, 20)  # Smaller size for forecast icons
+CACHE_DIR = Path(os.path.dirname(os.path.realpath(__file__))) / "cache" / "weather_icons"
 
 def find_closest_colors(pixel_rgb, epd):
     """Find the two closest EPD colors and optimal ratio to represent an RGB color"""
@@ -153,20 +155,36 @@ def process_icon_for_epd(icon, epd):
     return processed
 
 def get_weather_icon(icon_code, size, epd):
-    """Fetch and process weather icon from OpenWeatherMap"""
+    """Fetch and process weather icon from OpenWeatherMap with caching"""
     try:
+        # Create cache directory if it doesn't exist
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        
+        # Generate cache filename based on icon code and size
+        cache_file = CACHE_DIR / f"icon_{icon_code}_{size[0]}x{size[1]}.png"
+        
+        # Check if cached version exists
+        if cache_file.exists():
+            logger.debug(f"Loading cached icon: {cache_file}")
+            icon = Image.open(cache_file)
+            
+            # Process the cached icon
+            processed_icon = process_icon_for_epd(icon, epd)
+            return processed_icon
+        
+        # If not in cache, download and process
+        logger.debug(f"Downloading icon: {icon_code}")
         response = requests.get(WEATHER_ICON_URL.format(icon_code))
         if response.status_code == 200:
             icon = Image.open(BytesIO(response.content))
             icon = icon.resize(size, Image.Resampling.LANCZOS)
             
-            # Convert to RGBA if not already
-            if icon.mode != 'RGBA':
-                icon = icon.convert('RGBA')
+            # Save to cache
+            icon.save(cache_file, "PNG")
+            logger.debug(f"Saved icon to cache: {cache_file}")
             
-            # Process the icon using our dithering approach
+            # Process the icon
             processed_icon = process_icon_for_epd(icon, epd)
-            
             return processed_icon
             
     except Exception as e:
@@ -350,7 +368,7 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
     MARGIN = 8
     
     # Top row: Large temperature and weather icon
-    temp_text = f"{weather_data['current']['temperature']}°C"
+    temp_text = f"{weather_data['current']['temperature']}��C"
     
     # Get and draw weather icon
     icon = get_weather_icon(weather_data['current']['icon'], CURRENT_ICON_SIZE, epd)

@@ -11,8 +11,9 @@ class MockDisplay:
     def __init__(self):
         logger.warning("Using mock display - no actual hardware will be updated!")
         # Standard dimensions for 2.13inch display
-        self.height = 120
-        self.width = 250
+        # Our script assumes the display is rotated 90 degrees so will swap width and height
+        self.height = 250
+        self.width = 120
         
         # Standard colors
         self.BLACK = (0, 0, 0)
@@ -46,6 +47,8 @@ class MockDisplay:
     def getbuffer(self, image):
         logger.debug("Mock: getbuffer() called")
         # Save the image for debugging
+        #rotate the image back to normal
+        image = image.rotate(-90, expand=True)
         debug_path = "debug_output.png"
         image.save(debug_path)
         logger.info(f"Debug image saved to {debug_path}")

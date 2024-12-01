@@ -74,55 +74,62 @@ class WeatherService:
             # Get current weather
             current = self.get_weather()
             
-            # Get forecast data
+            # Get daily forecast and sun data
             if self.lat and self.lon:
                 params = {
                     'lat': self.lat,
                     'lon': self.lon,
                     'appid': self.api_key,
                     'units': 'metric',
-                    'cnt': 8  # Get next 24 hours (3-hour steps)
+                    'exclude': 'minutely,hourly,alerts'  # Get daily forecast only
                 }
+                url = "http://api.openweathermap.org/data/3.0/onecall"
             else:
                 params = {
                     'q': f"{self.city},{self.country}",
                     'appid': self.api_key,
-                    'units': 'metric',
-                    'cnt': 8
+                    'units': 'metric'
                 }
+                url = self.base_url
             
-            response = requests.get(self.forecast_url, params=params)
+            response = requests.get(url, params=params)
             response.raise_for_status()
-            forecast_data = response.json()
+            weather_data = response.json()
             
-            # Process forecast data
-            next_hours = []
-            for item in forecast_data['list'][:3]:  # Get next 9 hours
-                next_hours.append({
-                    'time': datetime.fromtimestamp(item['dt']).strftime('%H:%M'),
-                    'temp': round(item['main']['temp']),
-                    'description': item['weather'][0]['main'],
-                    'precipitation': item['pop'] * 100  # Probability of precipitation in %
-                })
-            logger.info(f"Forecast data: {next_hours}")
+            # Convert sunrise/sunset to local time
+            sunrise = datetime.fromtimestamp(weather_data['current']['sunrise'])
+            sunset = datetime.fromtimestamp(weather_data['current']['sunset'])
+            current_time = datetime.now()
+            
+            # Get tomorrow's forecast
+            tomorrow = weather_data['daily'][1]
+            
             return {
                 'current': current,
-                'forecast': next_hours,
                 'humidity': current['humidity'],
-                'feels_like': round(forecast_data['list'][0]['main']['feels_like']),
-                'wind_speed': round(forecast_data['list'][0]['wind']['speed'] * 3.6),  # Convert m/s to km/h
-                'precipitation_chance': round(forecast_data['list'][0]['pop'] * 100)
+                'wind_speed': round(weather_data['current']['wind_speed'] * 3.6),  # Convert m/s to km/h
+                'sunrise': sunrise.strftime('%H:%M'),
+                'sunset': sunset.strftime('%H:%M'),
+                'is_daytime': sunrise < current_time < sunset,
+                'tomorrow': {
+                    'min': round(tomorrow['temp']['min']),
+                    'max': round(tomorrow['temp']['max'])
+                }
             }
             
         except Exception as e:
             logger.error(f"Error fetching detailed weather: {e}")
             return {
                 'current': self.get_weather(),
-                'forecast': [],
                 'humidity': '--',
-                'feels_like': '--',
                 'wind_speed': '--',
-                'precipitation_chance': '--'
+                'sunrise': '--:--',
+                'sunset': '--:--',
+                'is_daytime': True,  # Default to daytime on error
+                'tomorrow': {
+                    'min': '--',
+                    'max': '--'
+                }
             }
 
 if __name__ == "__main__":

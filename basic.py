@@ -38,8 +38,8 @@ WEATHER_ICONS = {
 
 # Add to top of file with other constants
 WEATHER_ICON_URL = "https://openweathermap.org/img/wn/{}@4x.png"
-CURRENT_ICON_SIZE = (50, 50)  # Size for current weather icon
-FORECAST_ICON_SIZE = (20, 20)  # Smaller size for forecast icons
+CURRENT_ICON_SIZE = (46, 46)  # Size for current weather icon
+FORECAST_ICON_SIZE = (28, 28)  # Smaller size for forecast icons
 CACHE_DIR = Path(os.path.dirname(os.path.realpath(__file__))) / "cache" / "weather_icons"
 
 DISPLAY_REFRESH_INTERVAL = int(os.getenv("refresh_interval", 90))

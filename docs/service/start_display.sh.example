@@ -63,7 +63,7 @@ git fetch origin main
 git reset --hard origin/main
 git pull origin main
 echo "Installing requirements..."
-pip install -r requirements.txt --upgrade-strategy eager
+pip install -r requirements.txt 
 
 # Start the backend server in the background
 cd ~/brussels_transit/app
@@ -79,7 +79,7 @@ cd ~/display_programme
 echo "Pulling from git..."
 git pull origin main
 echo "Installing requirements..."
-pip install -r requirements.txt --upgrade-strategy eager
+pip install -r requirements.txt
 echo "Starting display program..."
 python basic.py &
 DISPLAY_PID=$!

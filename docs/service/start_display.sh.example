@@ -9,6 +9,20 @@
 # Sleep for 10 seconds to allow for network to be ready
 sleep 10
 
+
+# Update the script only if there's a newer version. 
+#Disable this if you want to keep the script from updating itself.
+if [ -f ~/display_programme/docs/service/start_display.sh.example ] && \
+   ! cmp -s ~/display_programme/docs/service/start_display.sh.example ~/start_display.sh; then
+    echo "Updating start_display.sh script..."
+    cp ~/display_programme/docs/service/start_display.sh.example ~/start_display.sh.new
+    chmod +x ~/start_display.sh.new
+    mv ~/start_display.sh.new ~/start_display.sh
+    echo "Script updated. Please restart the service."
+    exit 0
+fi
+
+
 # Store PIDs for cleanup
 BACKEND_PID=""
 DISPLAY_PID=""

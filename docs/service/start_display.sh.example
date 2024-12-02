@@ -19,6 +19,8 @@ if [ -f ~/display_programme/docs/service/start_display.sh.example ] && \
     chmod +x ~/start_display.sh.new
     mv ~/start_display.sh.new ~/start_display.sh
     echo "Script updated. Please restart the service."
+    echo "Exiting with status 0 - script update completed successfully"
+    systemd-notify --status="Script updated successfully. Service restart required."
     exit 0
 fi
 
@@ -56,13 +58,16 @@ source ~/display_env/bin/activate
 
 # Force update from git while preserving untracked files
 cd ~/brussels_transit
+echo "Updating from git..."
 git fetch origin main
 git reset --hard origin/main
 git pull origin main
-pip install -r requirements.txt
+echo "Installing requirements..."
+pip install -r requirements.txt --upgrade-strategy eager
 
 # Start the backend server in the background
 cd ~/brussels_transit/app
+echo "Starting backend server..."
 python main.py &
 BACKEND_PID=$!
 
@@ -71,8 +76,11 @@ sleep 5
 
 # Start the display program
 cd ~/display_programme
+echo "Pulling from git..."
 git pull origin main
-pip install -r requirements.txt
+echo "Installing requirements..."
+pip install -r requirements.txt --upgrade-strategy eager
+echo "Starting display program..."
 python basic.py &
 DISPLAY_PID=$!
 

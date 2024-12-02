@@ -224,7 +224,7 @@ class BusService:
                         else:
                             minutes_source = None
                             minutes = None
-                        time = f"{minutes_emoji}{minutes}'"
+                        time = f"{minutes_emoji}{minutes}"
                         message = None
                         
                         # Check for special messages

@@ -11,7 +11,8 @@ logger = logging.getLogger(__name__)
 dotenv.load_dotenv()
 Stop = os.getenv("Stops")
 Lines = os.getenv("Lines")
-bus_api_base_url = os.getenv("BUS_API_BASE_URL")
+bus_api_base_url = os.getenv("BUS_API_BASE_URL", "http://localhost:5001/")
+bus_provider = os.getenv("Provider", "stib")
 
 # Define our available colors and their RGB values
 DISPLAY_COLORS = {
@@ -73,8 +74,9 @@ def _parse_lines(lines_str: str) -> list:
 class BusService:
     def __init__(self):
         self.base_url = bus_api_base_url
-        self.api_url = f"{self.base_url}/api/stib/waiting_times"
-        self.colors_url = f"{self.base_url}/api/stib/colors"
+        self.provider = bus_provider
+        self.api_url = f"{self.base_url}/api/{self.provider}/waiting_times"
+        self.colors_url = f"{self.base_url}/api/{self.provider}/colors"
         self.stop_id = Stop
         self.lines_of_interest = _parse_lines(Lines)
         logger.info(f"Monitoring bus lines: {self.lines_of_interest}")
@@ -122,8 +124,14 @@ class BusService:
             response = requests.get(f"{self.colors_url}/{line}")
             response.raise_for_status()
             line_colors = response.json()
+
+            # Check if response has multiple keys and get background color if available
+            if isinstance(line_colors, dict) and 'background' in line_colors:
+                line_colors = line_colors['background']
             
-            hex_color = line_colors.get(line)
+                hex_color = line_colors
+            else:
+                hex_color = line_colors.get(line)
             if not hex_color:
                 logger.error(f"Color not found for line {line}")
                 return 'black', 'black', 1.0
@@ -156,8 +164,13 @@ class BusService:
             response.raise_for_status()
             data = response.json()
 
+            stops_data_location_keys = ['stops_data', 'stops']
+            for key in stops_data_location_keys:
+                if key in data:
+                    stop_data = data[key].get(self.stop_id, {})
+                    break
+
             # Extract waiting times for our stop
-            stop_data = data["stops_data"].get(self.stop_id, {})
             if not stop_data:
                 logger.error(f"Stop {self.stop_id} not found in response")
                 return self._get_error_data(), "Stop data not found", ""
@@ -184,10 +197,34 @@ class BusService:
 
                 # Process times and messages from all destinations
                 all_times = []
+                minutes_source = None
+                minutes_keys = ['minutes', 'scheduled_minutes', 'realtime_minutes']
                 for destination, times in line_data.items():
                     logger.debug(f"Processing destination: {destination}")
                     for bus in times:
-                        time = f"{bus['minutes']}'"
+                        # Get all available minutes values
+                        minutes_values = {}
+                        for key in minutes_keys:
+                            if key in bus:
+                                minutes_values[key] = bus[key]
+                        
+                        # Prefer realtime over scheduled over basic minutes
+                        if 'realtime_minutes' in minutes_values:
+                            minutes_source = 'realtime_minutes'
+                            minutes = minutes_values['realtime_minutes']
+                            minutes_emoji = '⚡'
+                        elif 'scheduled_minutes' in minutes_values:
+                            minutes_source = 'scheduled_minutes'
+                            minutes = minutes_values['scheduled_minutes']
+                            minutes_emoji = '🕒'
+                        elif 'minutes' in minutes_values:
+                            minutes_source = 'minutes'
+                            minutes = minutes_values['minutes']
+                            minutes_emoji = ''
+                        else:
+                            minutes_source = None
+                            minutes = None
+                        time = f"{minutes_emoji}{minutes}'"
                         message = None
                         
                         # Check for special messages
@@ -208,7 +245,7 @@ class BusService:
                         all_times.append({
                             'time': time,
                             'message': message,
-                            'minutes': bus['minutes'],
+                            'minutes': bus.get(minutes_source, None),
                             'destination': destination
                         })
 
@@ -255,7 +292,7 @@ class BusService:
         except requests.exceptions.ConnectionError:
             return self._get_error_data(), "Connection failed", ""
         except Exception as e:
-            logger.error(f"Error fetching bus times: {e}")
+            logger.error(f"Error fetching bus times: {e}", exc_info=True)
             return self._get_error_data(), f"Error: {str(e)}", ""
 
     def _get_error_data(self) -> List[Dict]:

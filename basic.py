@@ -24,6 +24,10 @@ import requests
 import random
 
 logger = logging.getLogger(__name__)
+# Set logging level for PIL.PngImagePlugin and urllib3.connectionpool to warning
+logging.getLogger('PIL.PngImagePlugin').setLevel(logging.WARNING)
+logging.getLogger('urllib3.connectionpool').setLevel(logging.WARNING)
+
 
 # Weather icon mapping
 WEATHER_ICONS = {
@@ -56,7 +60,7 @@ def find_optimal_colors(pixel_rgb, epd):
     r, g, b = pixel_rgb[:3]
     
     # Add debug logging
-    logger.debug(f"Processing pixel RGB: ({r}, {g}, {b})")
+    # logger.debug(f"Processing pixel RGB: ({r}, {g}, {b})")
     
     # Calculate color characteristics
     luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0
@@ -64,33 +68,33 @@ def find_optimal_colors(pixel_rgb, epd):
     red_ratio = r / 255.0
     yellow_ratio = min(r, g) / 255.0  # Yellow needs both red and green
     
-    logger.debug(f"Luminance: {luminance:.2f}, Saturation: {saturation}, Red ratio: {red_ratio:.2f}, Yellow ratio: {yellow_ratio:.2f}")
+    # logger.debug(f"Luminance: {luminance:.2f}, Saturation: {saturation}, Red ratio: {red_ratio:.2f}, Yellow ratio: {yellow_ratio:.2f}")
     
     # More aggressive color selection
     if r > 200 and g < 100:  # Strong red
-        logger.debug("Selected: Strong red pattern")
+        # logger.debug("Selected: Strong red pattern")
         return [('red', 0.7), ('black', 0.2), ('white', 0.1)]
     elif r > 200 and g > 200:  # Strong yellow
-        logger.debug("Selected: Strong yellow pattern")
+        # logger.debug("Selected: Strong yellow pattern")
         return [('yellow', 0.7), ('black', 0.2), ('white', 0.1)]
     elif saturation < 30:  # Grayscale
         if luminance > 0.7:
-            logger.debug("Selected: Light gray pattern")
+            # logger.debug("Selected: Light gray pattern")
             return [('white', 0.7), ('black', 0.3)]
         elif luminance > 0.3:
-            logger.debug("Selected: Medium gray pattern")
+            # logger.debug("Selected: Medium gray pattern")
             return [('white', 0.5), ('black', 0.5)]
         else:
-            logger.debug("Selected: Dark gray pattern")
+            # logger.debug("Selected: Dark gray pattern")
             return [('black', 0.7), ('white', 0.3)]
     elif r > g and r > b:  # Reddish
-        logger.debug("Selected: Reddish pattern")
+        # logger.debug("Selected: Reddish pattern")
         return [('red', 0.6), ('black', 0.2), ('white', 0.2)]
     elif r > 100 and g > 100:  # Yellowish
-        logger.debug("Selected: Yellowish pattern")
+        # logger.debug("Selected: Yellowish pattern")
         return [('yellow', 0.6), ('black', 0.2), ('white', 0.2)]
     else:
-        logger.debug("Selected: Default pattern")
+        # logger.debug("Selected: Default pattern")
         return [('black', 0.6), ('white', 0.4)]
 
 def draw_multicolor_dither(draw, epd, x, y, width, height, colors_with_ratios):
@@ -105,7 +109,7 @@ def draw_multicolor_dither(draw, epd, x, y, width, height, colors_with_ratios):
     total_pixels = width * height
     
     # Ensure we're actually using the colors we selected
-    logger.debug(f"Dithering with colors: {colors_with_ratios}")
+    # logger.debug(f"Dithering with colors: {colors_with_ratios}")
     
     for i in range(width):
         for j in range(height):
@@ -173,7 +177,7 @@ def get_weather_icon(icon_code, size, epd):
         
         # Check if cached version exists
         if cache_file.exists():
-            logger.debug(f"Loading cached icon: {cache_file}")
+            # logger.debug(f"Loading cached icon: {cache_file}")
             icon = Image.open(cache_file)
             
             # Process the cached icon
@@ -189,7 +193,7 @@ def get_weather_icon(icon_code, size, epd):
             
             # Save to cache
             icon.save(cache_file, "PNG")
-            logger.debug(f"Saved icon to cache: {cache_file}")
+            # logger.debug(f"Saved icon to cache: {cache_file}")
             
             # Process the icon
             processed_icon = process_icon_for_epd(icon, epd)
@@ -211,11 +215,11 @@ def update_display(epd, weather_data, bus_data, error_message=None, stop_name=No
         font_large = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 32)
         font_medium = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 24)
         font_small = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 16)
-        logger.info(f"Found DejaVu fonts: {font_large}, {font_medium}, {font_small}")
+        # logger.info(f"Found DejaVu fonts: {font_large}, {font_medium}, {font_small}")
     except:
         font_large = ImageFont.load_default()
         font_medium = font_small = font_large
-        logger.info(f"No DejaVu fonts found, using default: {font_large}, {font_medium}, {font_small}")
+        logger.warning(f"No DejaVu fonts found, using default: {font_large}, {font_medium}, {font_small}. Install DeJaVu fonts with \n sudo apt install fonts-dejavu\n")
 
     # Calculate layout
     MARGIN = 8

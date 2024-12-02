@@ -130,7 +130,7 @@ class WeatherService:
             response = requests.get(self.base_url, params=params)
             response.raise_for_status()
             current_data = response.json()
-            logger.debug(f"Current weather data: {current_data}")
+            # logger.debug(f"Current weather data: {current_data}")
             
             current = {
                 'temperature': round(current_data['main']['temp']),
@@ -148,7 +148,7 @@ class WeatherService:
             air_quality = None
             if self.lat and self.lon:
                 air_quality = self.get_air_quality()
-                logger.debug(f"Air quality data: {air_quality}")
+                # logger.debug(f"Air quality data: {air_quality}")
             
             # Get forecast data for next 3 days using 5 day/3 hour forecast API
             if self.lat and self.lon:
@@ -167,11 +167,11 @@ class WeatherService:
                 }
                 url = self.forecast_url
             
-            logger.debug(f"Fetching forecast from URL: {url}")
+            # logger.debug(f"Fetching forecast from URL: {url}")
             response = requests.get(url, params=params)
             response.raise_for_status()
             forecast_data = response.json()
-            logger.debug(f"Received forecast data: {forecast_data}")
+            # logger.debug(f"Received forecast data: {forecast_data}")
             
             try:
                 # Get forecasts for next 3 days
@@ -221,7 +221,7 @@ class WeatherService:
                         'air_quality': air_quality
                     }
                 }
-                logger.debug(f"Processed weather result: {result}")
+                # logger.debug(f"Processed weather result: {result}")
                 return result
                 
             except KeyError as ke:

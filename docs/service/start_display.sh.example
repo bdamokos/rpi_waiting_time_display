@@ -40,8 +40,10 @@ trap cleanup SIGTERM SIGINT
 # Activate virtual environment
 source ~/display_env/bin/activate
 
-# Download from git any updates
+# Force update from git while preserving untracked files
 cd ~/brussels_transit
+git fetch origin main
+git reset --hard origin/main
 git pull origin main
 pip install -r requirements.txt
 

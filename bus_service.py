@@ -167,16 +167,18 @@ class BusService:
             logger.debug(f"API response time: {response.elapsed.total_seconds():.3f} seconds")
             response.raise_for_status()
             data = response.json()
+            logger.debug(f"API response: {data}")
 
             stops_data_location_keys = ['stops_data', 'stops']
             for key in stops_data_location_keys:
                 if key in data:
                     stop_data = data[key].get(self.stop_id, {})
+                    logger.debug(f"Stop data found: {stop_data}")
                     break
 
             # Extract waiting times for our stop
             if not stop_data:
-                logger.error(f"Stop {self.stop_id} not found in response")
+                logger.error(f"Stop '{self.stop_id}' not found in response, as no stop data was found")
                 return self._get_error_data(), "Stop data not found", ""
 
             # Get stop name

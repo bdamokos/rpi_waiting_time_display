@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 
-dotenv.load_dotenv()
+dotenv.load_dotenv(override=True)
 weather_api_key = os.getenv('OPENWEATHER_API_KEY')
 coordinates_lat = os.getenv('Coordinates_LAT')
 coordinates_lng = os.getenv('Coordinates_LNG')

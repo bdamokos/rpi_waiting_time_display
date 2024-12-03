@@ -6,20 +6,27 @@
 # chmod +x ~/start_display.sh
 echo "----------------------------------------"
 echo "Starting display service service script"
-echo "Version: 0.0.4 (2024-12-03)"  # AUTO-INCREMENT
+echo "Version: 0.0.5 (2024-12-03)"  # AUTO-INCREMENT
+echo "----------------------------------------"
+echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
 
 # Sleep for 10 seconds to allow for network to be ready
 sleep 10
 
 # Step 1: Update display_programme first
+echo "----------------------------------------"
+echo "Updating display_programme from git..."
 cd ~/display_programme
 echo "Updating display_programme from git..."
 git fetch origin main
 git reset --hard origin/main
 git pull origin main
+echo "Display programme updated."
+echo "----------------------------------------"
 
 # Step 2: Check and update startup script if needed
+echo "Checking and updating startup script..."
 if [ -f ~/display_programme/docs/service/start_display.sh.example ] && \
    ! cmp -s ~/display_programme/docs/service/start_display.sh.example ~/start_display.sh; then
     echo "Updating start_display.sh script..."
@@ -31,6 +38,8 @@ if [ -f ~/display_programme/docs/service/start_display.sh.example ] && \
     systemd-notify --status="Script updated successfully. Service restart required."
     exit 0
 fi
+echo "Startup script is up to date."
+echo "----------------------------------------"
 
 # Step 3: Update brussels_transit
 cd ~/brussels_transit
@@ -38,15 +47,21 @@ echo "Updating brussels_transit from git..."
 git fetch origin main
 git reset --hard origin/main
 git pull origin main
+echo "----------------------------------------"
 
+echo "Activating virtual environment..."
 # Step 4: Activate virtual environment
 source ~/display_env/bin/activate
+echo "Virtual environment activated."
+echo "----------------------------------------"
 
 # Step 5: Install requirements from both projects at once
 echo "Installing requirements..."
 pip install -r requirements.txt
 cd ~/display_programme
 pip install -r requirements.txt
+echo "Requirements installed."
+echo "----------------------------------------"
 
 # Store PIDs for cleanup
 BACKEND_PID=""
@@ -81,6 +96,8 @@ cd ~/brussels_transit/app
 echo "Starting backend server..."
 python main.py &
 BACKEND_PID=$!
+echo "Backend server started."
+echo "----------------------------------------"
 
 # Wait for backend to start
 sleep 5
@@ -90,6 +107,8 @@ cd ~/display_programme
 echo "Starting display program..."
 python basic.py &
 DISPLAY_PID=$!
+echo "Display program started."
+echo "----------------------------------------"
 
 # Wait for any process to exit
 wait -n

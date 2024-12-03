@@ -6,7 +6,7 @@
 # chmod +x ~/start_display.sh
 echo "----------------------------------------"
 echo "Starting display service service script"
-echo "Version: 0.0.2 (2024-12-03)"  # AUTO-INCREMENT
+echo "Version: 0.0.3 (2024-12-03)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 
 # Sleep for 10 seconds to allow for network to be ready
@@ -80,6 +80,8 @@ sleep 5
 # Start the display program
 cd ~/display_programme
 echo "Pulling from git..."
+git fetch origin main
+git reset --hard origin/main
 git pull origin main
 echo "Installing requirements..."
 pip install -r requirements.txt

@@ -5,6 +5,7 @@
 # cp start_display.sh.example ~/start_display.sh
 # chmod +x ~/start_display.sh
 
+echo "Version: 0.0.0 (2024-03-21)"  # AUTO-INCREMENT
 
 # Sleep for 10 seconds to allow for network to be ready
 sleep 10

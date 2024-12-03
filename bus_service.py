@@ -3,13 +3,12 @@ import logging
 from typing import List, Dict, Tuple
 import os
 import dotenv
-from colorsys import rgb_to_hsv
-from dithering import draw_dithered_box
 import log_config
+import socket
 
 logger = logging.getLogger(__name__)
 
-dotenv.load_dotenv()
+dotenv.load_dotenv(override=True)
 Stop = os.getenv("Stops")
 Lines = os.getenv("Lines")
 bus_api_base_url = os.getenv("BUS_API_BASE_URL", "http://localhost:5001/")
@@ -75,9 +74,9 @@ def _parse_lines(lines_str: str) -> list:
 
 class BusService:
     def __init__(self):
-        self.base_url = bus_api_base_url
+        self.base_url = self._resolve_base_url()
         self.provider = bus_provider
-        logger.debug(f"Bus provider: {self.provider}. Base URL: {self.base_url}")
+        logger.debug(f"Bus provider: {self.provider}. Resolved Base URL: {self.base_url}")
         self.api_url = f"{self.base_url}/api/{self.provider}/waiting_times"
         logger.debug(f"API URL: {self.api_url}")
         self.colors_url = f"{self.base_url}/api/{self.provider}/colors"
@@ -87,6 +86,24 @@ class BusService:
         self.lines_of_interest = _parse_lines(Lines)
         logger.info(f"Monitoring bus lines: {self.lines_of_interest}")
         
+    def _resolve_base_url(self) -> str:
+        """Resolve the base URL, handling .local domains"""
+        base_url = bus_api_base_url.lower()
+        if '.local' in base_url:
+            try:
+                # Extract hostname from URL
+                hostname = base_url.split('://')[1].split(':')[0]
+                # Try to resolve the IP address
+                ip = socket.gethostbyname(hostname)
+                logger.info(f"Resolved {hostname} to {ip}")
+                # Replace hostname with IP in URL
+                return base_url.replace(hostname, ip)
+            except Exception as e:
+                logger.warning(f"Could not resolve {hostname}, falling back to IP: {e}")
+                # Fallback to direct IP if resolution fails
+                return "http://127.0.0.1:5001/"
+        return base_url
+
     def _hex_to_rgb(self, hex_color: str) -> Tuple[int, int, int]:
         """Convert hex color to RGB tuple"""
         hex_color = hex_color.lstrip('#')

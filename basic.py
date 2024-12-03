@@ -479,9 +479,11 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
     sun_full = f"{sun_icon} {sun_text}"
     draw.text((MARGIN , y_pos), sun_full, font=font_medium, fill=epd.BLACK)
 
-    # Bottom row: Three day forecast
+    # Bottom row: Three day forecast (today + next 2 days)
     y_pos = 85
+    logger.debug(f"Forecasts: {weather_data['forecasts']}")
     forecasts = weather_data['forecasts'][:3]
+    logger.debug(f"Forecasts: {forecasts}")
     
     # Calculate available width
     available_width = Himage.width - (2 * MARGIN)

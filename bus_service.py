@@ -8,11 +8,13 @@ from dithering import draw_dithered_box
 import log_config
 
 logger = logging.getLogger(__name__)
+
 dotenv.load_dotenv()
 Stop = os.getenv("Stops")
 Lines = os.getenv("Lines")
 bus_api_base_url = os.getenv("BUS_API_BASE_URL", "http://localhost:5001/")
 bus_provider = os.getenv("Provider", "stib")
+logging.debug(f"Bus provider: {bus_provider}. Base URL: {bus_api_base_url}. Monitoring lines: {Lines} and stop: {Stop}")
 
 # Define our available colors and their RGB values
 DISPLAY_COLORS = {
@@ -157,10 +159,12 @@ class BusService:
         """Fetch and process waiting times for our bus lines"""
         # First check API health
         if not self.get_api_health():
+            logger.error("API not available")
             return self._get_error_data(), "API not available", ""
 
         try:
-            response = requests.get(self.api_url)
+            response = requests.get(self.api_url, timeout=30)  # 30 second timeout
+            logger.debug(f"API response time: {response.elapsed.total_seconds():.3f} seconds")
             response.raise_for_status()
             data = response.json()
 
@@ -241,7 +245,7 @@ class BusService:
                             elif "End of service" in msg:
                                 time = "--"
                                 message = "End of service"
-                        
+                        logger.debug(f"Time: {time}, Message: {message}, Minutes: {bus.get(minutes_source, None)}, Destination: {destination}")
                         all_times.append({
                             'time': time,
                             'message': message,

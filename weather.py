@@ -6,7 +6,7 @@ import qrcode
 from io import BytesIO
 import logging
 import log_config
-
+import json
 logger = logging.getLogger(__name__)
 
 
@@ -130,7 +130,7 @@ class WeatherService:
             response = requests.get(self.base_url, params=params)
             response.raise_for_status()
             current_data = response.json()
-            # logger.debug(f"Current weather data: {current_data}")
+            # logger.debug(f"Current weather data: \n{json.dumps(current_data, indent=2, ensure_ascii=False)}")
             
             current = {
                 'temperature': round(current_data['main']['temp']),
@@ -141,7 +141,9 @@ class WeatherService:
                 'sunrise': current_data['sys']['sunrise'],
                 'sunset': current_data['sys']['sunset'],
                 'pressure': current_data['main']['pressure'],
-                'feels_like': round(current_data['main']['feels_like'])
+                'feels_like': round(current_data['main']['feels_like']),
+                'temp_min': round(current_data['main']['temp_min']),
+                'temp_max': round(current_data['main']['temp_max'])
             }
 
             # Get air quality
@@ -171,21 +173,30 @@ class WeatherService:
             response = requests.get(url, params=params)
             response.raise_for_status()
             forecast_data = response.json()
-            # logger.debug(f"Received forecast data: {forecast_data}")
-            
+
+
+           
+           
             try:
                 # Get forecasts for next 3 days
                 today = datetime.now().date()
                 forecasts = []
+
                 
-                for day_offset in range(1, 4):  # Next 3 days
+
+                
+                for day_offset in range(0, 4):  # Next 3 days
                     target_date = today + timedelta(days=day_offset)
+                    
                     day_forecasts = [
                         item for item in forecast_data['list'] 
                         if datetime.fromtimestamp(item['dt']).date() == target_date
                     ]
                     
                     if day_forecasts:
+                        first_item_dt = datetime.fromtimestamp(day_forecasts[0]['dt'])
+                        last_item_dt = datetime.fromtimestamp(day_forecasts[-1]['dt'])
+                        logger.debug(f"Forecast range for {target_date}: from {first_item_dt.strftime('%H:%M')} to {last_item_dt.strftime('%H:%M')}. {len(day_forecasts)} items.")
                         min_temp = min(float(item['main']['temp_min']) for item in day_forecasts)
                         max_temp = max(float(item['main']['temp_max']) for item in day_forecasts)
                         icon = day_forecasts[0]['weather'][0]['icon']
@@ -201,6 +212,8 @@ class WeatherService:
                             'icon': icon
                         })
                 
+
+
                 # Get sunrise/sunset from current weather data
                 sunrise = datetime.fromtimestamp(current.get('sunrise', 0))
                 sunset = datetime.fromtimestamp(current.get('sunset', 0))
@@ -212,12 +225,14 @@ class WeatherService:
                     'wind_speed': round(float(current_data.get('wind', {}).get('speed', 0)) * 3.6),  # Convert m/s to km/h
                     'sunrise': datetime.fromtimestamp(current['sunrise']).strftime('%H:%M'),
                     'sunset': datetime.fromtimestamp(current['sunset']).strftime('%H:%M'),
+                    'temp_min': current.get('temp_min', ''),
+                    'temp_max': current.get('temp_max', ''),
                     'is_daytime': sunrise < current_time < sunset,
                     'forecasts': forecasts,  # Add the 3-day forecast
                     'tomorrow': {
-                        'min': forecasts[0]['min'] if forecasts else '--',
+                        'min': forecasts[0]['min'] if forecasts else '',
                         'icon': forecasts[0]['icon'] if forecasts else '',
-                        'max': forecasts[0]['max'] if forecasts else '--',
+                        'max': forecasts[0]['max'] if forecasts else '',
                         'air_quality': air_quality
                     }
                 }

@@ -77,9 +77,13 @@ class BusService:
     def __init__(self):
         self.base_url = bus_api_base_url
         self.provider = bus_provider
+        logger.debug(f"Bus provider: {self.provider}. Base URL: {self.base_url}")
         self.api_url = f"{self.base_url}/api/{self.provider}/waiting_times"
+        logger.debug(f"API URL: {self.api_url}")
         self.colors_url = f"{self.base_url}/api/{self.provider}/colors"
+        logger.debug(f"Colors URL: {self.colors_url}")
         self.stop_id = Stop
+        logger.debug(f"Stop ID: {self.stop_id}")
         self.lines_of_interest = _parse_lines(Lines)
         logger.info(f"Monitoring bus lines: {self.lines_of_interest}")
         

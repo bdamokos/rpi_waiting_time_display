@@ -6,3 +6,4 @@ __pycache__/*
 logs/*
 debug_output.png
 cache/*
+.display_requirements_version;

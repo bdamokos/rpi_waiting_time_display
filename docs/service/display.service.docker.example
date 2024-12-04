@@ -1,0 +1,20 @@
+[Unit]
+Description=E-Paper Display Service (Docker Version)
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi
+ExecStart=/home/pi/start_display.sh
+Restart=always
+RestartSec=30
+StandardOutput=append:/var/log/display_service.log
+StandardError=append:/var/log/display_service.log
+
+# Give the service 30 seconds to stop gracefully
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target 

@@ -6,7 +6,7 @@
 # chmod +x ~/start_display.sh
 echo "----------------------------------------"
 echo "Starting display service service script"
-echo "Version: 0.0.5 (2024-12-03)"  # AUTO-INCREMENT
+echo "Version: 0.0.6 (2024-12-04)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -55,12 +55,30 @@ source ~/display_env/bin/activate
 echo "Virtual environment activated."
 echo "----------------------------------------"
 
-# Step 5: Install requirements from both projects at once
-echo "Installing requirements..."
-pip install -r requirements.txt
+# Step 5: Install requirements if changed
+echo "Checking display_programme requirements..."
 cd ~/display_programme
-pip install -r requirements.txt
-echo "Requirements installed."
+if [ ! -f ~/.display_requirements_version ] || \
+   ! grep -q "$(grep "^# Version: " requirements.txt)" ~/.display_requirements_version; then
+    echo "Requirements changed, installing..."
+    pip install -r requirements.txt
+    grep "^# Version: " requirements.txt > ~/.display_requirements_version
+    echo "Requirements installed."
+else
+    echo "Requirements unchanged, skipping installation."
+fi
+
+echo "Checking brussels_transit requirements..."
+cd ~/brussels_transit
+if [ ! -f ~/.brussels_transit_requirements_version ] || \
+   ! grep -q "$(grep "^# Version: " requirements.txt)" ~/.brussels_transit_requirements_version; then
+    echo "Requirements changed, installing..."
+    pip install -r requirements.txt
+    grep "^# Version: " requirements.txt > ~/.brussels_transit_requirements_version
+    echo "Requirements installed."
+else
+    echo "Requirements unchanged, skipping installation."
+fi
 echo "----------------------------------------"
 
 # Store PIDs for cleanup

@@ -1,0 +1,120 @@
+#!/bin/bash
+
+# Example startup script for the display service (Docker Version)
+# Copy this file to ~/start_display.sh and make it executable with:
+# cp start_display.sh.docker.example ~/start_display.sh
+# chmod +x ~/start_display.sh
+echo "----------------------------------------"
+echo "Starting display service script (Docker Version)"
+echo "Version: 0.0.1 (2024-12-04)"  # AUTO-INCREMENT
+echo "----------------------------------------"
+echo "MIT License - Copyright (c) 2024 Bence Damokos"
+echo "----------------------------------------"
+
+# Sleep for 10 seconds to allow for network and Docker to be ready
+sleep 10
+
+# Step 1: Update display_programme first
+echo "----------------------------------------"
+echo "Updating display_programme from git..."
+cd ~/display_programme
+git fetch origin main
+git reset --hard origin/main
+git pull origin main
+echo "Display programme updated."
+echo "----------------------------------------"
+
+# Step 2: Check and update startup script if needed
+echo "Checking and updating startup script..."
+if [ -f ~/display_programme/docs/service/start_display.sh.docker.example ] && \
+   ! cmp -s ~/display_programme/docs/service/start_display.sh.docker.example ~/start_display.sh; then
+    echo "Updating start_display.sh script..."
+    cp ~/display_programme/docs/service/start_display.sh.docker.example ~/start_display.sh.new
+    chmod +x ~/start_display.sh.new
+    mv ~/start_display.sh.new ~/start_display.sh
+    echo "Script updated. Please restart the service."
+    echo "Exiting with status 0 - script update completed successfully"
+    systemd-notify --status="Script updated successfully. Service restart required."
+    exit 0
+fi
+echo "Startup script is up to date."
+echo "----------------------------------------"
+
+# Step 3: Update brussels_transit and rebuild Docker image
+cd ~/brussels_transit
+echo "Updating brussels_transit from git..."
+git fetch origin main
+git reset --hard origin/main
+git pull origin main
+
+# Build/update Docker image
+echo "Building Docker image..."
+docker build -t brussels_transit:latest .
+echo "----------------------------------------"
+
+# Step 4: Activate virtual environment (for display program only)
+echo "Activating virtual environment..."
+source ~/display_env/bin/activate
+echo "Virtual environment activated."
+echo "----------------------------------------"
+
+# Step 5: Install requirements (for display program only)
+echo "Installing requirements..."
+cd ~/display_programme
+pip install -r requirements.txt
+echo "Requirements installed."
+echo "----------------------------------------"
+
+# Store container ID and display PID for cleanup
+CONTAINER_ID=""
+DISPLAY_PID=""
+
+# Function to clean up on exit
+cleanup() {
+    echo "Cleaning up..."
+    
+    # Stop Docker container if running
+    if [ ! -z "$CONTAINER_ID" ]; then
+        echo "Stopping Docker container..."
+        docker stop $CONTAINER_ID
+    fi
+    
+    # If display program is running, send SIGTERM to allow for clean shutdown
+    if [ ! -z "$DISPLAY_PID" ]; then
+        echo "Stopping display program..."
+        kill $DISPLAY_PID
+        # Wait for display program to cleanup
+        wait $DISPLAY_PID
+    fi
+    
+    exit 0
+}
+
+# Trap SIGTERM and SIGINT
+trap cleanup SIGTERM SIGINT
+
+# Step 6: Clean up any existing containers
+echo "Cleaning up any existing brussels_transit containers..."
+docker ps -q --filter "ancestor=brussels_transit:latest" | xargs -r docker stop
+
+# Start the backend server in Docker
+echo "Starting backend server in Docker..."
+CONTAINER_ID=$(docker run -d --restart=no -p 8000:8000 brussels_transit:latest)
+echo "Backend server started in container: $CONTAINER_ID"
+echo "----------------------------------------"
+
+# Wait for backend to start
+sleep 5
+
+# Step 7: Start the display program
+cd ~/display_programme
+echo "Starting display program..."
+python basic.py &
+DISPLAY_PID=$!
+echo "Display program started."
+echo "----------------------------------------"
+
+# Wait for any process to exit
+wait -n
+
+# Execute cleanup when any process exits 

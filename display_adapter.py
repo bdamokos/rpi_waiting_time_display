@@ -3,7 +3,8 @@ import log_config
 import importlib
 import os
 from PIL import Image
-
+import dotenv
+import inspect
 logger = logging.getLogger(__name__)
 
 class MockDisplay:
@@ -58,6 +59,7 @@ class DisplayAdapter:
     @staticmethod
     def get_display():
         """Get the appropriate display instance based on environment"""
+        dotenv.load_dotenv(override=True)
         display_model = os.getenv('display_model')
         
         if not display_model:
@@ -75,6 +77,30 @@ class DisplayAdapter:
             # Attach the epdconfig module to the instance if it doesn't already have it
             if not hasattr(epd, 'epdconfig'):
                 epd.epdconfig = display_module.epdconfig
+                
+            # Add wrapper for init method to handle different signatures
+            original_init = epd.init
+            def init_wrapper(*args, **kwargs):
+                # Get the parameters of the original init method
+                sig = inspect.signature(original_init)
+                
+                # If the method requires parameters but none were provided
+                if len(sig.parameters) > 1 and not args and not kwargs:  # >1 because first param is self
+                    # For epd2in13, provide the lut_full_update as default
+                    if hasattr(epd, 'lut_full_update'):
+                        return original_init(epd.lut_full_update)
+                return original_init(*args, **kwargs)
+            
+            epd.init = init_wrapper
+            
+            # Add init_Fast method if it doesn't exist
+            if not hasattr(epd, 'init_Fast'):
+                def init_Fast():
+                    # For displays that don't have fast mode, use regular init
+                    if hasattr(epd, 'lut_partial_update'):
+                        return init_wrapper(epd.lut_partial_update)
+                    return init_wrapper()
+                epd.init_Fast = init_Fast
                 
             return epd
             

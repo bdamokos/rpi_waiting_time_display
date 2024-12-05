@@ -202,10 +202,16 @@ def update_display(epd, weather_data, bus_data, error_message=None, stop_name=No
     """Update the display with new weather data"""
     MARGIN = 8
 
+    # Handle different color definitions
+    BLACK = getattr(epd, 'BLACK', 0x000000)
+    WHITE = getattr(epd, 'WHITE', 0xffffff)
+    RED = getattr(epd, 'RED', 0x0000ff)
+    YELLOW = getattr(epd, 'YELLOW', 0x00ffff)
+
     logger.info(f"Display dimensions: {epd.height}x{epd.width} (height x width)")
     
     # Create a new image with white background
-    Himage = Image.new('RGB', (epd.height, epd.width), epd.WHITE)
+    Himage = Image.new('RGB', (epd.height, epd.width), WHITE)
     draw = ImageDraw.Draw(Himage)
     
     try:
@@ -225,7 +231,7 @@ def update_display(epd, weather_data, bus_data, error_message=None, stop_name=No
     weather_width = weather_bbox[2] - weather_bbox[0]
     if weather_enabled:
         draw.text((Himage.width - weather_width - MARGIN, MARGIN), 
-                  weather_text, font=font_small, fill=epd.BLACK)
+                  weather_text, font=font_small, fill=BLACK)
     stop_name_height = 0
     if stop_name:
         stop_name_bbox = draw.textbbox((0, 0), stop_name, font=font_small)
@@ -242,7 +248,7 @@ def update_display(epd, weather_data, bus_data, error_message=None, stop_name=No
                 line2 = ""
             
             # Draw first line
-            draw.text((MARGIN, MARGIN), line1, font=font_small, fill=epd.BLACK)
+            draw.text((MARGIN, MARGIN), line1, font=font_small, fill=BLACK)
             line1_bbox = draw.textbbox((0, 0), line1, font=font_small)
             stop_name_height = line1_bbox[3] - line1_bbox[1] + MARGIN
             
@@ -251,14 +257,14 @@ def update_display(epd, weather_data, bus_data, error_message=None, stop_name=No
             if line2:
                 line1_bbox = draw.textbbox((0, 0), line1, font=font_small)
                 line1_height = line1_bbox[3] - line1_bbox[1]
-                draw.text((MARGIN, MARGIN + line1_height+MARGIN), line2, font=font_small, fill=epd.BLACK)
+                draw.text((MARGIN, MARGIN + line1_height+MARGIN), line2, font=font_small, fill=BLACK)
                 line2_bbox = draw.textbbox((0, 0), line2, font=font_small)
                 line2_height = line2_bbox[3] - line2_bbox[1]
                 stop_name_height = line1_height + line2_height + MARGIN + MARGIN + MARGIN
                 logger.debug(f"Stop name height: {stop_name_height}")
         else:
             logger.debug(f"Stop name width: {stop_name_width}, weather width: {weather_width if weather_enabled else 0}, total width: {Himage.width}, margin: {MARGIN}")
-            draw.text((MARGIN, MARGIN), stop_name, font=font_small, fill=epd.BLACK)
+            draw.text((MARGIN, MARGIN), stop_name, font=font_small, fill=BLACK)
             stop_name_bbox = draw.textbbox((0, 0), stop_name, font=font_small)
             stop_name_height = stop_name_bbox[3] - stop_name_bbox[1] + MARGIN
     logger.debug(f"Stop name height: {stop_name_height}")
@@ -285,7 +291,7 @@ def update_display(epd, weather_data, bus_data, error_message=None, stop_name=No
         logger.debug(f"Spacing: {SPACING}, First box y: {first_box_y}, Second box y: {second_box_y}")
     else:
         logger.error(f"Unexpected number of bus lines: {len(bus_data)}. Display currently supports up to 2 lines from the same provider and stop.")
-        draw.text((MARGIN, MARGIN), "Error, see logs", font=font_large, fill=epd.RED)
+        draw.text((MARGIN, MARGIN), "Error, see logs", font=font_large, fill=RED)
         return
 
 
@@ -318,7 +324,7 @@ def update_display(epd, weather_data, bus_data, error_message=None, stop_name=No
 
         # Draw arrow
         draw.text((line_text_width + MARGIN+10, y_position + (BOX_HEIGHT - 24) // 2), "→", 
-                  font=font_medium, fill=epd.BLACK)
+                  font=font_medium, fill=BLACK)
         # Calculate width of arrow
         arrow_bbox = draw.textbbox((0, 0), "→", font=font_medium)
         arrow_width = arrow_bbox[2] - arrow_bbox[0] + MARGIN
@@ -361,21 +367,21 @@ def update_display(epd, weather_data, bus_data, error_message=None, stop_name=No
                 break
             
             # Draw time
-            draw.text((x_pos + MARGIN, y_pos), time, font=font_medium, fill=epd.BLACK)
+            draw.text((x_pos + MARGIN, y_pos), time, font=font_medium, fill=BLACK)
             
             # Draw message if present
             if message:
                 msg_x = x_pos + time_width + MARGIN
                 if message == "Last":
                     draw.text((msg_x, y_pos + MARGIN), "Last departure", 
-                              font=font_small, fill=epd.BLACK)
+                              font=font_small, fill=BLACK)
                     break  # Don't show more times after "Last departure"
                 elif message == "theor.":
                     draw.text((msg_x, y_pos + MARGIN), "(theor.)", 
-                              font=font_small, fill=epd.BLACK)
+                              font=font_small, fill=BLACK)
                 elif message:
                     draw.text((msg_x, y_pos + MARGIN), msg_text, 
-                              font=font_small, fill=epd.BLACK)
+                              font=font_small, fill=BLACK)
             
             # Move x position for next time
             x_pos += time_width + message_width + MARGIN + EXTRA_SPACING  # Add spacing between times
@@ -395,7 +401,7 @@ def update_display(epd, weather_data, bus_data, error_message=None, stop_name=No
         time_y = Himage.height - time_height - MARGIN
     
     draw.text((Himage.width - time_width - MARGIN, time_y), 
-              current_time, font=font_small, fill=epd.BLACK)
+              current_time, font=font_small, fill=BLACK)
 
     # Draw error message if present
     if error_message:
@@ -403,10 +409,10 @@ def update_display(epd, weather_data, bus_data, error_message=None, stop_name=No
         error_width = error_bbox[2] - error_bbox[0]
         error_x = (Himage.width - error_width) // 2
         error_y = time_y + time_height + MARGIN if len(bus_data) == 1 else second_box_y + BOX_HEIGHT + MARGIN
-        draw.text((error_x, error_y), error_message, font=font_small, fill=epd.RED)
+        draw.text((error_x, error_y), error_message, font=font_small, fill=RED)
 
     # Draw a border around the display
-    draw.rectangle([(0, 0), (Himage.width-1, Himage.height-1)], outline=epd.BLACK)
+    draw.rectangle([(0, 0), (Himage.width-1, Himage.height-1)], outline=BLACK)
 
     # Rotate the image 90 degrees
     Himage = Himage.rotate(90, expand=True)

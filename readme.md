@@ -88,4 +88,4 @@ to the waveshare_epd folder in the virtual environment.
 The four colour version of the display does not support partial refresh, so it flickers with every refresh, making it less ideal for this application, despite the nice colours.
 
 # Known issues
-- DeLijn does not work yet on the Raspberry Pi Zero 2 W (it does not seem to have enough memory to load the data in the current state of the app)
+- 

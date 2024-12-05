@@ -21,7 +21,7 @@ Once the Raspberry Pi is assembled and powered on, connect to it with SSH.
 ssh <username>@raspberrypi.local
 ```
 
-> [!TIP] Fast Setup
+> **:bulb: TIP:** Fast Setup
 > If you want to automatically set up everything, you can use our setup script:
 > ![Fast Setup Step 1](images/fast_setup_step1.png)
 > ``` bash
@@ -175,7 +175,7 @@ The service should start automatically on boot (sudo reboot). If it doesn't, che
 journalctl -u display.service
 ```
 
-> [!TIP] Optional: Enable File Sharing
+> **:bulb: TIP:** Optional: Enable File Sharing
 > If you want to easily edit files on the Raspberry Pi from another computer, you can set up Samba file sharing:
 > ``` bash
 > # Download the Samba setup script

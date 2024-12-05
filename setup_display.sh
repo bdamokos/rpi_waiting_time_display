@@ -1,8 +1,79 @@
 #!/bin/bash
 
+# Store backup information in a fixed location
+BACKUP_DIR="/opt/display_setup_backup"
+BACKUP_MANIFEST="$BACKUP_DIR/manifest.txt"
+MODIFIED_FILES=()
+
+# Function to create backup of a file
+backup_file() {
+    local file="$1"
+    if [ -f "$file" ]; then
+        local backup_path="$BACKUP_DIR${file}"
+        mkdir -p "$(dirname "$backup_path")"
+        cp "$file" "$backup_path"
+        MODIFIED_FILES+=("$file")
+        echo "$file" >> "$BACKUP_MANIFEST"
+        echo "Backed up: $file"
+    fi
+}
+
+# Function to setup uninstall script
+setup_uninstall() {
+    echo "Setting up uninstall script..."
+    su - $ACTUAL_USER -c "cp $ACTUAL_HOME/display_programme/docs/service/uninstall_display.sh $ACTUAL_HOME/uninstall_display.sh"
+    su - $ACTUAL_USER -c "chmod +x $ACTUAL_HOME/uninstall_display.sh"
+    echo "Uninstall script created at: $ACTUAL_HOME/uninstall_display.sh"
+}
+
+# Function to restore backups and cleanup
+cleanup() {
+    echo "----------------------------------------"
+    echo "Cleaning up installation..."
+    
+    # Stop and disable service
+    systemctl stop display.service
+    systemctl disable display.service
+    rm -f /etc/systemd/system/display.service
+    systemctl daemon-reload
+    
+    # Remove installed packages (optional)
+    if confirm "Would you like to remove installed packages?"; then
+        apt-get remove -y git gh fonts-dejavu watchdog python3-dev
+    fi
+    
+    # Restore backed up files
+    if [ -f "$BACKUP_MANIFEST" ]; then
+        echo "Restoring backed up files..."
+        while IFS= read -r file; do
+            if [ -f "$BACKUP_DIR$file" ]; then
+                cp "$BACKUP_DIR$file" "$file"
+                echo "Restored: $file"
+            fi
+        done < "$BACKUP_MANIFEST"
+    fi
+    
+    # Setup uninstall script before exiting
+    setup_uninstall
+    
+    # Optionally remove backup directory
+    if confirm "Remove backup files?"; then
+        rm -rf "$BACKUP_DIR"
+    fi
+    
+    echo "Cleanup completed."
+    echo "----------------------------------------"
+    echo "You can use the uninstall script later with: sudo ~/uninstall_display.sh"
+    echo "----------------------------------------"
+}
+
+# Create backup directory
+mkdir -p "$BACKUP_DIR"
+touch "$BACKUP_MANIFEST"
+
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.4 (2024-12-05)"  # AUTO-INCREMENT
+echo "Version: 0.0.5 (2024-12-05)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -17,7 +88,10 @@ check_error() {
             echo "Continuing despite the error as per user request."
             echo "----------------------------------------"
         else
-            echo "Exiting setup script due to error."
+            echo "Setup failed."
+            if confirm "Would you like to clean up and restore previous state?"; then
+                cleanup
+            fi
             exit 1
         fi
     fi
@@ -157,4 +231,7 @@ echo "2. Check service status: systemctl status display.service"
 echo "3. View logs: journalctl -u display.service -f"
 echo ""
 echo "The service will start automatically on boot."
+setup_uninstall
+echo ""
+echo "To uninstall in the future, run: sudo ~/uninstall_display.sh"
 echo "----------------------------------------"

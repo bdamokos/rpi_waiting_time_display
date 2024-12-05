@@ -17,6 +17,7 @@ import importlib
 import log_config
 import requests
 import random
+import traceback
 
 logger = logging.getLogger(__name__)
 # Set logging level for PIL.PngImagePlugin and urllib3.connectionpool to warning
@@ -568,10 +569,18 @@ def main():
         
         # Add debug logs before EPD commands
         logger.debug("About to call epd.init()")
-        epd.init()
+        try:
+            epd.init()
+        except Exception as e:
+            logger.error(f"Error initializing display: {str(e)}\n{traceback.format_exc()}")
+            raise
         
         logger.debug("About to call epd.Clear()")
-        epd.Clear()
+        try:
+            epd.Clear()
+        except Exception as e:
+            logger.error(f"Error clearing display: {str(e)}\n{traceback.format_exc()}")
+            raise
         logger.info("Display initialized")
         
         logger.debug("About to call epd.init_Fast()")
@@ -670,7 +679,7 @@ def main():
         logger.info("Ctrl+C pressed - Cleaning up...")
         
     except Exception as e:
-        logger.error(f"Main error: {e}")
+        logger.error(f"Main error: {str(e)}\n{traceback.format_exc()}")
         
     finally:
         logger.info("Cleaning up...")
@@ -686,7 +695,7 @@ def main():
                 epd.epdconfig.module_exit(cleanup=True)
                 logger.info("Display cleanup completed")
             except Exception as e:
-                logger.error(f"Error during cleanup: {e}")
+                logger.error(f"Error during cleanup: {str(e)}\n{traceback.format_exc()}")
         sys.exit(0)
 
 if __name__ == "__main__":

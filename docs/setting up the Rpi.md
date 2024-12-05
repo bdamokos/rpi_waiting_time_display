@@ -194,3 +194,7 @@ journalctl -u display.service
 > - Linux: `smb://raspberrypi.local/username_home`
 > (or whatever hostname you set)
 > This makes it easier to edit files like `.env` from your main computer.
+
+
+# Setting up the backend server
+:warning: **Important:** The backend server needs to be set up first. See the [backend server readme](https://github.com/bdamokos/brussels_transit) for more information. If the API keys are not configured, the service will not start.

@@ -109,7 +109,7 @@ touch "$BACKUP_MANIFEST"
 
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.8 (2024-12-05)"  # AUTO-INCREMENT
+echo "Version: 0.0.9 (2024-12-05)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -216,6 +216,18 @@ check_error "Failed to install display programme requirements"
 
 su - $ACTUAL_USER -c "source $ACTUAL_HOME/display_env/bin/activate && cd $ACTUAL_HOME/brussels_transit && pip install -r requirements.txt"
 check_error "Failed to install brussels transit requirements"
+
+# Install Waveshare drivers
+echo "Installing Waveshare e-Paper drivers..."
+PYTHON_VERSION=$(su - $ACTUAL_USER -c "source $ACTUAL_HOME/display_env/bin/activate && python3 -c 'import sys; print(\".\"
+.join(map(str, sys.version_info[:2])))'")
+SITE_PACKAGES="$ACTUAL_HOME/display_env/lib/python$PYTHON_VERSION/site-packages/waveshare_epd"
+
+mkdir -p "$SITE_PACKAGES"
+curl -H "Cache-Control: no-cache" -o "$SITE_PACKAGES/epd2in13g.py" https://raw.githubusercontent.com/waveshareteam/e-Paper/master/E-paper_Separate_Program/2in13_e-Paper_G/RaspberryPi_JetsonNano/python/lib/waveshare_epd/epd2in13g.py
+curl -H "Cache-Control: no-cache" -o "$SITE_PACKAGES/epd2in13g_V2.py" https://raw.githubusercontent.com/waveshareteam/e-Paper/master/E-paper_Separate_Program/2in13_e-Paper_G/RaspberryPi_JetsonNano/python/lib/waveshare_epd/epd2in13g_V2.py
+curl -H "Cache-Control: no-cache" -o "$SITE_PACKAGES/epdconfig.py" https://raw.githubusercontent.com/waveshareteam/e-Paper/master/E-paper_Separate_Program/2in13_e-Paper_G/RaspberryPi_JetsonNano/python/lib/waveshare_epd/epdconfig.py
+check_error "Failed to install Waveshare drivers"
 
 # Setup service files
 echo "Setting up service files..."

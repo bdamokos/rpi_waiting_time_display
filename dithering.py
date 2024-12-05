@@ -19,16 +19,28 @@ def draw_dithered_box(draw, epd, x, y, width, height, text, primary_color, secon
     """
     logging.debug(f"Drawing dithered box with colors: {primary_color} ({ratio:.2f}) and {secondary_color} ({1-ratio:.2f})")
     
-    # Map color names to epd colors and RGB values
-    color_map = {
-        'black': (epd.BLACK, (0, 0, 0)),
-        'red': (epd.RED, (255, 0, 0)),
-        'yellow': (epd.YELLOW, (255, 255, 0)),
-        'white': (epd.WHITE, (255, 255, 255))
+    # Get available colors from EPD
+    available_colors = {
+        'black': (getattr(epd, 'BLACK', 0x000000), (0, 0, 0)),
+        'white': (getattr(epd, 'WHITE', 0xffffff), (255, 255, 255))
     }
-    # TO DO: check if the color is valid with the given epd display, and if not, remove it from the color_map; conversely, if there is a color missing, add it to the color_map
-    primary_epd, primary_rgb = color_map[primary_color]
-    secondary_epd, secondary_rgb = color_map[secondary_color]
+    
+    # Add red and yellow only if supported by the display
+    if hasattr(epd, 'RED'):
+        available_colors['red'] = (epd.RED, (255, 0, 0))
+    if hasattr(epd, 'YELLOW'):
+        available_colors['yellow'] = (epd.YELLOW, (255, 255, 0))
+    
+    # Validate requested colors
+    if primary_color not in available_colors:
+        logger.warning(f"Primary color {primary_color} not supported by display, falling back to black")
+        primary_color = 'black'
+    if secondary_color not in available_colors:
+        logger.warning(f"Secondary color {secondary_color} not supported by display, falling back to white")
+        secondary_color = 'white'
+    
+    primary_epd, primary_rgb = available_colors[primary_color]
+    secondary_epd, secondary_rgb = available_colors[secondary_color]
     
     # Count actual pixels of each color for accurate brightness calculation
     primary_pixel_count = 0
@@ -69,14 +81,33 @@ def draw_dithered_box(draw, epd, x, y, width, height, text, primary_color, secon
     logging.debug(f"Actual dithered ratio: {actual_ratio:.2f}, Brightness: {avg_brightness:.2f}")
     
     # Use black text if background is bright (threshold 0.6)
-    text_color = epd.BLACK if avg_brightness > 0.6 else epd.WHITE
+    text_color = available_colors['black'][0] if avg_brightness > 0.6 else available_colors['white'][0]
     draw.text((text_x, text_y), text, font=font, fill=text_color)
 
-# Alternative dithering patterns - not currently used in production but available for testing
+def _get_available_colors(epd):
+    """Helper function to get available colors for the display"""
+    colors = {
+        'black': (getattr(epd, 'BLACK', 0x000000), (0, 0, 0)),
+        'white': (getattr(epd, 'WHITE', 0xffffff), (255, 255, 255))
+    }
+    
+    if hasattr(epd, 'RED'):
+        colors['red'] = (epd.RED, (255, 0, 0))
+    if hasattr(epd, 'YELLOW'):
+        colors['yellow'] = (epd.YELLOW, (255, 255, 0))
+    
+    return colors
+
 def draw_horizontal_lines_dither(draw, epd, x, y, width, height, text, primary_color, secondary_color, ratio, font):
     """Horizontal line pattern - experimental"""
-    color_map = {'black': epd.BLACK, 'red': epd.RED, 'yellow': epd.YELLOW, 'white': epd.WHITE}
-    primary, secondary = color_map[primary_color], color_map[secondary_color]
+    colors = _get_available_colors(epd)
+    if primary_color not in colors or secondary_color not in colors:
+        logger.warning("Unsupported colors requested, falling back to black/white")
+        primary_color = 'black'
+        secondary_color = 'white'
+    
+    primary, _ = colors[primary_color]
+    secondary, _ = colors[secondary_color]
     
     line_height = 2
     for j in range(0, height, line_height):

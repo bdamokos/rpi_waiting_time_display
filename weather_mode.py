@@ -7,11 +7,23 @@ from weather import WeatherService
 import qrcode
 from datetime import datetime
 import os
+from display_adapter import DisplayAdapter
 
 logger = logging.getLogger(__name__)
 
-width = 250
-height = 122
+# Get display instance
+epd = DisplayAdapter.get_display()
+
+# Handle different color definitions
+BLACK = getattr(epd, 'BLACK', 0x000000)
+WHITE = getattr(epd, 'WHITE', 0xffffff)
+RED = getattr(epd, 'RED', 0x0000ff)
+YELLOW = getattr(epd, 'YELLOW', 0x00ffff)
+
+# Use display dimensions from the EPD instance
+width = epd.height  # Note: we swap height/width because we rotate 90 degrees
+height = epd.width
+
 url_for_qr_code = "http://raspberrypi.local:5001"
 available_colors = ['black', 'white', 'red', 'yellow']
 WEATHER_ICONS = {
@@ -24,15 +36,12 @@ WEATHER_ICONS = {
     'Mist': '🌫',
 }
 
-# Set up logging
-logging.basicConfig(level=logging.DEBUG)
-
 # Initialize weather service
 weather_service = WeatherService()
 weather_data = weather_service.get_detailed_weather()
 
 # Create a new image with the specified width and height
-image = Image.new('RGB', (width, height), 'white')
+image = Image.new('RGB', (width, height), WHITE)
 draw = ImageDraw.Draw(image)
 
 # Font paths for different operating systems
@@ -60,9 +69,9 @@ if font_large is None:
     logger.warning("DejaVu Sans font not found, using default font")
     font_large = font = font_small = ImageFont.load_default()
 
-def draw_box(x, y, w, h, text, fill='black', font_size='normal', multiline_align='center'):
+def draw_box(x, y, w, h, text, fill=BLACK, font_size='normal', multiline_align='center'):
     # Draw box
-    draw.rectangle([x, y, x + w - 1, y + h - 1], outline='black')
+    draw.rectangle([x, y, x + w - 1, y + h - 1], outline=BLACK)
     
     # Select font based on size parameter
     if font_size == 'large':
@@ -123,5 +132,12 @@ draw_box(40, 80, 60, 40, f"AQI: {weather_data['tomorrow']['air_quality']['aqi']}
 draw_box(100, 80, 100, 40, forecast_text, font_size='small')
 draw_box(200, 80, 50, 40, f"{datetime.now().strftime('%H:%M')}", font_size='small')
 
-# Save the image
-image.save('weather_display.png')
+# Rotate the image 90 degrees
+image = image.rotate(90, expand=True)
+
+# Convert and display the image
+buffer = epd.getbuffer(image)
+epd.display(buffer)
+
+# Clean up
+epd.sleep()

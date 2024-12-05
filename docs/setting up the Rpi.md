@@ -45,7 +45,7 @@ ssh <username>@raspberrypi.local
 > - Set up virtual environment
 > - Install requirements
 > - Configure and start the service
-> 
+> ![Fast Setup Step 3 - Setup Complete](images/fast_setup_step3.png)
 > After running the script, you only need to:
 > 1. Edit your .env file with your settings
 > 2. Reboot the Raspberry Pi

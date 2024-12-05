@@ -70,6 +70,7 @@ if font_large is None:
     font_large = font = font_small = ImageFont.load_default()
 
 def draw_box(x, y, w, h, text, fill=BLACK, font_size='normal', multiline_align='center'):
+    """Draw a box with text."""
     # Draw box
     draw.rectangle([x, y, x + w - 1, y + h - 1], outline=BLACK)
     
@@ -80,6 +81,10 @@ def draw_box(x, y, w, h, text, fill=BLACK, font_size='normal', multiline_align='
         selected_font = font_small
     else:
         selected_font = font
+    
+    # For monochrome displays, ensure fill color is valid
+    if not isinstance(fill, tuple) and fill != BLACK and fill != WHITE:
+        fill = BLACK  # Default to black if color isn't supported
     
     # Calculate text position to center it
     lines = text.split('\n')

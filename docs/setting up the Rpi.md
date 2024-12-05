@@ -23,13 +23,16 @@ ssh <username>@raspberrypi.local
 
 > [!TIP] Fast Setup
 > If you want to automatically set up everything, you can use our setup script:
+> ![Fast Setup Step 1](images/fast_setup_step1.png)
 > ``` bash
-> # Download the setup script
-> curl -O https://raw.githubusercontent.com/bdamokos/rpi_waiting_time_display/main/setup_display.sh
+> # Download the setup script (with cache bypass)
+> curl -H "Cache-Control: no-cache" -O https://raw.githubusercontent.com/bdamokos/rpi_waiting_time_display/main/setup_display.sh
 > 
 > # Make it executable
 > chmod +x setup_display.sh
-> 
+> ```
+> ![Fast Setup Step 2](images/fast_setup_step2.png) 
+> ``` bash
 > # Run the setup script
 > sudo ./setup_display.sh
 > ```

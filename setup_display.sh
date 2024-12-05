@@ -2,7 +2,7 @@
 
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.1 (2024-12-05)"  # AUTO-INCREMENT
+echo "Version: 0.0.2 (2024-12-05)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -51,7 +51,7 @@ echo "Installing required packages..."
 apt-get update
 check_error "Failed to update package list"
 
-apt-get install -y git gh ttf-dejavu watchdog
+apt-get install -y git gh fonts-dejavu watchdog
 check_error "Failed to install packages"
 
 # Setup watchdog

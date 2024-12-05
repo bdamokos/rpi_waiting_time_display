@@ -5,6 +5,7 @@ import os
 from PIL import Image
 import dotenv
 import inspect
+import types
 logger = logging.getLogger(__name__)
 
 class MockDisplay:
@@ -80,27 +81,27 @@ class DisplayAdapter:
                 
             # Add wrapper for init method to handle different signatures
             original_init = epd.init
-            def init_wrapper(*args, **kwargs):
+            def init_wrapper(self, *args, **kwargs):
                 # Get the parameters of the original init method
                 sig = inspect.signature(original_init)
                 
                 # If the method requires parameters but none were provided
                 if len(sig.parameters) > 1 and not args and not kwargs:  # >1 because first param is self
                     # For epd2in13, provide the lut_full_update as default
-                    if hasattr(epd, 'lut_full_update'):
-                        return original_init(epd.lut_full_update)
+                    if hasattr(self, 'lut_full_update'):
+                        return original_init(self.lut_full_update)
                 return original_init(*args, **kwargs)
             
-            epd.init = init_wrapper
+            epd.init = types.MethodType(init_wrapper, epd)
             
             # Add init_Fast method if it doesn't exist
             if not hasattr(epd, 'init_Fast'):
-                def init_Fast():
+                def init_Fast(self):
                     # For displays that don't have fast mode, use regular init
-                    if hasattr(epd, 'lut_partial_update'):
-                        return init_wrapper(epd.lut_partial_update)
-                    return init_wrapper()
-                epd.init_Fast = init_Fast
+                    if hasattr(self, 'lut_partial_update'):
+                        return self.init(self.lut_partial_update)
+                    return self.init()
+                epd.init_Fast = types.MethodType(init_Fast, epd)
                 
             return epd
             

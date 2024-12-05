@@ -29,56 +29,8 @@ The .env file is used to configure the application:
 - Configure the monitored transit stops
 - Configure your display model
 
-The [start_display.sh](docs/service/start_display.sh.example) script is used to start the display service. It should be copied to the home directory and made executable.
-
-A virtual environment is used to run the application. The dependencies are listed in the [requirements.txt](requirements.txt) file. By default it is set up in the ~/display_env directory with:
-```
-python3 -m venv ~/display_env
-source ~/display_env/bin/activate
-pip install -r requirements.txt
-```
-
-To set up the service with systemd, copy the [start_display.service](docs/service/start_display.service.example) file to the /etc/systemd/system directory and enable it with:
-```
-sudo systemctl enable start_display.service
-sudo systemctl start start_display.service
-```
-If you don't already have the DejaVuSans font installed, you can install it with:
-```
-sudo apt-get install ttf-dejavu
-```
-
-To setup watchdog (in case the display freezes, it will reboot the Pi):
-
-Add these parameters to /boot/firmware/config.txt:
-```
-dtparam=watchdog=on
-```
-
-Then install watchdog:
-```
-sudo apt-get install watchdog
-```
-
-Edit the watchdog configuration file:
-```
-sudo nano /etc/watchdog.conf
-```
-Put in the following:
-```
-# Add or uncomment these lines:
-watchdog-device = /dev/watchdog
-watchdog-timeout = 15
-interval = 10
-max-load-1 = 3.0
-max-load-5 = 2.8
-```
-
-Then enable the watchdog service:
-```
-sudo systemctl enable watchdog
-sudo systemctl start watchdog
-```
+# Setting up the Raspberry Pi
+See [docs/setting up the Rpi.md](docs/setting%20up%20the%20Rpi.md)
 
 # Specific workarounds (Waveshare 2.13 inch display with 4 colours, revision 2)
 To get the display working, I needed to copy a specific file from the E-Paper library from 

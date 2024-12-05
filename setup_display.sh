@@ -109,7 +109,7 @@ touch "$BACKUP_MANIFEST"
 
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.6 (2024-12-05)"  # AUTO-INCREMENT
+echo "Version: 0.0.7 (2024-12-05)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -220,7 +220,9 @@ check_error "Failed to install brussels transit requirements"
 # Setup service files
 echo "Setting up service files..."
 # Copy and modify service file
-sed "s/User=pi/User=$ACTUAL_USER/g" $ACTUAL_HOME/display_programme/docs/service/display.service.example > /etc/systemd/system/display.service
+sed -e "s|User=pi|User=$ACTUAL_USER|g" \
+    -e "s|/home/pi|$ACTUAL_HOME|g" \
+    $ACTUAL_HOME/display_programme/docs/service/display.service.example > /etc/systemd/system/display.service
 check_error "Failed to setup service file"
 
 # Copy and setup scripts

@@ -204,15 +204,15 @@ def update_display(epd, weather_data, bus_data, error_message=None, stop_name=No
     MARGIN = 8
 
     # Handle different color definitions
-    BLACK = getattr(epd, 'BLACK', 0x000000)
-    WHITE = getattr(epd, 'WHITE', 0xffffff)
-    RED = getattr(epd, 'RED', 0x0000ff)
-    YELLOW = getattr(epd, 'YELLOW', 0x00ffff)
+    BLACK = epd.BLACK
+    WHITE = epd.WHITE
+    RED = getattr(epd, 'RED', BLACK)  # Fall back to BLACK if RED not available
+    YELLOW = getattr(epd, 'YELLOW', BLACK)  # Fall back to BLACK if YELLOW not available
 
     logger.info(f"Display dimensions: {epd.height}x{epd.width} (height x width)")
     
     # Create a new image with white background
-    Himage = Image.new('RGB', (epd.height, epd.width), WHITE)
+    Himage = Image.new('RGB', (epd.height, epd.width), WHITE if isinstance(WHITE, tuple) else (255, 255, 255))
     draw = ImageDraw.Draw(Himage)
     
     try:

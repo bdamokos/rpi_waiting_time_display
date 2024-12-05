@@ -78,7 +78,23 @@ class DisplayAdapter:
             # Attach the epdconfig module to the instance if it doesn't already have it
             if not hasattr(epd, 'epdconfig'):
                 epd.epdconfig = display_module.epdconfig
-                
+            
+            # Add color constants if not defined
+            if not hasattr(epd, 'BLACK'):
+                logger.debug("Display does not define BLACK, using default value")
+                epd.BLACK = 0x00  # For monochrome displays, 0 is typically black
+            if not hasattr(epd, 'WHITE'):
+                logger.debug("Display does not define WHITE, using default value")
+                epd.WHITE = 0xFF  # For monochrome displays, 255 (0xFF) is typically white
+            
+            # Add color constants for compatibility with color displays
+            if not hasattr(epd, 'RED'):
+                logger.debug("Display does not support RED, falling back to BLACK")
+                epd.RED = epd.BLACK
+            if not hasattr(epd, 'YELLOW'):
+                logger.debug("Display does not support YELLOW, falling back to BLACK")
+                epd.YELLOW = epd.BLACK
+            
             # Add wrapper for init method to handle different signatures
             original_init = epd.init
             def init_wrapper(*args, **kwargs):

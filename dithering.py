@@ -3,13 +3,17 @@ import logging
 import log_config
 logger = logging.getLogger(__name__)
 
-def calculate_brightness(rgb: Tuple[int, int, int]) -> float:
+def calculate_brightness(rgb_or_value):
     """
     Calculate perceived brightness of a color (0-1)
     Using the formula from W3C accessibility guidelines
     """
-    r, g, b = rgb
-    return (0.299 * r + 0.587 * g + 0.114 * b) / 255
+    if isinstance(rgb_or_value, tuple):
+        r, g, b = rgb_or_value
+        return (0.299 * r + 0.587 * g + 0.114 * b) / 255
+    else:
+        # For monochrome displays, value is already 0x00 (0) or 0xFF (255)
+        return rgb_or_value / 255 if rgb_or_value > 0 else 0
 
 def draw_dithered_box(draw, epd, x, y, width, height, text, primary_color, secondary_color, ratio, font):
     """
@@ -21,15 +25,15 @@ def draw_dithered_box(draw, epd, x, y, width, height, text, primary_color, secon
     
     # Get available colors from EPD
     available_colors = {
-        'black': (getattr(epd, 'BLACK', 0x000000), (0, 0, 0)),
-        'white': (getattr(epd, 'WHITE', 0xffffff), (255, 255, 255))
+        'black': (epd.BLACK, (0, 0, 0) if isinstance(epd.BLACK, tuple) else epd.BLACK),
+        'white': (epd.WHITE, (255, 255, 255) if isinstance(epd.WHITE, tuple) else epd.WHITE)
     }
     
-    # Add red and yellow only if supported by the display
-    if hasattr(epd, 'RED'):
-        available_colors['red'] = (epd.RED, (255, 0, 0))
-    if hasattr(epd, 'YELLOW'):
-        available_colors['yellow'] = (epd.YELLOW, (255, 255, 0))
+    # Add red and yellow only if they're different from BLACK
+    if hasattr(epd, 'RED') and epd.RED != epd.BLACK:
+        available_colors['red'] = (epd.RED, (255, 0, 0) if isinstance(epd.RED, tuple) else epd.RED)
+    if hasattr(epd, 'YELLOW') and epd.YELLOW != epd.BLACK:
+        available_colors['yellow'] = (epd.YELLOW, (255, 255, 0) if isinstance(epd.YELLOW, tuple) else epd.YELLOW)
     
     # Validate requested colors
     if primary_color not in available_colors:

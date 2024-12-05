@@ -109,7 +109,7 @@ touch "$BACKUP_MANIFEST"
 
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.7 (2024-12-05)"  # AUTO-INCREMENT
+echo "Version: 0.0.8 (2024-12-05)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -219,6 +219,11 @@ check_error "Failed to install brussels transit requirements"
 
 # Setup service files
 echo "Setting up service files..."
+# Make service scripts executable
+su - $ACTUAL_USER -c "chmod +x $ACTUAL_HOME/display_programme/docs/service/setup_samba.sh"
+su - $ACTUAL_USER -c "chmod +x $ACTUAL_HOME/display_programme/docs/service/switch_display_mode.sh"
+su - $ACTUAL_USER -c "chmod +x $ACTUAL_HOME/display_programme/docs/service/uninstall_display.sh"
+
 # Copy and modify service file
 sed -e "s|User=pi|User=$ACTUAL_USER|g" \
     -e "s|/home/pi|$ACTUAL_HOME|g" \
@@ -273,3 +278,10 @@ setup_uninstall
 echo ""
 echo "To uninstall in the future, run: sudo ~/uninstall_display.sh"
 echo "----------------------------------------"
+
+# Ask about Samba setup
+if confirm "Would you like to set up Samba file sharing? This will allow you to edit files from your computer"; then
+    echo "Setting up Samba..."
+    bash "$ACTUAL_HOME/display_programme/docs/service/setup_samba.sh"
+    check_error "Failed to setup Samba"
+fi

@@ -2,7 +2,7 @@
 
 echo "----------------------------------------"
 echo "Samba Setup Script"
-echo "Version: 0.0.1 (2024-12-05)"  # AUTO-INCREMENT
+echo "Version: 0.0.2 (2024-12-05)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -35,18 +35,10 @@ echo "Setting up Samba password for $ACTUAL_USER"
 echo "Please enter the password you want to use for Samba:"
 smbpasswd -a $ACTUAL_USER
 
-# Add share configuration
-cat >> /etc/samba/smb.conf << EOL
-
-[${ACTUAL_USER}_home]
-   comment = ${ACTUAL_USER}'s Home Directory
-   path = ${ACTUAL_HOME}
-   browseable = yes
-   read only = no
-   create mask = 0644
-   directory mask = 0755
-   valid users = ${ACTUAL_USER}
-EOL
+# Modify the [homes] section to allow write access
+sed -i '/\[homes\]/,/^[^#[]/ s/read only = yes/read only = no/' /etc/samba/smb.conf
+sed -i '/\[homes\]/,/^[^#[]/ s/create mask = 0700/create mask = 0644/' /etc/samba/smb.conf
+sed -i '/\[homes\]/,/^[^#[]/ s/directory mask = 0700/directory mask = 0755/' /etc/samba/smb.conf
 
 # Restart Samba
 systemctl restart smbd
@@ -62,10 +54,10 @@ echo "----------------------------------------"
 echo "Samba setup completed!"
 echo ""
 echo "You can now access your home directory at:"
-echo "\\\\$(hostname).local\\${ACTUAL_USER}_home"
+echo "\\\\$(hostname).local\\$ACTUAL_USER"
 echo ""
 echo "Or on macOS/Linux:"
-echo "smb://$(hostname).local/${ACTUAL_USER}_home"
+echo "smb://$(hostname).local/$ACTUAL_USER"
 echo ""
 echo "Username: $ACTUAL_USER"
 echo "Password: (the one you just set)"

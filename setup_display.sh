@@ -2,7 +2,7 @@
 
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.2 (2024-12-05)"  # AUTO-INCREMENT
+echo "Version: 0.0.3 (2024-12-05)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -82,7 +82,7 @@ cd $ACTUAL_HOME
 su - $ACTUAL_USER -c "gh repo clone bdamokos/rpi_waiting_time_display display_programme"
 check_error "Failed to clone display programme"
 
-su - $ACTUAL_USER -c "gh repo clone bdamokos/brussels-transit"
+su - $ACTUAL_USER -c "gh repo clone bdamokos/brussels_transit"
 check_error "Failed to clone brussels transit"
 
 # Setup virtual environment

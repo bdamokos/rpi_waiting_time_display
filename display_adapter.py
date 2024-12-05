@@ -5,7 +5,7 @@ import os
 from PIL import Image
 import dotenv
 import inspect
-import types
+import traceback
 logger = logging.getLogger(__name__)
 
 class MockDisplay:
@@ -81,31 +81,53 @@ class DisplayAdapter:
                 
             # Add wrapper for init method to handle different signatures
             original_init = epd.init
-            def init_wrapper(self, *args, **kwargs):
-                # Get the parameters of the original init method
-                sig = inspect.signature(original_init)
-                
-                # If the method requires parameters but none were provided
-                if len(sig.parameters) > 1 and not args and not kwargs:  # >1 because first param is self
-                    # For epd2in13, provide the lut_full_update as default
-                    if hasattr(self, 'lut_full_update'):
-                        return original_init(self.lut_full_update)
-                return original_init(*args, **kwargs)
+            def init_wrapper(*args, **kwargs):
+                try:
+                    # If this is a bound method call (first arg is self)
+                    if args and isinstance(args[0], display_module.EPD):
+                        self = args[0]
+                        args = args[1:]  # Remove self from args
+                    else:
+                        self = epd
+                    
+                    # If no arguments provided but the original method requires them
+                    sig = inspect.signature(original_init)
+                    if len(sig.parameters) > 1 and not args and not kwargs:
+                        # For epd2in13, provide the lut_full_update as default
+                        if hasattr(self, 'lut_full_update'):
+                            logger.debug(f"Using lut_full_update for init. Params: {sig.parameters}")
+                            return original_init(self, self.lut_full_update)
+                        return original_init(self)
+                    
+                    # Call with original arguments
+                    logger.debug(f"Calling init with args: {args}, kwargs: {kwargs}")
+                    return original_init(self, *args, **kwargs)
+                except Exception as e:
+                    logger.error(f"Error in init_wrapper: {str(e)}\n{traceback.format_exc()}")
+                    raise
             
-            epd.init = types.MethodType(init_wrapper, epd)
+            epd.init = init_wrapper
             
             # Add init_Fast method if it doesn't exist
             if not hasattr(epd, 'init_Fast'):
-                def init_Fast(self):
-                    # For displays that don't have fast mode, use regular init
-                    if hasattr(self, 'lut_partial_update'):
-                        return self.init(self.lut_partial_update)
-                    return self.init()
-                epd.init_Fast = types.MethodType(init_Fast, epd)
+                def init_Fast():
+                    try:
+                        # For displays that don't have fast mode, use regular init
+                        if hasattr(epd, 'lut_partial_update'):
+                            logger.debug("Using lut_partial_update for init_Fast")
+                            return init_wrapper(epd.lut_partial_update)
+                        return init_wrapper()
+                    except Exception as e:
+                        logger.error(f"Error in init_Fast: {str(e)}\n{traceback.format_exc()}")
+                        raise
+                epd.init_Fast = init_Fast
                 
             return epd
             
         except ImportError as e:
-            logger.warning(f"Could not import display module {display_model}: {e}")
+            logger.error(f"Could not import display module {display_model}: {str(e)}\n{traceback.format_exc()}")
             logger.warning("Falling back to mock display")
-            return MockDisplay() 
+            return MockDisplay()
+        except Exception as e:
+            logger.error(f"Error creating display instance: {str(e)}\n{traceback.format_exc()}")
+            raise 

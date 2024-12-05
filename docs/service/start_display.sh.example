@@ -6,7 +6,7 @@
 # chmod +x ~/start_display.sh
 echo "----------------------------------------"
 echo "Starting display service service script"
-echo "Version: 0.0.6 (2024-12-04)"  # AUTO-INCREMENT
+echo "Version: 0.0.7 (2024-12-05)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -16,7 +16,6 @@ sleep 10
 
 # Step 1: Update display_programme first
 echo "----------------------------------------"
-echo "Updating display_programme from git..."
 cd ~/display_programme
 echo "Updating display_programme from git..."
 git fetch origin main

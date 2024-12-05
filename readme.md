@@ -32,6 +32,14 @@ The .env file is used to configure the application:
 # Setting up the Raspberry Pi
 See [docs/setting up the Rpi.md](docs/setting%20up%20the%20Rpi.md)
 
+## Uninstalling the display
+Run [docs/service/uninstall_display.sh](docs/service/uninstall_display.sh) (which is copied to the home directory during setup or manually:
+``` bash
+curl -O https://raw.githubusercontent.com/bdamokos/rpi_waiting_time_display/main/docs/service/uninstall_display.sh
+chmod +x uninstall_display.sh
+sudo ./uninstall_display.sh
+```
+
 # Specific workarounds (Waveshare 2.13 inch display with 4 colours, revision 2)
 To get the display working, I needed to copy a specific file from the E-Paper library from 
 e-Paper/E-paper_Separate_Program/2in13_e-Paper_G/RaspberryPi_JetsonNano/python/lib/waveshare_epd/epd2in13g.py

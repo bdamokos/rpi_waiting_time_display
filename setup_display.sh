@@ -53,6 +53,42 @@ cleanup() {
         done < "$BACKUP_MANIFEST"
     fi
     
+    # Remove virtual environment
+    if [ -d "$ACTUAL_HOME/display_env" ]; then
+        if confirm "Remove virtual environment?"; then
+            rm -rf "$ACTUAL_HOME/display_env"
+        fi
+    fi
+    
+    # Remove cloned repositories with warning
+    if [ -d "$ACTUAL_HOME/display_programme" ]; then
+        echo "----------------------------------------"
+        echo -e "\e[1;31mWARNING: Removing the display programme repository will delete all your settings,"
+        echo -e "including your .env file and any customizations you've made!\e[0m"
+        echo "----------------------------------------"
+        if confirm "Are you ABSOLUTELY SURE you want to remove the display programme repository?"; then
+            rm -rf "$ACTUAL_HOME/display_programme"
+        fi
+    fi
+    if [ -d "$ACTUAL_HOME/brussels_transit" ]; then
+        echo "----------------------------------------"
+        echo -e "\e[1;31mWARNING: Removing the brussels transit repository will delete all your settings,"
+        echo -e "including your .env file and any customizations you've made!\e[0m"
+        echo "----------------------------------------"
+        if confirm "Are you ABSOLUTELY SURE you want to remove the brussels transit repository?"; then
+            rm -rf "$ACTUAL_HOME/brussels_transit"
+        fi
+    fi
+    
+    # Remove script files
+    rm -f "$ACTUAL_HOME/start_display.sh"
+    rm -f "$ACTUAL_HOME/switch_display_mode.sh"
+    
+    # Disable SPI interface
+    if confirm "Disable SPI interface?"; then
+        raspi-config nonint do_spi 1
+    fi
+    
     # Setup uninstall script before exiting
     setup_uninstall
     
@@ -73,7 +109,7 @@ touch "$BACKUP_MANIFEST"
 
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.5 (2024-12-05)"  # AUTO-INCREMENT
+echo "Version: 0.0.6 (2024-12-05)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"

@@ -19,14 +19,24 @@ An API key for OpenWeatherMap is required to get the weather data.
 
 ## Hardware
 Tested with:
-- Raspberry Pi Zero 2W (~€20 for the board, €10-15 for microSD card, €8 for charger)
+Systems:
+- Raspberry Pi Zero 2W (~€20 for the board, €10-15 for microSD card (tested with 16 and 32GB, should work with 8GB), €8 for charger, €1 for usb-C to micro-USB cable)
+Displays:
 - Waveshare 2.13" G V2 e-Paper display (black, white, red, yellow; no partial refresh support; ~€20)
+- 
+
+Total cost of components: ~€60
+
+Can be extended with:
+-- Battery pack, e.g. Pisugar 3
+-- Case, e.g. 3D printed case or the one that comes with the display
 
 # Configuration
+![.env file](docs/images/nano_env.png)
 The .env file is used to configure the application:
 - Add your openweather API key
 - Input your location
-- Configure the monitored transit stops
+- Configure the monitored transit stops (see readme at the [backend server](https://github.com/bdamokos/brussels_transit) on how to find stop IDs)
 - Configure your display model
 
 # Setting up the Raspberry Pi

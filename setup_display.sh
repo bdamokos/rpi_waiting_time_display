@@ -2,7 +2,7 @@
 
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.3 (2024-12-05)"  # AUTO-INCREMENT
+echo "Version: 0.0.4 (2024-12-05)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -10,8 +10,16 @@ echo "----------------------------------------"
 # Function to check if command succeeded
 check_error() {
     if [ $? -ne 0 ]; then
+        echo "----------------------------------------"
         echo "Error: $1"
-        exit 1
+        echo "----------------------------------------"
+        if confirm "Would you like to continue despite this error? (Accept the risks)"; then
+            echo "Continuing despite the error as per user request."
+            echo "----------------------------------------"
+        else
+            echo "Exiting setup script due to error."
+            exit 1
+        fi
     fi
 }
 
@@ -51,7 +59,8 @@ echo "Installing required packages..."
 apt-get update
 check_error "Failed to update package list"
 
-apt-get install -y git gh fonts-dejavu watchdog
+# Install Python development headers
+apt-get install -y git gh fonts-dejavu watchdog python3-dev
 check_error "Failed to install packages"
 
 # Setup watchdog

@@ -51,5 +51,4 @@ urllib3==2.2.3
 waveshare-epd @ git+https://github.com/waveshare/e-Paper.git@ecdd8cf#subdirectory=RaspberryPi_JetsonNano/python
     # via -r requirements.in
 
-# The following packages are considered to be unsafe in a requirements file:
-# setuptools
+flask>=3.1.0

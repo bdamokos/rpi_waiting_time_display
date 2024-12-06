@@ -5,6 +5,7 @@ import os
 import dotenv
 import log_config
 import socket
+from display_adapter import DisplayAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -148,23 +149,32 @@ class BusService:
             response.raise_for_status()
             line_colors = response.json()
 
-            # Check if response has multiple keys and get background color if available
-            if isinstance(line_colors, dict) and 'background' in line_colors:
-                line_colors = line_colors['background']
+            # Get display colors from mock display to determine available colors
+            epd = DisplayAdapter.get_display()
+            available_colors = set()
+            if hasattr(epd, 'RED') and epd.RED != epd.BLACK and epd.RED != 0x00:
+                available_colors.add('red')
+            if hasattr(epd, 'YELLOW') and epd.YELLOW != epd.BLACK and epd.YELLOW != 0x00:
+                available_colors.add('yellow')
             
-                hex_color = line_colors
+            logger.debug(f"Display supports colors: {available_colors}")
+            
+            # If display only supports B&W, use black/white dithering
+            if not available_colors:
+                return 'black', 'white', 0.7  # Use higher ratio for better contrast
+            
+            # Otherwise, use the color mapping as before
+            if isinstance(line_colors, dict) and 'background' in line_colors:
+                hex_color = line_colors['background']
             else:
                 hex_color = line_colors.get(line)
-            if not hex_color:
-                logger.error(f"Color not found for line {line}")
-                return 'black', 'black', 1.0
-                
+            
             target_rgb = self._hex_to_rgb(hex_color)
             return self._get_dithering_colors(target_rgb)
             
         except Exception as e:
             logger.error(f"Error fetching line color: {e}")
-            return 'black', 'black', 1.0
+            return 'black', 'white', 0.7  # Default to B&W with good contrast
 
     def get_api_health(self) -> bool:
         """Check if the API is healthy"""

@@ -64,7 +64,7 @@ def draw_dithered_box(draw, epd, x, y, width, height, text, primary_color, secon
     # Get available colors from EPD
     available_colors = _get_available_colors(epd)
     
-    # Validate requested colors
+    # Validate requested colors and fall back to B&W if requested colors aren't available
     if primary_color not in available_colors:
         logger.warning(f"Primary color {primary_color} not supported by display, falling back to black")
         primary_color = 'black'
@@ -125,11 +125,13 @@ def _get_available_colors(epd):
         'white': (getattr(epd, 'WHITE', 0xffffff), (255, 255, 255))
     }
     
-    if hasattr(epd, 'RED'):
+    # Only add RED and YELLOW if they're actually different from BLACK and supported by the display
+    if hasattr(epd, 'RED') and epd.RED != epd.BLACK and epd.RED != 0x00:
         colors['red'] = (epd.RED, (255, 0, 0))
-    if hasattr(epd, 'YELLOW'):
+    if hasattr(epd, 'YELLOW') and epd.YELLOW != epd.BLACK and epd.YELLOW != 0x00:
         colors['yellow'] = (epd.YELLOW, (255, 255, 0))
     
+    logger.debug(f"Available colors for display: {list(colors.keys())}")
     return colors
 
 def draw_horizontal_lines_dither(draw, epd, x, y, width, height, text, primary_color, secondary_color, ratio, font):

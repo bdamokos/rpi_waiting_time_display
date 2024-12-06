@@ -23,11 +23,16 @@ def draw_multicolor_dither(draw, epd, x, y, width, height, colors_with_ratios):
     # Get available colors from EPD
     available_colors = _get_available_colors(epd)
     
-    # Validate colors
-    for color_name, _ in colors_with_ratios:
+    # Validate and replace unsupported colors
+    validated_colors = []
+    for color_name, ratio in colors_with_ratios:
         if color_name not in available_colors:
             logger.warning(f"Color {color_name} not supported by display, falling back to black")
-            color_name = 'black'
+            validated_colors.append(('black', ratio))
+        else:
+            validated_colors.append((color_name, ratio))
+    
+    colors_with_ratios = validated_colors  # Use the validated colors
     
     # Create checkerboard pattern with offset rows
     for i in range(width):
@@ -66,10 +71,10 @@ def draw_dithered_box(draw, epd, x, y, width, height, text, primary_color, secon
     
     # Validate requested colors and fall back to B&W if requested colors aren't available
     if primary_color not in available_colors:
-        logger.warning(f"Primary color {primary_color} not supported by display, falling back to black")
+        logger.debug(f"Primary color {primary_color} not supported by display, falling back to black")
         primary_color = 'black'
     if secondary_color not in available_colors:
-        logger.warning(f"Secondary color {secondary_color} not supported by display, falling back to white")
+        logger.debug(f"Secondary color {secondary_color} not supported by display, falling back to white")
         secondary_color = 'white'
     
     primary_epd, primary_rgb = available_colors[primary_color]
@@ -124,6 +129,13 @@ def _get_available_colors(epd):
         'black': (getattr(epd, 'BLACK', 0x000000), (0, 0, 0)),
         'white': (getattr(epd, 'WHITE', 0xffffff), (255, 255, 255))
     }
+    
+    # Debug what the display actually has
+    logger.debug(f"Display color values - BLACK: {epd.BLACK}, WHITE: {epd.WHITE}")
+    if hasattr(epd, 'RED'):
+        logger.debug(f"Display has RED attribute with value: {epd.RED}")
+    if hasattr(epd, 'YELLOW'):
+        logger.debug(f"Display has YELLOW attribute with value: {epd.YELLOW}")
     
     # Only add RED and YELLOW if they're actually different from BLACK and supported by the display
     if hasattr(epd, 'RED') and epd.RED != epd.BLACK and epd.RED != 0x00:

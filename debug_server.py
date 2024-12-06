@@ -19,13 +19,16 @@ app = Flask(__name__)
 def restart_service():
     """Endpoint to trigger service restart by exiting the program"""
     def delayed_exit():
-        # Wait a bit to allow the response to be sent
+        logger.info("Initiating service restart...")
         import time
         time.sleep(1)
-        sys.exit(0)
+        logger.info("Forcing process exit...")
+        os._exit(1)  # Force exit the entire process
     
     # Start delayed exit in separate thread
-    threading.Thread(target=delayed_exit, daemon=True).start()
+    logger.info("Restart requested, starting delayed exit thread")
+    exit_thread = threading.Thread(target=delayed_exit, daemon=False)
+    exit_thread.start()
     return "Restarting service...", 200
 
 @app.route('/debug/display')

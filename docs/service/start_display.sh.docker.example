@@ -18,9 +18,9 @@ sleep 10
 echo "----------------------------------------"
 echo "Updating display_programme from git..."
 cd ~/display_programme
-git fetch origin main
-git reset --hard origin/main
-git pull origin main
+git fetch origin main --verbose
+git reset --hard origin/main --verbose
+git pull origin main --verbose
 echo "Display programme updated."
 echo "----------------------------------------"
 
@@ -43,9 +43,9 @@ echo "----------------------------------------"
 # Step 3: Update brussels_transit and rebuild Docker image
 cd ~/brussels_transit
 echo "Updating brussels_transit from git..."
-git fetch origin main
-git reset --hard origin/main
-git pull origin main
+git fetch origin main --verbose
+git reset --hard origin/main --verbose
+git pull origin main --verbose
 
 # Build/update Docker image
 echo "Building Docker image..."

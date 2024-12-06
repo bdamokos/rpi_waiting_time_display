@@ -6,7 +6,7 @@
 # chmod +x ~/start_display.sh
 echo "----------------------------------------"
 echo "Starting display service service script"
-echo "Version: 0.0.7 (2024-12-05)"  # AUTO-INCREMENT
+echo "Version: 0.0.8 (2024-12-06)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -18,9 +18,9 @@ sleep 10
 echo "----------------------------------------"
 cd ~/display_programme
 echo "Updating display_programme from git..."
-git fetch origin main
-git reset --hard origin/main
-git pull origin main
+git fetch origin main --verbose
+git reset --hard origin/main --verbose
+git pull origin main --verbose
 echo "Display programme updated."
 echo "----------------------------------------"
 
@@ -43,9 +43,9 @@ echo "----------------------------------------"
 # Step 3: Update brussels_transit
 cd ~/brussels_transit
 echo "Updating brussels_transit from git..."
-git fetch origin main
-git reset --hard origin/main
-git pull origin main
+git fetch origin main --verbose
+git reset --hard origin/main --verbose
+git pull origin main --verbose
 echo "----------------------------------------"
 
 echo "Activating virtual environment..."

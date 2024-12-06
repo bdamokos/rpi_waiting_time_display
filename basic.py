@@ -281,7 +281,7 @@ def update_display(epd, weather_data, bus_data, error_message=None, stop_name=No
     # Adjust spacing based on number of bus lines
     if len(bus_data) == 1:
         # Center the single bus line vertically
-        first_box_y = MARGIN + HEADER_HEIGHT + ((Himage.height - HEADER_HEIGHT - BOX_HEIGHT) // 2)
+        first_box_y = MARGIN + HEADER_HEIGHT + ((Himage.height - HEADER_HEIGHT - BOX_HEIGHT - stop_name_height) // 2)
         logger.debug(f"First box y: {first_box_y}. Header height: {HEADER_HEIGHT}, box height: {BOX_HEIGHT}. Himage height: {Himage.height}")
         second_box_y = first_box_y  # Not used but kept for consistency
     elif len(bus_data) == 2:

@@ -17,11 +17,25 @@ class MockDisplay:
         self.height = 250
         self.width = 120
         
-        # Standard colors
-        self.BLACK = (0, 0, 0)
-        self.WHITE = (255, 255, 255)
-        self.RED = (255, 0, 0)
-        self.YELLOW = (255, 255, 0)
+        # Get display type from .env
+        mock_type = os.getenv('mock_display_type', 'bw').lower()  # Default to B&W
+        logger.info(f"Initializing mock display as type: {mock_type}")
+        
+        # Set color support based on mock type
+        self.BLACK = 0x00
+        self.WHITE = 0xFF
+        
+        if mock_type == 'color':
+            self.RED = 0xF0
+            self.YELLOW = 0xF1
+            self.is_bw_display = False
+            logger.debug("Mock display initialized with color support")
+        else:
+            # For B&W display, RED and YELLOW fall back to BLACK
+            self.RED = self.BLACK
+            self.YELLOW = self.BLACK
+            self.is_bw_display = True
+            logger.debug("Mock display initialized as B&W")
         
         # Add mock epdconfig
         self.epdconfig = self.MockEPDConfig()
@@ -57,11 +71,18 @@ class DisplayAdapter:
     def save_debug_image(image):
         """Save a debug image of the current display buffer"""
         try:
-            # Rotate the image back to normal orientation
-            image = image.rotate(-90, expand=True)
+            # Convert 1-bit image to RGB for debug output
+            if image.mode == '1':
+                debug_image = image.convert('RGB')
+            else:
+                debug_image = image
+            
+            # Rotate and save
+            debug_image = debug_image.rotate(-90, expand=True)
             debug_path = "debug_output.png"
-            image.save(debug_path)
+            debug_image.save(debug_path)
             logger.info(f"Debug image saved to {debug_path}")
+            logger.debug(f"Image mode: {image.mode}, Size: {image.size}")
         except Exception as e:
             logger.error(f"Error saving debug image: {e}")
     
@@ -126,8 +147,12 @@ class DisplayAdapter:
             def getbuffer_wrapper(image):
                 # Convert to 1-bit if it's a B&W display
                 if epd.is_bw_display:
-                    logger.debug("Converting image to 1-bit for B&W display")
-                    image = image.convert('1')
+                    logger.debug(f"Converting image from {image.mode} to 1-bit")
+                    # First convert to L (grayscale) then to 1 (binary)
+                    image = image.convert('L').convert('1')
+                    logger.debug(f"Image converted to mode: {image.mode}")
+                
+                # Save debug image before sending to display
                 DisplayAdapter.save_debug_image(image)
                 return original_getbuffer(image)
             epd.getbuffer = getbuffer_wrapper

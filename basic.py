@@ -213,7 +213,10 @@ def update_display(epd, weather_data, bus_data, error_message=None, stop_name=No
     logger.info(f"Display dimensions: {epd.height}x{epd.width} (height x width)")
     
     # Create a new image with white background
-    Himage = Image.new('RGB', (epd.height, epd.width), WHITE if isinstance(WHITE, tuple) else (255, 255, 255))
+    if epd.is_bw_display:
+        Himage = Image.new('1', (epd.height, epd.width), 1)  # 1 is white in 1-bit mode
+    else:
+        Himage = Image.new('RGB', (epd.height, epd.width), WHITE)
     draw = ImageDraw.Draw(Himage)
     
     try:

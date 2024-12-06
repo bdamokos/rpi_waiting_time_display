@@ -62,16 +62,7 @@ def draw_dithered_box(draw, epd, x, y, width, height, text, primary_color, secon
     logging.debug(f"Drawing dithered box with colors: {primary_color} ({ratio:.2f}) and {secondary_color} ({1-ratio:.2f})")
     
     # Get available colors from EPD
-    available_colors = {
-        'black': (epd.BLACK, (0, 0, 0) if isinstance(epd.BLACK, tuple) else epd.BLACK),
-        'white': (epd.WHITE, (255, 255, 255) if isinstance(epd.WHITE, tuple) else epd.WHITE)
-    }
-    
-    # Add red and yellow only if they're different from BLACK
-    if hasattr(epd, 'RED') and epd.RED != epd.BLACK:
-        available_colors['red'] = (epd.RED, (255, 0, 0) if isinstance(epd.RED, tuple) else epd.RED)
-    if hasattr(epd, 'YELLOW') and epd.YELLOW != epd.BLACK:
-        available_colors['yellow'] = (epd.YELLOW, (255, 255, 0) if isinstance(epd.YELLOW, tuple) else epd.YELLOW)
+    available_colors = _get_available_colors(epd)
     
     # Validate requested colors
     if primary_color not in available_colors:
@@ -123,10 +114,7 @@ def draw_dithered_box(draw, epd, x, y, width, height, text, primary_color, secon
     
     # Choose text color based on background darkness
     # If primary color is dark (black) and dominant, use white text
-    if primary_color == 'black' and ratio > 0.5:
-        text_color = available_colors['white'][0]
-    else:
-        text_color = available_colors['black'][0]
+    text_color = available_colors['white'][0] if primary_color == 'black' and ratio > 0.5 else available_colors['black'][0]
     
     draw.text((text_x, text_y), text, font=font, fill=text_color)
 
@@ -167,12 +155,20 @@ def draw_horizontal_lines_dither(draw, epd, x, y, width, height, text, primary_c
     text_bbox = draw.textbbox((0, 0), text, font=font)
     text_x = x + (width - (text_bbox[2] - text_bbox[0])) // 2
     text_y = y + (height - (text_bbox[3] - text_bbox[1])) // 2
-    draw.text((text_x, text_y), text, font=font, fill=epd.WHITE)
+    # Use white text for dark backgrounds
+    text_color = colors['white'][0] if primary_color == 'black' and ratio > 0.5 else colors['black'][0]
+    draw.text((text_x, text_y), text, font=font, fill=text_color)
 
 def draw_vertical_lines_dither(draw, epd, x, y, width, height, text, primary_color, secondary_color, ratio, font):
     """Vertical line pattern - experimental"""
-    color_map = {'black': epd.BLACK, 'red': epd.RED, 'yellow': epd.YELLOW, 'white': epd.WHITE}
-    primary, secondary = color_map[primary_color], color_map[secondary_color]
+    colors = _get_available_colors(epd)
+    if primary_color not in colors or secondary_color not in colors:
+        logger.warning("Unsupported colors requested, falling back to black/white")
+        primary_color = 'black'
+        secondary_color = 'white'
+    
+    primary, _ = colors[primary_color]
+    secondary, _ = colors[secondary_color]
     
     line_width = 2
     for i in range(0, width, line_width):
@@ -186,12 +182,20 @@ def draw_vertical_lines_dither(draw, epd, x, y, width, height, text, primary_col
     text_bbox = draw.textbbox((0, 0), text, font=font)
     text_x = x + (width - (text_bbox[2] - text_bbox[0])) // 2
     text_y = y + (height - (text_bbox[3] - text_bbox[1])) // 2
-    draw.text((text_x, text_y), text, font=font, fill=epd.WHITE)
+    # Use white text for dark backgrounds
+    text_color = colors['white'][0] if primary_color == 'black' and ratio > 0.5 else colors['black'][0]
+    draw.text((text_x, text_y), text, font=font, fill=text_color)
 
 def draw_diagonal_lines_dither(draw, epd, x, y, width, height, text, primary_color, secondary_color, ratio, font):
     """Diagonal line pattern - experimental"""
-    color_map = {'black': epd.BLACK, 'red': epd.RED, 'yellow': epd.YELLOW, 'white': epd.WHITE}
-    primary, secondary = color_map[primary_color], color_map[secondary_color]
+    colors = _get_available_colors(epd)
+    if primary_color not in colors or secondary_color not in colors:
+        logger.warning("Unsupported colors requested, falling back to black/white")
+        primary_color = 'black'
+        secondary_color = 'white'
+    
+    primary, _ = colors[primary_color]
+    secondary, _ = colors[secondary_color]
     
     for i in range(width):
         for j in range(height):
@@ -204,12 +208,20 @@ def draw_diagonal_lines_dither(draw, epd, x, y, width, height, text, primary_col
     text_bbox = draw.textbbox((0, 0), text, font=font)
     text_x = x + (width - (text_bbox[2] - text_bbox[0])) // 2
     text_y = y + (height - (text_bbox[3] - text_bbox[1])) // 2
-    draw.text((text_x, text_y), text, font=font, fill=epd.WHITE)
+    # Use white text for dark backgrounds
+    text_color = colors['white'][0] if primary_color == 'black' and ratio > 0.5 else colors['black'][0]
+    draw.text((text_x, text_y), text, font=font, fill=text_color)
 
 def draw_dots_dither(draw, epd, x, y, width, height, text, primary_color, secondary_color, ratio, font):
     """Dot pattern - experimental"""
-    color_map = {'black': epd.BLACK, 'red': epd.RED, 'yellow': epd.YELLOW, 'white': epd.WHITE}
-    primary, secondary = color_map[primary_color], color_map[secondary_color]
+    colors = _get_available_colors(epd)
+    if primary_color not in colors or secondary_color not in colors:
+        logger.warning("Unsupported colors requested, falling back to black/white")
+        primary_color = 'black'
+        secondary_color = 'white'
+    
+    primary, _ = colors[primary_color]
+    secondary, _ = colors[secondary_color]
     
     # Fill background with secondary color
     for i in range(width):
@@ -227,4 +239,6 @@ def draw_dots_dither(draw, epd, x, y, width, height, text, primary_color, second
     text_bbox = draw.textbbox((0, 0), text, font=font)
     text_x = x + (width - (text_bbox[2] - text_bbox[0])) // 2
     text_y = y + (height - (text_bbox[3] - text_bbox[1])) // 2
-    draw.text((text_x, text_y), text, font=font, fill=epd.WHITE) 
+    # Use white text for dark backgrounds
+    text_color = colors['white'][0] if primary_color == 'black' and ratio > 0.5 else colors['black'][0]
+    draw.text((text_x, text_y), text, font=font, fill=text_color) 

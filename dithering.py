@@ -120,9 +120,9 @@ def draw_dithered_box(draw, epd, x, y, width, height, text, primary_color, secon
     
     logging.debug(f"Actual dithered ratio: {actual_ratio:.2f}, Brightness: {avg_brightness:.2f}")
     
-    # Choose text color based on background darkness
-    # If primary color is dark (black) and dominant, use white text
-    if primary_color == 'black' and ratio > 0.5:
+    # Choose text color based on background brightness
+    # Use white text for dark backgrounds (brightness < 0.5)
+    if avg_brightness < 0.5:
         text_color = epd.WHITE if epd.is_bw_display else available_colors['white'][0]
     else:
         text_color = epd.BLACK if epd.is_bw_display else available_colors['black'][0]

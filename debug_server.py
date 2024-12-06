@@ -144,8 +144,8 @@ def debug_index():
                         fetch('/debug/restart', { method: 'POST' })
                             .then(response => {
                                 if (response.ok) {
-                                    alert('Service restart initiated. Page will reload in 5 seconds.');
-                                    setTimeout(() => location.reload(), 5000);
+                                    alert('Service restart initiated. Page will reload in 30 seconds.');
+                                    setTimeout(() => location.reload(), 30000);
                                 } else {
                                     alert('Failed to restart service');
                                 }

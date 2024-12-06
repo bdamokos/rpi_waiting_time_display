@@ -220,29 +220,41 @@ def edit_env():
     backup_dir.mkdir(exist_ok=True)
     
     if request.method == 'POST':
-        # Save the updated .env content
-        new_content = request.form.get('env_content', '')
-        
-        # Create a backup before saving
-        timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
-        backup_path = backup_dir / f'.env.backup.{timestamp}'
-        try:
-            shutil.copy(env_path, backup_path)
-            logger.info(f".env file backed up to {backup_path}")
+        if 'restore' in request.form:
+            # Restore from a selected backup or example file
+            restore_file = request.form.get('restore_file')
+            if restore_file:
+                try:
+                    shutil.copy(restore_file, env_path)
+                    logger.info(f".env file restored from {restore_file}")
+                    return redirect(url_for('edit_env'))
+                except Exception as e:
+                    logger.error(f"Error restoring .env file: {e}")
+                    return f"Error restoring .env file: {e}", 500
+        else:
+            # Save the updated .env content
+            new_content = request.form.get('env_content', '')
             
-            # Rotate backups, keep only the last 5
-            backups = sorted(backup_dir.glob('.env.backup.*'), key=os.path.getmtime, reverse=True)
-            for old_backup in backups[5:]:
-                old_backup.unlink()
-                logger.info(f"Old backup {old_backup} removed")
-            
-            with open(env_path, 'w') as f:
-                f.write(new_content)
-            logger.info(".env file updated successfully")
-            return redirect(url_for('edit_env'))
-        except Exception as e:
-            logger.error(f"Error updating .env file: {e}")
-            return f"Error updating .env file: {e}", 500
+            # Create a backup before saving
+            timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+            backup_path = backup_dir / f'.env.backup.{timestamp}'
+            try:
+                shutil.copy(env_path, backup_path)
+                logger.info(f".env file backed up to {backup_path}")
+                
+                # Rotate backups, keep only the last 5
+                backups = sorted(backup_dir.glob('.env.backup.*'), key=os.path.getmtime, reverse=True)
+                for old_backup in backups[5:]:
+                    old_backup.unlink()
+                    logger.info(f"Old backup {old_backup} removed")
+                
+                with open(env_path, 'w') as f:
+                    f.write(new_content)
+                logger.info(".env file updated successfully")
+                return redirect(url_for('edit_env'))
+            except Exception as e:
+                logger.error(f"Error updating .env file: {e}")
+                return f"Error updating .env file: {e}", 500
     
     # Read the current .env content
     try:
@@ -254,8 +266,17 @@ def edit_env():
     
     # Generate shell commands for restoring backups
     backup_files = sorted(backup_dir.glob('.env.backup.*'), key=os.path.getmtime, reverse=True)
+    restore_options = [(str(backup_file), backup_file.name) for backup_file in backup_files]
+    example_file = Path('.env.example')
+    if example_file.exists():
+        restore_options.append((str(example_file), '.env.example'))
+    
     restore_commands = "\n".join(
-        f"cp {backup_file} .env" for backup_file in backup_files
+        f"cp {backup_file} .env" for backup_file, _ in restore_options
+    )
+    
+    restore_options_html = "\n".join(
+        f'<option value="{file_path}">{file_name}</option>' for file_path, file_name in restore_options
     )
     
     return f'''
@@ -276,6 +297,12 @@ def edit_env():
                 <button type="submit">Save Changes</button>
             </form>
             <h2>Restore .env from Backup</h2>
+            <form method="post">
+                <select name="restore_file">
+                    {restore_options_html}
+                </select>
+                <button type="submit" name="restore">Restore Selected</button>
+            </form>
             <p>If the server is unresponsive, use the following shell commands to restore a backup:</p>
             <pre>{restore_commands}</pre>
         </body>

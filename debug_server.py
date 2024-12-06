@@ -120,6 +120,9 @@ def debug_index():
                     <img id="display-image" src="/debug/display" alt="Current Display">
                 </div>
                 <button onclick="refreshImage()">Refresh Image</button>
+                <a href="/debug/display" download="debug_output.png">
+                    <button>Download Image</button>
+                </a>
             </div>
             
             <div class="debug-link">

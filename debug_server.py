@@ -216,9 +216,29 @@ def edit_env():
         abort(403)  # Forbidden
 
     env_path = Path('.env')
+    example_path = Path('.env.example')
     backup_dir = Path('env_backups')
     backup_dir.mkdir(exist_ok=True)
-    
+
+    def parse_env_file(file_path):
+        """Parse an env file into a dictionary of variables"""
+        if not file_path.exists():
+            return {}
+        
+        env_vars = {}
+        try:
+            with open(file_path, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#'):
+                        if '=' in line:
+                            key, value = line.split('=', 1)
+                            env_vars[key.strip()] = value.strip()
+        except Exception as e:
+            logger.error(f"Error parsing {file_path}: {e}")
+        return env_vars
+
+    # Handle POST requests for saving/restoring
     if request.method == 'POST':
         if 'restore' in request.form:
             # Restore from a selected backup or example file
@@ -256,7 +276,43 @@ def edit_env():
                 logger.error(f"Error updating .env file: {e}")
                 return f"Error updating .env file: {e}", 500
     
-    # Read the current .env content
+    # Read both .env and .env.example
+    current_vars = parse_env_file(env_path)
+    example_vars = parse_env_file(example_path)
+
+    # Create a combined set of all variables
+    all_vars = sorted(set(list(current_vars.keys()) + list(example_vars.keys())))
+
+    # Generate comparison HTML
+    vars_comparison = ""
+    for var in all_vars:
+        in_current = var in current_vars
+        in_example = var in example_vars
+        current_value = current_vars.get(var, '')
+        example_value = example_vars.get(var, '')
+        
+        status_class = ''
+        status_text = ''
+        
+        if in_current and in_example:
+            if current_value != example_value:
+                status_class = 'modified'
+                status_text = '(Modified)'
+        elif in_current and not in_example:
+            status_class = 'extra'
+            status_text = '(Not in example)'
+        elif not in_current and in_example:
+            status_class = 'missing'
+            status_text = '(Missing)'
+        
+        vars_comparison += f'<div class="var-row {status_class}">'
+        vars_comparison += f'<span class="var-name">{var}</span>'
+        vars_comparison += f'<span class="var-status">{status_text}</span>'
+        if in_example:
+            vars_comparison += f'<div class="var-example">Example: {example_value}</div>'
+        vars_comparison += '</div>'
+
+    # Read the current .env content for the textarea
     try:
         with open(env_path, 'r') as f:
             env_content = f.read()
@@ -285,17 +341,39 @@ def edit_env():
             <title>Edit .env File</title>
             <style>
                 body {{ font-family: Arial, sans-serif; margin: 20px; }}
-                textarea {{ width: 100%; height: 400px; }}
+                .env-container {{ display: flex; gap: 20px; }}
+                .editor-section {{ flex: 1; }}
+                .vars-section {{ flex: 1; }}
+                textarea {{ width: 100%; height: 400px; font-family: monospace; }}
                 button {{ margin-top: 10px; }}
                 pre {{ background: #f5f5f5; padding: 10px; border: 1px solid #ccc; }}
+                .var-row {{ padding: 5px; margin: 5px 0; border-left: 3px solid transparent; }}
+                .var-name {{ font-weight: bold; }}
+                .var-status {{ color: #666; margin-left: 10px; font-size: 0.9em; }}
+                .var-example {{ color: #666; font-size: 0.9em; margin-left: 20px; }}
+                .modified {{ border-left-color: #ffa500; background: #fff3e0; }}
+                .extra {{ border-left-color: #2196f3; background: #e3f2fd; }}
+                .missing {{ border-left-color: #f44336; background: #ffebee; }}
             </style>
         </head>
         <body>
             <h1>Edit .env File</h1>
-            <form method="post">
-                <textarea name="env_content">{env_content}</textarea><br>
-                <button type="submit">Save Changes</button>
-            </form>
+            <div class="env-container">
+                <div class="editor-section">
+                    <h2>Edit Configuration</h2>
+                    <form method="post">
+                        <textarea name="env_content">{env_content}</textarea><br>
+                        <button type="submit">Save Changes</button>
+                    </form>
+                </div>
+                <div class="vars-section">
+                    <h2>Variables Overview</h2>
+                    <div class="vars-comparison">
+                        {vars_comparison}
+                    </div>
+                </div>
+            </div>
+            
             <h2>Restore .env from Backup</h2>
             <form method="post">
                 <select name="restore_file">

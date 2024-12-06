@@ -354,9 +354,22 @@ def edit_env():
                 .modified {{ border-left-color: #ffa500; background: #fff3e0; }}
                 .extra {{ border-left-color: #2196f3; background: #e3f2fd; }}
                 .missing {{ border-left-color: #f44336; background: #ffebee; }}
+                .back-button {{ 
+                    background-color: #4CAF50;
+                    color: white;
+                    padding: 10px 20px;
+                    text-decoration: none;
+                    border-radius: 5px;
+                    display: inline-block;
+                    margin-bottom: 20px;
+                }}
+                .back-button:hover {{
+                    background-color: #45a049;
+                }}
             </style>
         </head>
         <body>
+            <a href="/debug" class="back-button">← Back to Debug</a>
             <h1>Edit .env File</h1>
             <div class="env-container">
                 <div class="editor-section">

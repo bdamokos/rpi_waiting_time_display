@@ -81,6 +81,8 @@ def get_logs():
         return "Error accessing logs", 500
 
 @app.route('/debug')
+@app.route('/debug/')
+@app.route('/')
 def debug_index():
     """Simple HTML page with links to debug resources"""
     return '''

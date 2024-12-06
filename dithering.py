@@ -43,12 +43,15 @@ def draw_multicolor_dither(draw, epd, x, y, width, height, colors_with_ratios):
             
             # Select color based on position and ratios
             cumulative_ratio = 0
-            selected_color = available_colors['white'][0]  # Default to white
+            selected_color = epd.WHITE if epd.is_bw_display else available_colors['white'][0]  # Default to white
             
             for color_name, ratio in colors_with_ratios:
                 cumulative_ratio += ratio
                 if pos <= cumulative_ratio:
-                    selected_color = available_colors[color_name][0]
+                    if epd.is_bw_display:
+                        selected_color = epd.BLACK if color_name == 'black' else epd.WHITE
+                    else:
+                        selected_color = available_colors[color_name][0]
                     break
             
             draw.point((x + i, y + j), fill=selected_color)
@@ -173,7 +176,10 @@ def draw_horizontal_lines_dither(draw, epd, x, y, width, height, text, primary_c
     text_x = x + (width - (text_bbox[2] - text_bbox[0])) // 2
     text_y = y + (height - (text_bbox[3] - text_bbox[1])) // 2
     # Use white text for dark backgrounds
-    text_color = colors['white'][0] if primary_color == 'black' and ratio > 0.5 else colors['black'][0]
+    if primary_color == 'black' and ratio > 0.5:
+        text_color = epd.WHITE if epd.is_bw_display else colors['white'][0]
+    else:
+        text_color = epd.BLACK if epd.is_bw_display else colors['black'][0]
     draw.text((text_x, text_y), text, font=font, fill=text_color)
 
 def draw_vertical_lines_dither(draw, epd, x, y, width, height, text, primary_color, secondary_color, ratio, font):

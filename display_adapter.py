@@ -66,6 +66,29 @@ class DisplayAdapter:
             logger.error(f"Error saving debug image: {e}")
     
     @staticmethod
+    def _get_available_colors(epd):
+        """Helper function to get available colors for the display"""
+        colors = {
+            'black': (getattr(epd, 'BLACK', 0x000000), (0, 0, 0)),
+            'white': (getattr(epd, 'WHITE', 0xffffff), (255, 255, 255))
+        }
+        
+        # Debug what the display actually has
+        logger.debug(f"Display color values - BLACK: {epd.BLACK}, WHITE: {epd.WHITE}")
+        if hasattr(epd, 'RED') and epd.RED != epd.BLACK and epd.RED != 0x00:
+            colors['red'] = (epd.RED, (255, 0, 0))
+            logger.debug(f"Display has RED support: {epd.RED}")
+        if hasattr(epd, 'YELLOW') and epd.YELLOW != epd.BLACK and epd.YELLOW != 0x00:
+            colors['yellow'] = (epd.YELLOW, (255, 255, 0))
+            logger.debug(f"Display has YELLOW support: {epd.YELLOW}")
+        
+        # Set display type based on available colors
+        epd.is_bw_display = len(colors) == 2  # Only black and white available
+        logger.debug(f"Display type: {'Black & White' if epd.is_bw_display else 'Color'} ({len(colors)} colors)")
+        
+        return colors
+
+    @staticmethod
     def get_display():
         """Get the appropriate display instance based on environment"""
         dotenv.load_dotenv(override=True)
@@ -95,13 +118,19 @@ class DisplayAdapter:
                 logger.debug("Display does not define WHITE, using default value")
                 epd.WHITE = 0xFF  # For monochrome displays, 255 (0xFF) is typically white
             
-            # Add color constants for compatibility with color displays
-            if not hasattr(epd, 'RED'):
-                logger.debug("Display does not support RED, falling back to WHITE")
-                epd.RED = epd.WHITE
-            if not hasattr(epd, 'YELLOW'):
-                logger.debug("Display does not support YELLOW, falling back to WHITE")
-                epd.YELLOW = epd.WHITE
+            # Initialize color support and detect display type
+            DisplayAdapter._get_available_colors(epd)
+            
+            # Wrap getbuffer method to handle different image formats
+            original_getbuffer = epd.getbuffer
+            def getbuffer_wrapper(image):
+                # Convert to 1-bit if it's a B&W display
+                if epd.is_bw_display:
+                    logger.debug("Converting image to 1-bit for B&W display")
+                    image = image.convert('1')
+                DisplayAdapter.save_debug_image(image)
+                return original_getbuffer(image)
+            epd.getbuffer = getbuffer_wrapper
             
             # Add wrapper for init method to handle different signatures
             original_init = epd.init
@@ -186,13 +215,6 @@ class DisplayAdapter:
                             logger.error(f"Error in init_Fast: {str(e)}\n{traceback.format_exc()}")
                             raise
                     epd.init_Fast = init_Fast
-            
-            # Wrap the getbuffer method to save debug output
-            original_getbuffer = epd.getbuffer
-            def getbuffer_wrapper(image):
-                DisplayAdapter.save_debug_image(image)
-                return original_getbuffer(image)
-            epd.getbuffer = getbuffer_wrapper
             
             return epd
             

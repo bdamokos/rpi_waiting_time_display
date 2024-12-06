@@ -527,7 +527,8 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
 
     # Generate and draw QR code (larger size)
     qr = qrcode.QRCode(version=1, box_size=2, border=1)
-    qr.add_data('http://raspberrypi.local:5001')
+    qr_code_address = os.getenv("weather_mode_qr_code_address", "http://raspberrypi.local:5002/debug")
+    qr.add_data(qr_code_address)
     qr.make(fit=True)
     qr_img = qr.make_image(fill_color="black", back_color="white")
     qr_img = qr_img.convert('RGB')

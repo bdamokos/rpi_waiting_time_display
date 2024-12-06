@@ -57,23 +57,10 @@ class DisplayAdapter:
     def save_debug_image(image):
         """Save a debug image of the current display buffer"""
         try:
-            # Create a new RGB image for debug output
-            debug_image = Image.new('RGB', image.size, (255, 255, 255))
-            
-            # Map EPD values to RGB values
-            for x in range(image.width):
-                for y in range(image.height):
-                    pixel = image.getpixel((x, y))
-                    if pixel == 0x00:  # BLACK
-                        debug_image.putpixel((x, y), (0, 0, 0))
-                    elif pixel == 0xFF:  # WHITE
-                        debug_image.putpixel((x, y), (255, 255, 255))
-                    # Add other mappings if needed
-            
-            # Rotate and save
-            debug_image = debug_image.rotate(-90, expand=True)
+            # Rotate the image back to normal orientation
+            image = image.rotate(-90, expand=True)
             debug_path = "debug_output.png"
-            debug_image.save(debug_path)
+            image.save(debug_path)
             logger.info(f"Debug image saved to {debug_path}")
         except Exception as e:
             logger.error(f"Error saving debug image: {e}")

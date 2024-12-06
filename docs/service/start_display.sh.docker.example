@@ -19,7 +19,7 @@ echo "----------------------------------------"
 echo "Updating display_programme from git..."
 cd ~/display_programme
 git fetch -v origin main
-git reset -v --hard origin/main
+git reset --hard origin/main
 git pull -v origin main
 echo "Display programme updated."
 echo "----------------------------------------"
@@ -44,7 +44,7 @@ echo "----------------------------------------"
 cd ~/brussels_transit
 echo "Updating brussels_transit from git..."
 git fetch -v origin main
-git reset -v --hard origin/main
+git reset  --hard origin/main
 git pull -v origin main
 
 # Build/update Docker image

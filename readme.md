@@ -20,10 +20,16 @@ An API key for OpenWeatherMap is required to get the weather data.
 ## Hardware
 Tested with:
 Systems:
-- Raspberry Pi Zero 2W (~€20 for the board, €10-15 for microSD card (tested with 16 and 32GB, should work with 8GB), €8 for charger, €1 for usb-C to micro-USB cable)
+- [Raspberry Pi Zero 2W](https://www.raspberrypi.com/products/raspberry-pi-zero-2-w/)
+  - Board with headers: ~€20
+  - MicroSD card: €10-15 (tested with 16 and 32GB, should work with 8GB)
+  - Official charger: €8 (if not using existing charging cable)
+  - [USB-C to micro-USB adapter](https://www.raspberrypi.com/products/usb-b-to-usb-c-adapter/): €1
+
 Displays:
-- Waveshare 2.13" G V2 e-Paper display (black, white, red, yellow; no partial refresh support; ~€20)
-- 
+- [Waveshare 2.13" G V2 e-Paper display](https://www.waveshare.com/2.13inch-e-Paper-HAT-G.htm) (black, white, red, yellow; no partial refresh support; ~€20) - display driver set as epd2in13g_V2 in the .env file
+- [Waveshare 2.13" e-Paper display](https://www.waveshare.com/2.13inch-e-paper-hat.htm) (black, white; partial refresh support; ~€20) - display driver set as epd2in13_V4 in the .env file
+- [Waveshare 2.13" e-Paper display with case](https://www.waveshare.com/2.13inch-Touch-e-Paper-HAT-with-case.htm) (black, white; partial refresh support; ~€20) - display driver set as epd2in13_V4 in the .env file
 
 Total cost of components: ~€60
 
@@ -49,6 +55,9 @@ curl -O https://raw.githubusercontent.com/bdamokos/rpi_waiting_time_display/main
 chmod +x uninstall_display.sh
 sudo ./uninstall_display.sh
 ```
+
+## Debugging
+To enable debugging, set the debug_port_enabled=true in the .env which will start a flask server on the port specified in debug_port. Access it at http://raspberrypi.local:5002/debug (or the IP address of the Raspberry Pi if you are not on the same network, and the port specified in debug_port).
 
 # Specific workarounds (Waveshare 2.13 inch display with 4 colours, revision 2)
 To get the display working, I needed to copy a specific file from the E-Paper library from 

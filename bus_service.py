@@ -276,8 +276,11 @@ class BusService:
                             'destination': destination
                         })
 
-                # Sort times by minutes
-                all_times.sort(key=lambda x: x['minutes'])
+                # Sort times by minutes:
+                # - Extracts only digits from time strings (e.g., "⚡5" -> 5, "🕒10" -> 10)
+                # - Valid times (with digits) are sorted normally
+                # - Invalid times (None, "--", no digits) are pushed to end using infinity
+                all_times.sort(key=lambda x: int(''.join(filter(str.isdigit, str(x['minutes'])))) if x['minutes'] is not None and str(x['minutes']).strip() and any(c.isdigit() for c in str(x['minutes'])) else float('inf'))
                 logger.debug(f"All sorted times for line {line}: {all_times}")
 
                 # Take all available times

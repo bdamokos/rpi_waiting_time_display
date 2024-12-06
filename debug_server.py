@@ -1,4 +1,4 @@
-from flask import Flask, send_file, Response
+from flask import Flask, send_file, Response, request, redirect, url_for, abort
 import os
 import dotenv
 import logging
@@ -6,6 +6,9 @@ from pathlib import Path
 import threading
 import log_config
 import sys
+import shutil
+from datetime import datetime
+
 logger = logging.getLogger(__name__)
 
 # Load environment variables
@@ -14,6 +17,12 @@ DEBUG_PORT = int(os.getenv("debug_port", "5002"))
 DEBUG_ENABLED = os.getenv("debug_port_enabled", "false").lower() == "true"
 
 app = Flask(__name__)
+
+def is_local_request():
+    """Check if the request is from a local network"""
+    if request.remote_addr.startswith('127.') or request.remote_addr.startswith('192.168.') or request.remote_addr.startswith('10.') or request.remote_addr.startswith('172.'):
+        return True
+    return False
 
 @app.route('/debug/restart', methods=['POST'])
 def restart_service():
@@ -130,6 +139,13 @@ def debug_index():
                 <div id="log-container">Loading logs...</div>
             </div>
 
+            <div class="debug-link">
+                <h2>Edit .env File</h2>
+                <a href="/debug/env">
+                    <button>Edit .env</button>
+                </a>
+            </div>
+
             <div class="danger-zone">
                 <h2>⚠️ Danger Zone</h2>
                 <p>Use these controls with caution:</p>
@@ -188,6 +204,80 @@ def debug_index():
                         logContainer.textContent = 'Error loading logs: ' + error;
                     });
             </script>
+        </body>
+    </html>
+    '''
+
+@app.route('/debug/env', methods=['GET', 'POST'])
+def edit_env():
+    """Endpoint to view and edit the .env file"""
+    if not is_local_request():
+        logger.warning(f"Unauthorized access attempt from {request.remote_addr}")
+        abort(403)  # Forbidden
+
+    env_path = Path('.env')
+    backup_dir = Path('env_backups')
+    backup_dir.mkdir(exist_ok=True)
+    
+    if request.method == 'POST':
+        # Save the updated .env content
+        new_content = request.form.get('env_content', '')
+        
+        # Create a backup before saving
+        timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+        backup_path = backup_dir / f'.env.backup.{timestamp}'
+        try:
+            shutil.copy(env_path, backup_path)
+            logger.info(f".env file backed up to {backup_path}")
+            
+            # Rotate backups, keep only the last 5
+            backups = sorted(backup_dir.glob('.env.backup.*'), key=os.path.getmtime, reverse=True)
+            for old_backup in backups[5:]:
+                old_backup.unlink()
+                logger.info(f"Old backup {old_backup} removed")
+            
+            with open(env_path, 'w') as f:
+                f.write(new_content)
+            logger.info(".env file updated successfully")
+            return redirect(url_for('edit_env'))
+        except Exception as e:
+            logger.error(f"Error updating .env file: {e}")
+            return f"Error updating .env file: {e}", 500
+    
+    # Read the current .env content
+    try:
+        with open(env_path, 'r') as f:
+            env_content = f.read()
+    except Exception as e:
+        logger.error(f"Error reading .env file: {e}")
+        env_content = "Error reading .env file"
+    
+    # Generate shell commands for restoring backups
+    backup_files = sorted(backup_dir.glob('.env.backup.*'), key=os.path.getmtime, reverse=True)
+    restore_commands = "\n".join(
+        f"cp {backup_file} .env" for backup_file in backup_files
+    )
+    
+    return f'''
+    <html>
+        <head>
+            <title>Edit .env File</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 20px; }}
+                textarea {{ width: 100%; height: 400px; }}
+                button {{ margin-top: 10px; }}
+                pre {{ background: #f5f5f5; padding: 10px; border: 1px solid #ccc; }}
+            </style>
+        </head>
+        <body>
+            <h1>Edit .env File</h1>
+            <form method="post">
+                <textarea name="env_content">{env_content}</textarea><br>
+                <button type="submit">Save Changes</button>
+            </form>
+            <h2>Restore .env from Backup</h2>
+            <p>If the server is unresponsive, use the following shell commands to restore a backup:</p>
+            <pre>{restore_commands}</pre>
         </body>
     </html>
     '''

@@ -49,14 +49,22 @@ class MockDisplay:
     def getbuffer(self, image):
         logger.debug("Mock: getbuffer() called")
         # Save the image for debugging
-        #rotate the image back to normal
-        image = image.rotate(-90, expand=True)
-        debug_path = "debug_output.png"
-        image.save(debug_path)
-        logger.info(f"Debug image saved to {debug_path}")
+        DisplayAdapter.save_debug_image(image)
         return image
 
 class DisplayAdapter:
+    @staticmethod
+    def save_debug_image(image):
+        """Save a debug image of the current display buffer"""
+        try:
+            # Rotate the image back to normal orientation
+            image = image.rotate(-90, expand=True)
+            debug_path = "debug_output.png"
+            image.save(debug_path)
+            logger.info(f"Debug image saved to {debug_path}")
+        except Exception as e:
+            logger.error(f"Error saving debug image: {e}")
+    
     @staticmethod
     def get_display():
         """Get the appropriate display instance based on environment"""
@@ -179,6 +187,13 @@ class DisplayAdapter:
                             raise
                     epd.init_Fast = init_Fast
             
+            # Wrap the getbuffer method to save debug output
+            original_getbuffer = epd.getbuffer
+            def getbuffer_wrapper(image):
+                DisplayAdapter.save_debug_image(image)
+                return original_getbuffer(image)
+            epd.getbuffer = getbuffer_wrapper
+            
             return epd
             
         except ImportError as e:
@@ -187,4 +202,4 @@ class DisplayAdapter:
             return MockDisplay()
         except Exception as e:
             logger.error(f"Error creating display instance: {str(e)}\n{traceback.format_exc()}")
-            raise 
+            raise

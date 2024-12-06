@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 import threading
 import log_config
+import sys
 logger = logging.getLogger(__name__)
 
 # Load environment variables
@@ -13,6 +14,19 @@ DEBUG_PORT = int(os.getenv("debug_port", "5002"))
 DEBUG_ENABLED = os.getenv("debug_port_enabled", "false").lower() == "true"
 
 app = Flask(__name__)
+
+@app.route('/debug/restart', methods=['POST'])
+def restart_service():
+    """Endpoint to trigger service restart by exiting the program"""
+    def delayed_exit():
+        # Wait a bit to allow the response to be sent
+        import time
+        time.sleep(1)
+        sys.exit(0)
+    
+    # Start delayed exit in separate thread
+    threading.Thread(target=delayed_exit, daemon=True).start()
+    return "Restarting service...", 200
 
 @app.route('/debug/display')
 def get_debug_display():
@@ -75,6 +89,23 @@ def debug_index():
                     font-family: monospace;
                     white-space: pre;
                 }
+                .danger-zone {
+                    margin-top: 20px;
+                    padding: 10px;
+                    border: 2px solid #ff4444;
+                    border-radius: 5px;
+                }
+                .danger-button {
+                    background-color: #ff4444;
+                    color: white;
+                    border: none;
+                    padding: 10px 20px;
+                    border-radius: 5px;
+                    cursor: pointer;
+                }
+                .danger-button:hover {
+                    background-color: #ff0000;
+                }
             </style>
         </head>
         <body>
@@ -93,10 +124,33 @@ def debug_index():
                 <div id="log-container">Loading logs...</div>
             </div>
 
+            <div class="danger-zone">
+                <h2>⚠️ Danger Zone</h2>
+                <p>Use these controls with caution:</p>
+                <button class="danger-button" onclick="restartService()">Restart Display Service</button>
+            </div>
+
             <script>
                 function refreshImage() {
                     const img = document.getElementById('display-image');
                     img.src = '/debug/display?' + new Date().getTime();
+                }
+
+                function restartService() {
+                    if (confirm('Are you sure you want to restart the display service?')) {
+                        fetch('/debug/restart', { method: 'POST' })
+                            .then(response => {
+                                if (response.ok) {
+                                    alert('Service restart initiated. Page will reload in 5 seconds.');
+                                    setTimeout(() => location.reload(), 5000);
+                                } else {
+                                    alert('Failed to restart service');
+                                }
+                            })
+                            .catch(error => {
+                                alert('Error: ' + error);
+                            });
+                    }
                 }
 
                 // Auto-refresh image every 10 seconds

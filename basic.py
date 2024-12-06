@@ -18,6 +18,7 @@ import log_config
 import requests
 import random
 import traceback
+from debug_server import start_debug_server
 
 logger = logging.getLogger(__name__)
 # Set logging level for PIL.PngImagePlugin and urllib3.connectionpool to warning
@@ -558,6 +559,9 @@ def main():
     epd = None
     try:
         logger.info("E-ink Display Starting")
+        
+        # Start debug server if enabled
+        start_debug_server()
         
         # Initialize services
         weather = WeatherService() if weather_enabled else None

@@ -57,10 +57,23 @@ class DisplayAdapter:
     def save_debug_image(image):
         """Save a debug image of the current display buffer"""
         try:
-            # Rotate the image back to normal orientation
-            image = image.rotate(-90, expand=True)
+            # Create a new RGB image for debug output
+            debug_image = Image.new('RGB', image.size, (255, 255, 255))
+            
+            # Map EPD values to RGB values
+            for x in range(image.width):
+                for y in range(image.height):
+                    pixel = image.getpixel((x, y))
+                    if pixel == 0x00:  # BLACK
+                        debug_image.putpixel((x, y), (0, 0, 0))
+                    elif pixel == 0xFF:  # WHITE
+                        debug_image.putpixel((x, y), (255, 255, 255))
+                    # Add other mappings if needed
+            
+            # Rotate and save
+            debug_image = debug_image.rotate(-90, expand=True)
             debug_path = "debug_output.png"
-            image.save(debug_path)
+            debug_image.save(debug_path)
             logger.info(f"Debug image saved to {debug_path}")
         except Exception as e:
             logger.error(f"Error saving debug image: {e}")
@@ -97,11 +110,11 @@ class DisplayAdapter:
             
             # Add color constants for compatibility with color displays
             if not hasattr(epd, 'RED'):
-                logger.debug("Display does not support RED, falling back to BLACK")
-                epd.RED = epd.BLACK
+                logger.debug("Display does not support RED, falling back to WHITE")
+                epd.RED = epd.WHITE
             if not hasattr(epd, 'YELLOW'):
-                logger.debug("Display does not support YELLOW, falling back to BLACK")
-                epd.YELLOW = epd.BLACK
+                logger.debug("Display does not support YELLOW, falling back to WHITE")
+                epd.YELLOW = epd.WHITE
             
             # Add wrapper for init method to handle different signatures
             original_init = epd.init

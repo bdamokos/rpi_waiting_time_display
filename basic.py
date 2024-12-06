@@ -356,6 +356,8 @@ def update_display(epd, weather_data, bus_data, error_message=None, stop_name=No
             
             if not time.lower().endswith("'"):
                 time = str(time) + "'"
+            if time.lower()=="0'" or time.lower()=="0":
+                time = "↓↓"
             message_width = 0
             if message:
                 if message == "Last":

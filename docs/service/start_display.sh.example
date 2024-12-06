@@ -6,7 +6,7 @@
 # chmod +x ~/start_display.sh
 echo "----------------------------------------"
 echo "Starting display service service script"
-echo "Version: 0.0.9 (2024-12-06)"  # AUTO-INCREMENT
+echo "Version: 0.0.10 (2024-12-06)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -19,7 +19,7 @@ echo "----------------------------------------"
 cd ~/display_programme
 echo "Updating display_programme from git..."
 git fetch -v origin main
-git reset -v --hard origin/main
+git reset --hard origin/main
 git pull -v origin main
 echo "Display programme updated."
 echo "----------------------------------------"
@@ -44,7 +44,7 @@ echo "----------------------------------------"
 cd ~/brussels_transit
 echo "Updating brussels_transit from git..."
 git fetch -v origin main
-git reset -v --hard origin/main
+git reset --hard origin/main
 git pull -v origin main
 echo "----------------------------------------"
 

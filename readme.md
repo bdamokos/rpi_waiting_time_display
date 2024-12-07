@@ -11,7 +11,8 @@ Features:
 - Next bus arrival times for configured lines
 - Color-coded bus line numbers matching STIB/MIVB official colors
 - If the Raspberry Pi is not connected to the internet, it will set up a hotspot and display a QR code to connect to it that allows you to connect the Pi to the internet
-![No Wi-Fi - a hotspot has been set up](docs/images/no_wifi.png)
+
+    ![No Wi-Fi - a hotspot has been set up](docs/images/no_wifi.png)
 
 
 # Requirements

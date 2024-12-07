@@ -231,21 +231,33 @@ def update_display(epd, weather_data, bus_data, error_message=None, stop_name=No
         font_large = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 32)
         font_medium = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 24)
         font_small = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 16)
+
         # logger.info(f"Found DejaVu fonts: {font_large}, {font_medium}, {font_small}")
     except:
         font_large = ImageFont.load_default()
         font_medium = font_small = font_large
         logger.warning(f"No DejaVu fonts found, using default: {font_large}, {font_medium}, {font_small}. Install DeJaVu fonts with \n sudo apt install fonts-dejavu\n")
+    try:
+        emoji_font = ImageFont.truetype('/usr/local/share/fonts/noto/NotoEmoji-Regular.ttf', 16)
+        emoji_font_medium = ImageFont.truetype('/usr/local/share/fonts/noto/NotoEmoji-Regular.ttf', 24)
+    except:
+        emoji_font = font_small
+        emoji_font_medium = font_medium
+        logger.warning(f"No Noto Emoji font found, using {emoji_font.getname()} instead.")
 
     weather_icon = WEATHER_ICONS.get(weather_data['description'], '')
-    logger.debug(f"Weather icon: {weather_icon}, description: {weather_data['description']}, font: {font_small.getname()}")
+    logger.debug(f"Weather icon: {weather_icon}, description: {weather_data['description']}, font: {emoji_font.getname()}")
     temp_text = f"{weather_data['temperature']}°"
-    weather_text = f"{weather_icon} {temp_text}"
+    
+    weather_text = f"{temp_text}"
+    weather_icon_bbox = draw.textbbox((0, 0), weather_icon, font=emoji_font)
+    weather_icon_width = weather_icon_bbox[2] - weather_icon_bbox[0]
     weather_bbox = draw.textbbox((0, 0), weather_text, font=font_small)
-    weather_width = weather_bbox[2] - weather_bbox[0]
+    weather_text_width = weather_bbox[2] - weather_bbox[0]
+    weather_width = weather_text_width + weather_icon_width
     if weather_enabled:
-        draw.text((Himage.width - weather_width - MARGIN, MARGIN), 
-                  weather_text, font=font_small, fill=BLACK)
+        draw.text((Himage.width - weather_width - weather_icon_width - MARGIN, MARGIN), weather_icon, font=emoji_font, fill=BLACK)
+        draw.text((Himage.width - weather_width - MARGIN, MARGIN), weather_text, font=font_small, fill=BLACK)
     stop_name_height = 0
     if stop_name:
         stop_name_bbox = draw.textbbox((0, 0), stop_name, font=font_small)
@@ -383,8 +395,21 @@ def update_display(epd, weather_data, bus_data, error_message=None, stop_name=No
             if times_shown > 0 and (time_width + message_width + MARGIN + EXTRA_SPACING > max_width):
                 break
             
-            # Draw time
-            draw.text((x_pos + MARGIN, y_pos), time, font=font_medium, fill=BLACK)
+            # Check if there is an emoji to show
+            if '🕒' in time or '⚡' in time:
+                emoji_text = '🕒' if '🕒' in time else '⚡'
+                emoji_bbox = draw.textbbox((0, 0), emoji_text, font=emoji_font)
+                emoji_width = emoji_bbox[2] - emoji_bbox[0]
+                time_text = time.replace('🕒', '').replace('⚡', '')
+                time_bbox = draw.textbbox((0, 0), time_text, font=font_medium)
+                time_text_width = time_bbox[2] - time_bbox[0]
+                time_width = time_text_width + emoji_width
+                draw.text((x_pos + MARGIN, y_pos), emoji_text, font=emoji_font_medium, fill=BLACK)
+                draw.text((x_pos + MARGIN + emoji_width, y_pos), time_text, font=font_medium, fill=BLACK)
+            else:
+                draw.text((x_pos + MARGIN, y_pos), time, font=font_medium, fill=BLACK)
+
+
             
             # Draw message if present
             if message:

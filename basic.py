@@ -19,6 +19,8 @@ import requests
 import random
 import traceback
 from debug_server import start_debug_server
+from wifi_manager import is_connected, show_no_wifi_display
+import subprocess
 
 logger = logging.getLogger(__name__)
 # Set logging level for PIL.PngImagePlugin and urllib3.connectionpool to warning
@@ -49,6 +51,11 @@ DISPLAY_REFRESH_FULL_INTERVAL = int(os.getenv("refresh_full_interval", 3600))
 DISPLAY_REFRESH_WEATHER_INTERVAL = int(os.getenv("refresh_weather_interval", 600))
 
 weather_enabled = True if os.getenv("OPENWEATHER_API_KEY") else False
+
+HOTSPOT_ENABLED = os.getenv('hotspot_enabled', 'true').lower() == 'true'
+HOTSPOT_SSID = os.getenv('hotspot_ssid', 'PiHotspot')
+HOTSPOT_PASSWORD = os.getenv('hotspot_password', 'YourPassword')
+
 if not weather_enabled:
     logger.warning("Weather is not enabled, weather data will not be displayed. Please set OPENWEATHER_API_KEY in .env to enable it.")
 
@@ -562,6 +569,7 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
     buffer = epd.getbuffer(Himage)
     epd.display(buffer)
 
+
 def main():
     epd = None
     try:
@@ -569,10 +577,6 @@ def main():
         
         # Start debug server if enabled
         start_debug_server()
-        
-        # Initialize services
-        weather = WeatherService() if weather_enabled else None
-        bus = BusService()
         
         # Initialize display using adapter
         logger.debug("About to initialize display")
@@ -597,6 +601,17 @@ def main():
         logger.debug("About to call epd.init_Fast()")
         epd.init_Fast()
         logger.info("Fast mode initialized")
+        
+        # Check Wi-Fi connectivity
+        if not is_connected():
+            logger.info("Not connected to Wi-Fi. Starting Wi-Fi manager...")
+            subprocess.Popen(['python3', 'wifi_manager.py'])
+            show_no_wifi_display(epd)
+            return  # Exit the main loop to prevent further execution
+
+        # Initialize services
+        weather = WeatherService() if weather_enabled else None
+        bus = BusService()
         
         # Counter for full refresh every hour
         update_count = 0

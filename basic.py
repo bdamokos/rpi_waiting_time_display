@@ -124,17 +124,33 @@ def find_optimal_colors(pixel_rgb, epd):
 
 def draw_multicolor_dither(draw, epd, x, y, width, height, colors_with_ratios):
     """Draw a block using multiple colors with specified ratios"""
+    # Only include colors that the display supports
     epd_colors = {
         'white': ((255, 255, 255), epd.WHITE),
-        'black': ((0, 0, 0), epd.BLACK),
-        'red': ((255, 0, 0), epd.RED),
-        'yellow': ((255, 255, 0), epd.YELLOW)
+        'black': ((0, 0, 0), epd.BLACK)
     }
+    
+    # Add RED if supported
+    if hasattr(epd, 'RED'):
+        epd_colors['red'] = ((255, 0, 0), epd.RED)
+    
+    # Add YELLOW if supported
+    if hasattr(epd, 'YELLOW'):
+        epd_colors['yellow'] = ((255, 255, 0), epd.YELLOW)
     
     total_pixels = width * height
     
-    # Ensure we're actually using the colors we selected
-    # logger.debug(f"Dithering with colors: {colors_with_ratios}")
+    # Filter out any colors that aren't supported by the display
+    valid_colors = [(color, ratio) for color, ratio in colors_with_ratios if color in epd_colors]
+    
+    # If no valid colors remain, fallback to black and white
+    if not valid_colors:
+        valid_colors = [('black', 0.6), ('white', 0.4)]
+    
+    # Normalize ratios if we filtered out any colors
+    total_ratio = sum(ratio for _, ratio in valid_colors)
+    if total_ratio != 1.0:
+        valid_colors = [(color, ratio/total_ratio) for color, ratio in valid_colors]
     
     for i in range(width):
         for j in range(height):
@@ -144,7 +160,7 @@ def draw_multicolor_dither(draw, epd, x, y, width, height, colors_with_ratios):
             cumulative_ratio = 0
             chosen_color = 'white'  # default
             
-            for color_name, ratio in colors_with_ratios:
+            for color_name, ratio in valid_colors:
                 cumulative_ratio += ratio
                 if pos <= cumulative_ratio:
                     chosen_color = color_name

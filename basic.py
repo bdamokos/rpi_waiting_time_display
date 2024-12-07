@@ -454,7 +454,8 @@ def update_display(epd, weather_data, bus_data, error_message=None, stop_name=No
         draw.text((error_x, error_y), error_message, font=font_small, fill=RED)
 
     # Draw a border around the display
-    draw.rectangle([(0, 0), (Himage.width-1, Himage.height-1)], outline=BLACK)
+    border_color = getattr(epd, 'RED', epd.BLACK)  # Fall back to BLACK if RED not available
+    draw.rectangle([(0, 0), (Himage.width-1, Himage.height-1)], outline=border_color)
 
     # Rotate the image 90 degrees
     Himage = Himage.rotate(90, expand=True)
@@ -587,7 +588,8 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
               current_time, font=font_tiny, fill=epd.BLACK, align="right")
 
     # Draw a border around the display
-    draw.rectangle([(0, 0), (Himage.width-1, Himage.height-1)], outline=epd.RED)
+    border_color = getattr(epd, 'RED', epd.BLACK)  # Fall back to BLACK if RED not available
+    draw.rectangle([(0, 0), (Himage.width-1, Himage.height-1)], outline=border_color)
 
     # Rotate the image 90 degrees
     Himage = Himage.rotate(90, expand=True)

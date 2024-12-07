@@ -66,8 +66,17 @@ def is_connected():
     """Check if the Pi is connected to a Wi-Fi network."""
     if is_running_on_pi():
         try:
-            # Original RPI/Linux logic
-            result = subprocess.run(['sudo', 'nmcli', '-t', '-f', 'ACTIVE,SSID', 'dev', 'wifi'], capture_output=True, text=True)
+            # Force English language output by setting LC_ALL=C
+            env = os.environ.copy()
+            env['LC_ALL'] = 'C'
+            
+            # Original RPI/Linux logic with modified environment
+            result = subprocess.run(
+                ['sudo', 'nmcli', '-t', '-f', 'ACTIVE,SSID', 'dev', 'wifi'],
+                capture_output=True,
+                text=True,
+                env=env
+            )
             logger.info(f"nmcli output: {result.stdout}")
             # Look for any line that starts with "yes:" (the colon is part of the -t format)
             return any(line.startswith('yes:') for line in result.stdout.splitlines())

@@ -109,7 +109,7 @@ touch "$BACKUP_MANIFEST"
 
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.11 (2024-12-07)"  # AUTO-INCREMENT
+echo "Version: 0.0.12 (2024-12-07)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -283,17 +283,33 @@ fi
 
 # Add to the existing setup script
 echo "Setting up WiFi captive portal dependencies..."
-apt-get update
-apt-get install -y dnsmasq
+if ! command -v dnsmasq &> /dev/null; then
+    apt-get update
+    apt-get install -y dnsmasq
+else
+    echo "dnsmasq already installed"
+fi
 
-# Enable IP forwarding
-echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
-sysctl -p
+# Enable IP forwarding if not already enabled
+if ! grep -q "net.ipv4.ip_forward=1" /etc/sysctl.conf; then
+    echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+    sysctl -p
+else
+    echo "IP forwarding already enabled"
+fi
 
 # Setup network permissions
 echo "Setting up network permissions..."
-usermod -a -G netdev $ACTUAL_USER
-cat > /etc/polkit-1/localauthority/50-local.d/10-network-manager.pkla << EOF
+if ! groups $ACTUAL_USER | grep -q "\bnetdev\b"; then
+    usermod -a -G netdev $ACTUAL_USER
+    echo "Added $ACTUAL_USER to netdev group"
+else
+    echo "User already in netdev group"
+fi
+
+POLKIT_FILE="/etc/polkit-1/localauthority/50-local.d/10-network-manager.pkla"
+if [ ! -f "$POLKIT_FILE" ]; then
+    cat > "$POLKIT_FILE" << EOF
 [Let users in netdev group modify NetworkManager]
 Identity=unix-group:netdev
 Action=org.freedesktop.NetworkManager.*
@@ -301,10 +317,15 @@ ResultAny=yes
 ResultInactive=no
 ResultActive=yes
 EOF
+    echo "Created PolicyKit configuration"
+else
+    echo "PolicyKit configuration already exists"
+fi
 check_error "Failed to setup network permissions"
 
 # Create a script that can be called with sudo
-cat > /usr/local/bin/wifi-portal-setup << 'EOL'
+if [ ! -f "/usr/local/bin/wifi-portal-setup" ]; then
+    cat > /usr/local/bin/wifi-portal-setup << 'EOL'
 #!/bin/bash
 # Configure dnsmasq
 cat > /etc/dnsmasq.conf << EOF
@@ -323,11 +344,21 @@ iptables -t nat -A PREROUTING -p tcp --dport 443 -j REDIRECT --to-port 80
 # Restart dnsmasq
 systemctl restart dnsmasq
 EOL
-
-chmod +x /usr/local/bin/wifi-portal-setup
+    chmod +x /usr/local/bin/wifi-portal-setup
+    echo "Created wifi portal setup script"
+else
+    echo "Wifi portal setup script already exists"
+fi
 
 # Create sudoers entry to allow the script to be run without password
-echo "$ACTUAL_USER ALL=(ALL) NOPASSWD: /usr/local/bin/wifi-portal-setup, /sbin/iptables -t nat -F, /bin/systemctl stop dnsmasq" > /etc/sudoers.d/wifi-portal
+SUDOERS_FILE="/etc/sudoers.d/wifi-portal"
+SUDOERS_LINE="$ACTUAL_USER ALL=(ALL) NOPASSWD: /usr/local/bin/wifi-portal-setup, /sbin/iptables -t nat -F, /bin/systemctl stop dnsmasq, /usr/bin/nmcli dev wifi hotspot ifname wlan0 ssid * password *, /usr/bin/nmcli device disconnect wlan0, /usr/bin/nmcli device connect wlan0"
+if [ ! -f "$SUDOERS_FILE" ] || ! grep -q "^$SUDOERS_LINE" "$SUDOERS_FILE"; then
+    echo "$SUDOERS_LINE" > "$SUDOERS_FILE"
+    echo "Created sudoers entry with nmcli permissions"
+else
+    echo "Sudoers entry already exists"
+fi
 
 # Start the debug server
 echo "Starting the debug server..."

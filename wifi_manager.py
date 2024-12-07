@@ -57,6 +57,7 @@ def is_connected():
         try:
             # Original RPI/Linux logic
             result = subprocess.run(['nmcli', '-t', '-f', 'ACTIVE,SSID', 'dev', 'wifi'], capture_output=True, text=True)
+            logger.info(f"nmcli output: {result.stdout}")
             return 'yes' in result.stdout
         except Exception as e:
             logger.error(f"Error checking Wi-Fi connection: {e}")

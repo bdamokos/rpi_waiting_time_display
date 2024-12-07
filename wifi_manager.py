@@ -303,6 +303,7 @@ def show_no_wifi_display(epd):
     Himage = Himage.rotate(90, expand=True)
     
     # Display the image
+    epd.init()
     buffer = epd.getbuffer(Himage)
     epd.display(buffer)
 

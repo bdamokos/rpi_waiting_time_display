@@ -237,7 +237,8 @@ def update_display(epd, weather_data, bus_data, error_message=None, stop_name=No
         font_medium = font_small = font_large
         logger.warning(f"No DejaVu fonts found, using default: {font_large}, {font_medium}, {font_small}. Install DeJaVu fonts with \n sudo apt install fonts-dejavu\n")
 
-    weather_icon = WEATHER_ICONS.get(weather_data['description'], '?')
+    weather_icon = WEATHER_ICONS.get(weather_data['description'], '')
+    logger.debug(f"Weather icon: {weather_icon}, description: {weather_data['description']}, font: {font_small}")
     temp_text = f"{weather_data['temperature']}°"
     weather_text = f"{weather_icon} {temp_text}"
     weather_bbox = draw.textbbox((0, 0), weather_text, font=font_small)

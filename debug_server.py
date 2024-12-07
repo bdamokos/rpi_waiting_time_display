@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 dotenv.load_dotenv(override=True)
 DEBUG_PORT = int(os.getenv("debug_port", "5002"))
 DEBUG_ENABLED = os.getenv("debug_port_enabled", "false").lower() == "true"
+FIRST_RUN = os.getenv("first_run", "false").lower() == "true"
 
 app = Flask(__name__)
 
@@ -253,6 +254,20 @@ def edit_env():
                 except Exception as e:
                     logger.error(f"Error restoring .env file: {e}")
                     return f"Error restoring .env file: {e}", 500
+        elif 'confirm_settings' in request.form:
+            # Flip first_run setting and restart
+            current_vars = parse_env_file(env_path)
+            if current_vars.get('first_run', 'false').lower() == 'true':
+                current_vars['first_run'] = 'false'
+                with open(env_path, 'w') as f:
+                    for key, value in current_vars.items():
+                        f.write(f"{key}={value}\n")
+                logger.info("first_run set to false, restarting Raspberry Pi")
+                os._exit(1)  # Exit to trigger restart in setup script
+            else:
+                logger.info("Restarting service...")
+                return redirect(url_for('restart_service'))
+
         else:
             # Save the updated .env content
             new_content = request.form.get('env_content', '')
@@ -336,6 +351,9 @@ def edit_env():
     restore_options_html = "\n".join(
         f'<option value="{file_path}">{file_name}</option>' for file_path, file_name in restore_options
     )
+
+    # Determine if the "Confirm Settings" button should be shown
+    show_confirm_button = current_vars.get('first_run', 'false').lower() == 'true'
     
     return f'''
     <html>
@@ -398,6 +416,13 @@ def edit_env():
             </form>
             <p>If the server is unresponsive, use the following shell commands to restore a backup:</p>
             <pre>{restore_commands}</pre>
+
+            <h2>Confirm Initial Settings</h2>
+            <form method="post">
+                <button type="submit" name="confirm_settings">
+                    {'I am happy with my initial settings, restart my Pi' if show_confirm_button else 'Restart Display Service'}
+                </button>
+            </form>
         </body>
     </html>
     '''

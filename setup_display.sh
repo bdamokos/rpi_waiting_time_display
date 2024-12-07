@@ -109,7 +109,7 @@ touch "$BACKUP_MANIFEST"
 
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.9 (2024-12-05)"  # AUTO-INCREMENT
+echo "Version: 0.0.10 (2024-12-07)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -169,8 +169,8 @@ echo "Installing required packages..."
 apt-get update
 check_error "Failed to update package list"
 
-# Install Python development headers
-apt-get install -y git gh fonts-dejavu watchdog python3-dev
+# Install dependencies
+apt-get install -y git gh fonts-dejavu watchdog python3-dev nmcli
 check_error "Failed to install packages"
 
 # Setup watchdog
@@ -272,24 +272,7 @@ if [ ! -f "$ACTUAL_HOME/display_programme/.env" ]; then
     echo "nano $ACTUAL_HOME/display_programme/.env"
 fi
 
-# Enable and start service
-systemctl daemon-reload
-systemctl enable display.service
-systemctl start display.service
-
-echo "----------------------------------------"
-echo "Setup completed!"
-echo ""
-echo "Next steps:"
-echo "1. Edit your .env file: nano $ACTUAL_HOME/display_programme/.env"
-echo "2. Check service status: systemctl status display.service"
-echo "3. View logs: journalctl -u display.service -f"
-echo ""
-echo "The service will start automatically on boot."
 setup_uninstall
-echo ""
-echo "To uninstall in the future, run: sudo ~/uninstall_display.sh"
-echo "----------------------------------------"
 
 # Ask about Samba setup
 if confirm "Would you like to set up Samba file sharing? This will allow you to edit files from your computer"; then
@@ -297,3 +280,70 @@ if confirm "Would you like to set up Samba file sharing? This will allow you to 
     bash "$ACTUAL_HOME/display_programme/docs/service/setup_samba.sh"
     check_error "Failed to setup Samba"
 fi
+
+# Add to the existing setup script
+echo "Setting up WiFi captive portal dependencies..."
+apt-get update
+apt-get install -y dnsmasq
+
+# Enable IP forwarding
+echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+sysctl -p
+
+# Create a script that can be called with sudo
+cat > /usr/local/bin/wifi-portal-setup << 'EOL'
+#!/bin/bash
+# Configure dnsmasq
+cat > /etc/dnsmasq.conf << EOF
+interface=wlan0
+dhcp-range=192.168.4.2,192.168.4.20,255.255.255.0,24h
+address=/#/192.168.4.1
+EOF
+
+# Configure network interface
+ifconfig wlan0 192.168.4.1 netmask 255.255.255.0
+
+# Configure iptables
+iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 80
+iptables -t nat -A PREROUTING -p tcp --dport 443 -j REDIRECT --to-port 80
+
+# Restart dnsmasq
+systemctl restart dnsmasq
+EOL
+
+chmod +x /usr/local/bin/wifi-portal-setup
+
+# Create sudoers entry to allow the script to be run without password
+echo "$ACTUAL_USER ALL=(ALL) NOPASSWD: /usr/local/bin/wifi-portal-setup, /sbin/iptables -t nat -F, /bin/systemctl stop dnsmasq" > /etc/sudoers.d/wifi-portal
+
+# Start the debug server
+echo "Starting the debug server..."
+su - $ACTUAL_USER -c "source $ACTUAL_HOME/display_env/bin/activate && python3 $ACTUAL_HOME/display_programme/debug_server.py &"
+DEBUG_SERVER_PID=$!
+check_error "Failed to start debug server"
+
+# Wait for the debug server to exit
+wait $DEBUG_SERVER_PID
+
+echo "----------------------------------------"
+echo "Setup completed!"
+echo ""
+echo "Next steps:"
+echo "1. Edit your .env file by visiting: http://hostname:5002/debug/env" or manually by:
+echo "   nano $ACTUAL_HOME/display_programme/.env"
+echo "2. Once you are happy with your settings, press the 'I am happy with my initial settings, restart my Pi' button."
+echo ""
+echo "The Raspberry Pi will restart automatically in 10 seconds with the new settings."
+echo ""
+echo "To uninstall in the future, run: sudo ~/uninstall_display.sh"
+echo "You will find this readme at: https://github.com/bdamokos/rpi_waiting_time_display"
+echo "----------------------------------------"
+
+# Enable and start service
+systemctl daemon-reload
+systemctl enable display.service
+systemctl start display.service
+# Restart the Raspberry Pi after a timeout
+echo "Restarting Raspberry Pi in 10 seconds..."
+sleep 10
+reboot

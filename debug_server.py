@@ -6,6 +6,7 @@ from pathlib import Path
 import threading
 import log_config
 import sys
+from werkzeug.utils import secure_filename
 import shutil
 from datetime import datetime, timedelta
 
@@ -32,8 +33,9 @@ def safe_path(base_path: Path, filename: str) -> Path:
     """
     try:
         base_path = Path(base_path).resolve()
-        file_path = (base_path / filename).resolve()
-        
+        sanitized_filename = secure_filename(filename)
+        file_path = (base_path / sanitized_filename).resolve()
+
         # Check if the resolved path is within the base directory
         if not str(file_path).startswith(str(base_path)):
             raise ValueError("Path traversal detected")

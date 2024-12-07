@@ -124,7 +124,8 @@ def wifi_setup():
                 cleanup_captive_portal()
                 os.system('reboot')
             except subprocess.CalledProcessError as e:
-                return f"Failed to connect to {ssid}: {e}", 500
+                logger.error(f"Failed to connect to {ssid}: {e}")
+                return "Failed to connect to the network. Please try again.", 500
         return redirect(url_for('wifi_setup'))
 
     return f'''

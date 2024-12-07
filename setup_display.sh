@@ -109,7 +109,7 @@ touch "$BACKUP_MANIFEST"
 
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.14 (2024-12-07)"  # AUTO-INCREMENT
+echo "Version: 0.0.15 (2024-12-07)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -327,19 +327,33 @@ check_error "Failed to setup network permissions"
 if [ ! -f "/usr/local/bin/wifi-portal-setup" ]; then
     cat > /usr/local/bin/wifi-portal-setup << 'EOL'
 #!/bin/bash
-# Configure dnsmasq
+# Configure dnsmasq with more options
 cat > /etc/dnsmasq.conf << EOF
 interface=wlan0
 dhcp-range=192.168.4.2,192.168.4.20,255.255.255.0,24h
 address=/#/192.168.4.1
+dhcp-option=3,192.168.4.1  # Gateway
+dhcp-option=6,192.168.4.1  # DNS
+no-resolv
+no-poll
+no-hosts
+server=8.8.8.8
+server=8.8.4.4
+log-queries
+log-dhcp
 EOF
 
 # Configure network interface
 ifconfig wlan0 192.168.4.1 netmask 255.255.255.0
 
-# Configure iptables
+# Configure iptables more thoroughly
+iptables -t nat -F
+iptables -F
 iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 80
 iptables -t nat -A PREROUTING -p tcp --dport 443 -j REDIRECT --to-port 80
+iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+iptables -A FORWARD -i wlan0 -o eth0 -j ACCEPT
+iptables -A FORWARD -i eth0 -o wlan0 -m state --state RELATED,ESTABLISHED -j ACCEPT
 
 # Restart dnsmasq
 systemctl restart dnsmasq

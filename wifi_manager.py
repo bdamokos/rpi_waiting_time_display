@@ -69,7 +69,8 @@ def is_connected():
             # Original RPI/Linux logic
             result = subprocess.run(['sudo', 'nmcli', '-t', '-f', 'ACTIVE,SSID', 'dev', 'wifi'], capture_output=True, text=True)
             logger.info(f"nmcli output: {result.stdout}")
-            return 'yes' in result.stdout
+            # Look for any line that starts with "yes:" (the colon is part of the -t format)
+            return any(line.startswith('yes:') for line in result.stdout.splitlines())
         except Exception as e:
             logger.error(f"Error checking Wi-Fi connection: {e}")
             return False

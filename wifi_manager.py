@@ -63,7 +63,7 @@ def cleanup_captive_portal():
         logger.error(f"Error cleaning up captive portal: {e}")
 
 def is_connected():
-    """Check if the Pi is connected to a Wi-Fi network."""
+    """Check if the Pi is connected to a Wi-Fi network (excluding our own hotspot)."""
     if is_running_on_pi():
         try:
             # Force English language output by setting LC_ALL=C
@@ -78,8 +78,22 @@ def is_connected():
                 env=env
             )
             logger.info(f"nmcli output: {result.stdout}")
-            # Look for any line that starts with "yes:" (the colon is part of the -t format)
-            return any(line.startswith('yes:') for line in result.stdout.splitlines())
+            
+            # Check each active connection
+            for line in result.stdout.splitlines():
+                if line.startswith('yes:'):
+                    connected_ssid = line.split(':', 1)[1]
+                    # Return True only if we're connected to a network that isn't our hotspot
+                    if connected_ssid != HOTSPOT_SSID:
+                        logger.info(f"Connected to external network: {connected_ssid}")
+                        return True
+                    else:
+                        logger.info(f"Connected to our own hotspot: {connected_ssid}")
+                        return False
+            
+            logger.info("No active WiFi connections found")
+            return False
+            
         except Exception as e:
             logger.error(f"Error checking Wi-Fi connection: {e}")
             return False

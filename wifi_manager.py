@@ -186,7 +186,8 @@ def main():
             if not is_connected():
                 print("Not connected to Wi-Fi. Setting up hotspot...")
                 create_hotspot()
-                app.run(host='0.0.0.0', port=80)
+                # Ensure debug mode is off in production
+                app.run(host='0.0.0.0', port=80, debug=False)
             else:
                 print("Connected to Wi-Fi.")
             time.sleep(900)  # Check every 15 minutes

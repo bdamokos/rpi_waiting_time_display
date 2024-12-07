@@ -19,7 +19,7 @@ import requests
 import random
 import traceback
 from debug_server import start_debug_server
-from wifi_manager import is_connected, show_no_wifi_display
+from wifi_manager import is_connected, show_no_wifi_display, get_hostname
 import subprocess
 
 logger = logging.getLogger(__name__)
@@ -53,7 +53,8 @@ DISPLAY_REFRESH_WEATHER_INTERVAL = int(os.getenv("refresh_weather_interval", 600
 weather_enabled = True if os.getenv("OPENWEATHER_API_KEY") else False
 
 HOTSPOT_ENABLED = os.getenv('hotspot_enabled', 'true').lower() == 'true'
-HOTSPOT_SSID = os.getenv('hotspot_ssid', 'PiHotspot')
+hostname = get_hostname()
+HOTSPOT_SSID = os.getenv('hotspot_ssid', f'PiHotspot-{hostname}')
 HOTSPOT_PASSWORD = os.getenv('hotspot_password', 'YourPassword')
 
 if not weather_enabled:
@@ -607,7 +608,17 @@ def main():
             logger.info("Not connected to Wi-Fi. Starting Wi-Fi manager...")
             subprocess.Popen(['python3', 'wifi_manager.py'])
             show_no_wifi_display(epd)
-            return  # Exit the main loop to prevent further execution
+            
+            # Wait and check for WiFi connection
+            while not is_connected():
+                logger.info("Waiting for WiFi connection...")
+                time.sleep(30)  # Check every 30 seconds
+            
+            logger.info("WiFi connected. Continuing with main loop...")
+            # Reinitialize display after WiFi setup
+            epd.init()
+            epd.Clear()
+            epd.init_Fast()
 
         # Initialize services
         weather = WeatherService() if weather_enabled else None

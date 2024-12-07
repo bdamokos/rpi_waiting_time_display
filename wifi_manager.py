@@ -12,8 +12,7 @@ logger = logging.getLogger(__name__)
 dotenv.load_dotenv(override=True)
 app = Flask(__name__)
 HOTSPOT_ENABLED = os.getenv('hotspot_enabled', 'true').lower() == 'true'
-HOTSPOT_SSID = os.getenv('hotspot_ssid', 'PiHotspot')
-HOTSPOT_PASSWORD = os.getenv('hotspot_password', 'YourPassword')
+
 
 def get_hostname():
     """Get the Pi's hostname with .local suffix."""
@@ -27,6 +26,8 @@ def get_hostname():
         return "raspberrypi.local" # Default fallback
 
 hostname = get_hostname()
+HOTSPOT_SSID = os.getenv('hotspot_ssid', f'PiHotspot-{hostname}')
+HOTSPOT_PASSWORD = os.getenv('hotspot_password', 'YourPassword')
 DEBUG_SERVER_ENABLED = True if os.getenv("debug_server_enabled", "false").lower() == "true" else False
 DEBUG_SERVER_PORT = int(os.getenv("debug_server_port", 5002))
 
@@ -39,14 +40,24 @@ def is_running_on_pi():
         return False
 
 def cleanup_captive_portal():
-    """Clean up captive portal configuration."""
+    """Clean up captive portal configuration thoroughly."""
     if not is_running_on_pi():
         return
 
     try:
-        # Clear iptables rules and stop dnsmasq
+        # Clear all iptables rules
+        subprocess.run(['sudo', 'iptables', '-F'], check=True)
         subprocess.run(['sudo', 'iptables', '-t', 'nat', '-F'], check=True)
+        subprocess.run(['sudo', 'iptables', '-X'], check=True)
+        subprocess.run(['sudo', 'iptables', '-t', 'nat', '-X'], check=True)
+        
+        # Stop and disable dnsmasq
         subprocess.run(['sudo', 'systemctl', 'stop', 'dnsmasq'], check=True)
+        subprocess.run(['sudo', 'systemctl', 'disable', 'dnsmasq'], check=True)
+        
+        # Reset network interface
+        subprocess.run(['sudo', 'ip', 'addr', 'flush', 'dev', 'wlan0'], check=True)
+        
         logger.info("Captive portal cleanup completed")
     except Exception as e:
         logger.error(f"Error cleaning up captive portal: {e}")

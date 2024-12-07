@@ -171,7 +171,12 @@ def draw_multicolor_dither(draw, epd, x, y, width, height, colors_with_ratios):
 def process_icon_for_epd(icon, epd):
     """Process icon using multi-color dithering"""
     width, height = icon.size
-    processed = Image.new('RGB', icon.size, epd.WHITE)
+
+    # Create a new image with white background
+    if epd.is_bw_display:
+        processed = Image.new('1', icon.size, 1)  # 1 is white in 1-bit mode
+    else:
+        processed = Image.new('RGB', icon.size, epd.WHITE)
     draw = ImageDraw.Draw(processed)
     
     block_size = 4

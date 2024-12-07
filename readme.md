@@ -6,7 +6,8 @@ A Raspberry Pi project that displays bus waiting times using an e-Paper display 
 Features:
 - Current time
 - Weather conditions and temperature (including a weather mode when no bus is coming soon)
-![Weather Mode](docs/images/weather%20mode%20with%20dithered%20weather%20icons.png)
+
+    ![Weather Mode](docs/images/weather%20mode%20with%20dithered%20weather%20icons.png)
 - Next bus arrival times for configured lines
 - Color-coded bus line numbers matching STIB/MIVB official colors
 - If the Raspberry Pi is not connected to the internet, it will set up a hotspot and display a QR code to connect to it that allows you to connect the Pi to the internet
@@ -30,8 +31,8 @@ Systems:
 
 Displays:
 - [Waveshare 2.13" G V2 e-Paper display](https://www.waveshare.com/2.13inch-e-Paper-HAT-G.htm) (black, white, red, yellow; no partial refresh support[^1]; ~€20) - display driver set as epd2in13g_V2 in the .env file
-- [Waveshare 2.13" e-Paper display](https://www.waveshare.com/2.13inch-e-paper-hat.htm) (black, white; partial refresh support; ~€20) - display driver set as epd2in13_V4 in the .env file
-- [Waveshare 2.13" e-Paper display with case](https://www.waveshare.com/2.13inch-Touch-e-Paper-HAT-with-case.htm) (black, white; partial refresh support; ~€20) - display driver set as epd2in13_V4 in the .env file
+- [Waveshare 2.13" e-Paper display](https://www.waveshare.com/2.13inch-e-paper-hat.htm) (black, white; partial refresh support; ~€20) - display driver set as epd2in13_V4 in the .env file[^2]
+- [Waveshare 2.13" e-Paper display with case](https://www.waveshare.com/2.13inch-Touch-e-Paper-HAT-with-case.htm) (black, white; partial refresh support; ~€20-€30) - display driver set as epd2in13_V4 in the .env file[^3]
 
 Total cost of components: ~€60
 
@@ -40,7 +41,8 @@ Can be extended with:
 -- Case, e.g. 3D printed case or the one that comes with the display
 
 [^1]: The four colour version of the display does not support partial refresh, so it flickers with every refresh, making it less ideal for this application, despite the nice colours.
-
+[^2]: Good for our application, except it does not come with a case.
+[^3]: Best for our application so far, as it comes with a case (intended for laying face up on a table, with a cable sticking out the back). Different cases for a vertical orientation would be better.
 # Configuration
 ![.env file](docs/images/nano_env.png)
 The .env file is used to configure the application:
@@ -63,10 +65,4 @@ sudo ./uninstall_display.sh
 ## Debugging
 To enable debugging, set the debug_port_enabled=true in the .env which will start a flask server on the port specified in debug_port. Access it at http://raspberrypi.local:5002/debug (or the IP address of the Raspberry Pi if you are not on the same network, and the port specified in debug_port).
 
-# Specific workarounds (Waveshare 2.13 inch display with 4 colours, revision 2)
-
-
-
-
-# Known issues
 

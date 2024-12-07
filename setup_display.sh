@@ -109,7 +109,7 @@ touch "$BACKUP_MANIFEST"
 
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.13 (2024-12-07)"  # AUTO-INCREMENT
+echo "Version: 0.0.14 (2024-12-07)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -350,14 +350,33 @@ else
     echo "Wifi portal setup script already exists"
 fi
 
-# Create sudoers entry to allow the script to be run without password
+# Create or update sudoers entry
 SUDOERS_FILE="/etc/sudoers.d/wifi-portal"
-SUDOERS_LINE="$ACTUAL_USER ALL=(ALL) NOPASSWD: /usr/local/bin/wifi-portal-setup, /sbin/iptables -t nat -F, /bin/systemctl stop dnsmasq, /usr/bin/nmcli dev wifi hotspot ifname wlan0 ssid * password *, /usr/bin/nmcli device disconnect wlan0, /usr/bin/nmcli device connect wlan0, /usr/bin/nmcli -t -f ACTIVE,SSID dev wifi, /usr/bin/nmcli dev wifi connect * password *"
-if [ ! -f "$SUDOERS_FILE" ] || ! grep -q "^$SUDOERS_LINE" "$SUDOERS_FILE"; then
-    echo "$SUDOERS_LINE" > "$SUDOERS_FILE"
-    echo "Created sudoers entry with nmcli permissions"
+REQUIRED_ENTRIES=(
+    "$ACTUAL_USER ALL=(ALL) NOPASSWD: /usr/local/bin/wifi-portal-setup"
+    "$ACTUAL_USER ALL=(ALL) NOPASSWD: /sbin/iptables"
+    "$ACTUAL_USER ALL=(ALL) NOPASSWD: /bin/systemctl"
+    "$ACTUAL_USER ALL=(ALL) NOPASSWD: /usr/bin/nmcli"
+)
+
+# Create new sudoers content
+echo "Setting up network permissions in sudoers..."
+SUDOERS_CONTENT=""
+for entry in "${REQUIRED_ENTRIES[@]}"; do
+    SUDOERS_CONTENT+="$entry"$'\n'
+done
+
+# Safely update the sudoers file
+echo "$SUDOERS_CONTENT" > "/tmp/wifi-portal"
+visudo -c -f "/tmp/wifi-portal"
+if [ $? -eq 0 ]; then
+    mv "/tmp/wifi-portal" "$SUDOERS_FILE"
+    chmod 440 "$SUDOERS_FILE"
+    echo "Updated sudoers file successfully"
 else
-    echo "Sudoers entry already exists"
+    rm -f "/tmp/wifi-portal"
+    echo "Failed to create valid sudoers file"
+    check_error "Invalid sudoers syntax"
 fi
 
 # Start the debug server

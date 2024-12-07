@@ -56,7 +56,7 @@ def is_connected():
     if is_running_on_pi():
         try:
             # Original RPI/Linux logic
-            result = subprocess.run(['nmcli', '-t', '-f', 'ACTIVE,SSID', 'dev', 'wifi'], capture_output=True, text=True)
+            result = subprocess.run(['sudo', 'nmcli', '-t', '-f', 'ACTIVE,SSID', 'dev', 'wifi'], capture_output=True, text=True)
             logger.info(f"nmcli output: {result.stdout}")
             return 'yes' in result.stdout
         except Exception as e:
@@ -88,7 +88,7 @@ def create_hotspot():
 
     if is_running_on_pi():
         try:
-            subprocess.run(['nmcli', 'dev', 'wifi', 'hotspot', 'ifname', 'wlan0', 'ssid', HOTSPOT_SSID, 'password', HOTSPOT_PASSWORD], check=True)
+            subprocess.run(['sudo', 'nmcli', 'dev', 'wifi', 'hotspot', 'ifname', 'wlan0', 'ssid', HOTSPOT_SSID, 'password', HOTSPOT_PASSWORD], check=True)
             logger.info(f"Hotspot '{HOTSPOT_SSID}' created.")
             setup_captive_portal()
         except subprocess.CalledProcessError as e:
@@ -119,7 +119,7 @@ def wifi_setup():
         password = request.form.get('password')
         if ssid and password:
             try:
-                subprocess.run(['nmcli', 'dev', 'wifi', 'connect', ssid, 'password', password], check=True)
+                subprocess.run(['sudo', 'nmcli', 'dev', 'wifi', 'connect', ssid, 'password', password], check=True)
                 logger.info(f"Connected to {ssid}. Restarting...")
                 # Clean up captive portal before reboot
                 cleanup_captive_portal()

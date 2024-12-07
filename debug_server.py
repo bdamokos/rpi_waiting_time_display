@@ -33,7 +33,18 @@ def safe_path(base_path: Path, filename: str) -> Path:
     """
     try:
         base_path = Path(base_path).resolve()
-        sanitized_filename = secure_filename(filename)
+        
+        # Explicit whitelist for allowed dotfiles
+        ALLOWED_DOTFILES = {'.env', '.env.example', '.env.backup'}
+        
+        # Check if it's a backup file with timestamp
+        is_backup = filename.startswith('.env.backup.') and filename[12:].isdigit()
+        
+        if filename in ALLOWED_DOTFILES or is_backup:
+            sanitized_filename = filename
+        else:
+            sanitized_filename = secure_filename(filename)
+            
         file_path = (base_path / sanitized_filename).resolve()
 
         # Check if the resolved path is within the base directory
@@ -264,23 +275,30 @@ def edit_env():
                 logger.error(f"Error parsing {file_path}: {e}")
             return env_vars
 
+        # Get available backup files
+        backup_files = sorted(backup_dir.glob('.env.backup.*'), 
+                            key=os.path.getmtime, reverse=True)
+        valid_restore_paths = {str(f) for f in backup_files}
+        # Add .env.example if it exists
+        if example_path.exists():
+            valid_restore_paths.add(str(example_path))
+
         # Handle POST requests for saving/restoring
         if request.method == 'POST':
             if 'restore' in request.form:
                 restore_file = request.form.get('restore_file')
-                if restore_file:
+                if restore_file and restore_file in valid_restore_paths:
                     try:
-                        # Validate restore file path
-                        restore_path = safe_path(base_dir, restore_file)
-                        if not restore_path.is_file():
-                            raise ValueError("Invalid restore file")
-                        
+                        restore_path = Path(restore_file)
                         shutil.copy(restore_path, env_path)
                         logger.info(f".env file restored from {restore_path}")
                         return redirect(url_for('edit_env'))
                     except Exception as e:
-                        logger.error(f"Error restoring .env file: {e}")
-                        return "Invalid restore file", 400
+                        logger.error(f"Error restoring .env file: {e}", exc_info=True)
+                        return "Error restoring file", 500
+                else:
+                    logger.warning(f"Invalid restore file attempted: {restore_file}")
+                    return "Invalid restore file", 400
 
             elif 'confirm_settings' in request.form:
                 current_vars = parse_env_file(env_path)

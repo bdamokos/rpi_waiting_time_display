@@ -631,6 +631,8 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
     Himage = Himage.rotate(90, expand=True)
     
     # Display the image
+    epd.init()
+    epd.Clear()
     buffer = epd.getbuffer(Himage)
     epd.display(buffer)
 

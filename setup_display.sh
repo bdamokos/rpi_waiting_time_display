@@ -109,7 +109,7 @@ touch "$BACKUP_MANIFEST"
 
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.12 (2024-12-07)"  # AUTO-INCREMENT
+echo "Version: 0.0.13 (2024-12-07)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -352,7 +352,7 @@ fi
 
 # Create sudoers entry to allow the script to be run without password
 SUDOERS_FILE="/etc/sudoers.d/wifi-portal"
-SUDOERS_LINE="$ACTUAL_USER ALL=(ALL) NOPASSWD: /usr/local/bin/wifi-portal-setup, /sbin/iptables -t nat -F, /bin/systemctl stop dnsmasq, /usr/bin/nmcli dev wifi hotspot ifname wlan0 ssid * password *, /usr/bin/nmcli device disconnect wlan0, /usr/bin/nmcli device connect wlan0"
+SUDOERS_LINE="$ACTUAL_USER ALL=(ALL) NOPASSWD: /usr/local/bin/wifi-portal-setup, /sbin/iptables -t nat -F, /bin/systemctl stop dnsmasq, /usr/bin/nmcli dev wifi hotspot ifname wlan0 ssid * password *, /usr/bin/nmcli device disconnect wlan0, /usr/bin/nmcli device connect wlan0, /usr/bin/nmcli -t -f ACTIVE,SSID dev wifi, /usr/bin/nmcli dev wifi connect * password *"
 if [ ! -f "$SUDOERS_FILE" ] || ! grep -q "^$SUDOERS_LINE" "$SUDOERS_FILE"; then
     echo "$SUDOERS_LINE" > "$SUDOERS_FILE"
     echo "Created sudoers entry with nmcli permissions"

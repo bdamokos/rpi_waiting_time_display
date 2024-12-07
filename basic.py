@@ -505,8 +505,19 @@ def update_display(epd, weather_data, bus_data, error_message=None, stop_name=No
 
 def draw_weather_display(epd, weather_data, last_weather_data=None):
     """Draw a weather-focused display when no bus times are available"""
+        # Handle different color definitions
+    BLACK = epd.BLACK
+    WHITE = epd.WHITE
+    RED = getattr(epd, 'RED', BLACK)  # Fall back to BLACK if RED not available
+    YELLOW = getattr(epd, 'YELLOW', BLACK)  # Fall back to BLACK if YELLOW not available
+
     # Create a new image with white background
-    Himage = Image.new('RGB', (epd.height, epd.width), epd.WHITE)  # 250x120 width x height
+    if epd.is_bw_display:
+        Himage = Image.new('1', (epd.height, epd.width), 1)  # 1 is white in 1-bit mode
+    else:
+        Himage = Image.new('RGB', (epd.height, epd.width), WHITE)
+
+ # 250x120 width x height
     draw = ImageDraw.Draw(Himage)
     
     try:
@@ -631,8 +642,6 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
     Himage = Himage.rotate(90, expand=True)
     
     # Display the image
-    epd.init()
-    epd.Clear()
     buffer = epd.getbuffer(Himage)
     epd.display(buffer)
 

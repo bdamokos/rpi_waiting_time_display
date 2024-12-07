@@ -238,7 +238,18 @@ def main():
 
 def show_no_wifi_display(epd):
     """Display a Wi-Fi QR code and no Wi-Fi symbol on the screen."""
-    Himage = Image.new('RGB', (epd.height, epd.width), epd.WHITE)
+    BLACK = epd.BLACK
+    WHITE = epd.WHITE
+    RED = getattr(epd, 'RED', BLACK)  # Fall back to BLACK if RED not available
+    YELLOW = getattr(epd, 'YELLOW', BLACK)  # Fall back to BLACK if YELLOW not available
+
+    # Create a new image with white background
+    if epd.is_bw_display:
+        Himage = Image.new('1', (epd.height, epd.width), 1)  # 1 is white in 1-bit mode
+    else:
+        Himage = Image.new('RGB', (epd.height, epd.width), WHITE)
+
+
     draw = ImageDraw.Draw(Himage)
     
     try:
@@ -303,7 +314,6 @@ def show_no_wifi_display(epd):
     Himage = Himage.rotate(90, expand=True)
     
     # Display the image
-    epd.init()
     buffer = epd.getbuffer(Himage)
     epd.display(buffer)
 

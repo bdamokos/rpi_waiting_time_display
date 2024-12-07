@@ -109,7 +109,7 @@ touch "$BACKUP_MANIFEST"
 
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.15 (2024-12-07)"  # AUTO-INCREMENT
+echo "Version: 0.0.16 (2024-12-07)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -392,6 +392,37 @@ else
     echo "Failed to create valid sudoers file"
     check_error "Invalid sudoers syntax"
 fi
+
+# Download noto font
+echo "Downloading Noto font..."
+#!/bin/bash
+
+# Create system font directory if it doesn't exist
+sudo mkdir -p /usr/local/share/fonts/noto
+
+# Check if font already exists
+if [ -f "/usr/local/share/fonts/noto/NotoEmoji-Regular.ttf" ]; then
+    echo "Noto Emoji font already installed."
+else
+    echo "Downloading Noto Emoji font..."
+    # Download the font
+    wget -O NotoEmoji-Regular.ttf "https://github.com/google/fonts/raw/414e7e29b4a2a96d24ed12ac33df156823c6c262/ofl/notoemoji/NotoEmoji%5Bwght%5D.ttf"
+
+    # Move it to the system fonts directory
+    sudo mv NotoEmoji-Regular.ttf /usr/local/share/fonts/noto/
+
+    # Set proper permissions
+    sudo chmod 644 /usr/local/share/fonts/noto/NotoEmoji-Regular.ttf
+
+    # Update font cache
+    sudo fc-cache -f -v
+
+    echo "Noto Emoji font installed successfully."
+fi
+
+# Verify installation
+echo "Verifying Noto font installation..."
+fc-list | grep -i noto
 
 # Start the debug server
 echo "Starting the debug server..."

@@ -109,7 +109,7 @@ touch "$BACKUP_MANIFEST"
 
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.10 (2024-12-07)"  # AUTO-INCREMENT
+echo "Version: 0.0.11 (2024-12-07)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -289,6 +289,19 @@ apt-get install -y dnsmasq
 # Enable IP forwarding
 echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
 sysctl -p
+
+# Setup network permissions
+echo "Setting up network permissions..."
+usermod -a -G netdev $ACTUAL_USER
+cat > /etc/polkit-1/localauthority/50-local.d/10-network-manager.pkla << EOF
+[Let users in netdev group modify NetworkManager]
+Identity=unix-group:netdev
+Action=org.freedesktop.NetworkManager.*
+ResultAny=yes
+ResultInactive=no
+ResultActive=yes
+EOF
+check_error "Failed to setup network permissions"
 
 # Create a script that can be called with sudo
 cat > /usr/local/bin/wifi-portal-setup << 'EOL'

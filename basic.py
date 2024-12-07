@@ -225,7 +225,7 @@ def get_weather_icon(icon_code, size, epd):
             return processed_icon
             
     except Exception as e:
-        logger.error(f"Error processing weather icon: {e}")
+        logger.error(f"Error processing weather icon: {e}\n{traceback.format_exc()}")
     return None
 
 def update_display(epd, weather_data, bus_data, error_message=None, stop_name=None, first_run=False):

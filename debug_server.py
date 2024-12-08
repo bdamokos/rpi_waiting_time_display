@@ -289,6 +289,10 @@ def edit_env():
         if request.method == 'POST':
             if 'restore' in request.form:
                 restore_file = request.form.get('restore_file')
+                # If it's just the filename, construct the full path
+                if restore_file == '.env.example':
+                    restore_file = str(example_path)
+                
                 if restore_file and restore_file in valid_restore_paths:
                     try:
                         restore_path = Path(restore_file)
@@ -299,7 +303,7 @@ def edit_env():
                         logger.error(f"Error restoring .env file: {e}", exc_info=True)
                         return "Error restoring file", 500
                 else:
-                    logger.warning(f"Invalid restore file attempted: {restore_file}", exc_info=True)
+                    logger.warning(f"Invalid restore file attempted: {restore_file}")
                     return "Invalid restore file", 400
 
             elif 'confirm_settings' in request.form:

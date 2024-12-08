@@ -86,26 +86,25 @@ def get_debug_display():
 
 @app.route('/debug/logs')
 def get_logs():
-    """Endpoint to stream the application logs"""
+    """Endpoint to stream systemd service logs"""
     try:
-        log_file = Path("logs/app.log")
-        if not log_file.exists():
-            return "Log file not found", 404
-
         def generate():
-            with open(log_file, 'r') as f:
-                # First, yield all existing content
-                yield f.read()
-                
-                # Then continue to stream new content
-                while True:
-                    line = f.readline()
-                    if line:
-                        yield line
-                    else:
-                        # No new lines, wait a bit
-                        import time
-                        time.sleep(1)
+            # Initial logs
+            import subprocess
+            process = subprocess.Popen(
+                ['journalctl', '-u', 'display.service', '-n', '1000', '-f'],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                universal_newlines=True
+            )
+            
+            while True:
+                line = process.stdout.readline()
+                if line:
+                    yield line
+                else:
+                    import time
+                    time.sleep(0.1)
 
         return Response(generate(), mimetype='text/plain')
     except Exception as e:

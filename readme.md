@@ -4,21 +4,24 @@ A Raspberry Pi project that displays bus waiting times using an e-Paper display 
 ![Display Example](docs/images/display_example.jpg)
 
 Features:
-- Current time
 - Weather conditions and temperature (including a weather mode when no bus is coming soon)
 
-    ![Weather Mode](docs/images/weather%20mode%20with%20dithered%20weather%20icons.png)
-- Next bus arrival times for configured lines
+    ![Weather Mode example, showing the current temperature, the time of the next sunset or sunrise, and forecast for the next 3 days (including today if we are before 10 pm), as well as weather condition icons and a QR code that leads to the debugging page of the display](docs/images/weather%20mode%20with%20dithered%20weather%20icons.png)
+- Next bus arrival times for configured lines (up to 2 lines at 1 stop)
+
+    ![Next bus arrival times - example with 1 monitored line (line 44 at Trois Couleurs, arriving in 1 and 21 minutes)](docs/images/stop_display_1line.png)
+
 - Color-coded bus line numbers matching STIB/MIVB official colors
 - If the Raspberry Pi is not connected to the internet, it will set up a hotspot and display a QR code to connect to it that allows you to connect the Pi to the internet
 
     ![No Wi-Fi - a hotspot has been set up](docs/images/no_wifi.png)
+- Debugging interface to check the data being displayed
 
-
+    ![Debugging interface](docs/images/debug_screen.png)
 # Requirements
-The server from https://github.com/bdamokos/brussels_transit is set up and is providing data for the stop we are interested in.
+The server from [my other repository](https://github.com/bdamokos/brussels_transit) is set up and is providing data for the stop we are interested in. It can run directly on the Raspberry Pi, or on a remote server. (You can choose between the two modes in the setup script.)
 
-An API key for OpenWeatherMap is required to get the weather data.
+An [API key for OpenWeatherMap](https://openweathermap.org/appid) is required to get the weather data. (Optional, without an API key, the weather will not be displayed.)
 
 ## Hardware
 Tested with:
@@ -35,11 +38,11 @@ Displays:
 - [Waveshare 2.13" e-Paper display](https://www.waveshare.com/2.13inch-e-paper-hat.htm) (black, white; partial refresh support; ~€20) - display driver set as epd2in13_V4 in the .env file[^2]
 - [Waveshare 2.13" e-Paper display with case](https://www.waveshare.com/2.13inch-Touch-e-Paper-HAT-with-case.htm) (black, white; partial refresh support; ~€20-€30) - display driver set as epd2in13_V4 in the .env file[^3]
 
-Total cost of components: ~€60
+Total cost of components: **~€60**
 
 Can be extended with:
--- Battery pack, e.g. Pisugar 3
--- Case, e.g. 3D printed case or the one that comes with the display
+- [Battery pack, e.g. Pisugar 3](https://www.amazon.com/dp/B07Z333333)
+- Case, e.g. 3D printed case or the one that comes with the display
 
 [^1]: The four colour version of the display does not support partial refresh, so it flickers with every refresh, making it less ideal for this application, despite the nice colours.
 [^2]: Good for our application, except it does not come with a case.

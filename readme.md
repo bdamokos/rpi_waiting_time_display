@@ -15,9 +15,9 @@ Features:
 - If the Raspberry Pi is not connected to the internet, it will set up a hotspot and display a QR code to connect to it that allows you to connect the Pi to the internet
 
     ![No Wi-Fi - a hotspot has been set up](docs/images/no_wifi.png)
-- Debugging interface to check the data being displayed
+- [Debugging interface](#debugging) to check the data being displayed
 
-    ![Debugging interface](docs/images/debug_screen.png)
+
 # Requirements
 The server from [my other repository](https://github.com/bdamokos/brussels_transit) is set up and is providing data for the stop we are interested in. It can run directly on the Raspberry Pi, or on a remote server. (You can choose between the two modes in the setup script.)
 
@@ -48,12 +48,23 @@ Can be extended with:
 [^2]: Good for our application, except it does not come with a case.
 [^3]: Best for our application so far, as it comes with a case (intended for laying face up on a table, with a cable sticking out the back). Different cases for a vertical orientation would be better.
 # Configuration
-![.env file](docs/images/nano_env.png)
+
+You can configure the display by editing the .env file directly, or by using the web interface that starts when you run the setup script.
+
+![.env file edited using nano](docs/images/nano_env.png)
 The .env file is used to configure the application:
 - Add your openweather API key
 - Input your location
 - Configure the monitored transit stops (see readme at the [backend server](https://github.com/bdamokos/brussels_transit) on how to find stop IDs)
 - Configure your display model
+
+For manual editing:
+``` bash
+nano ~/display_programme/.env
+```
+For the web interface (assuming default host name _raspberrypi.local_): http://raspberrypi.local:5002/debug/env
+
+
 
 # Setting up the Raspberry Pi
 See [docs/setting up the Rpi.md](docs/setting%20up%20the%20Rpi.md)
@@ -69,4 +80,4 @@ sudo ./uninstall_display.sh
 ## Debugging
 To enable debugging, set the debug_port_enabled=true in the .env which will start a flask server on the port specified in debug_port. Access it at http://raspberrypi.local:5002/debug (or the IP address of the Raspberry Pi if you are not on the same network, and the port specified in debug_port).
 
-
+![Debugging interface](docs/images/debug_screen.png)

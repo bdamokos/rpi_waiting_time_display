@@ -3,7 +3,7 @@
 # Script to switch between Docker and normal versions of the display service
 # To make it executable, run:
 # chmod +x switch_display_mode.sh
-# Usage: ./switch_display_mode.sh [docker|normal]
+# Usage: ./switch_display_mode.sh [docker|normal|remote]
 
 echo "----------------------------------------"
 echo "Switching display mode script"
@@ -19,8 +19,8 @@ SCRIPT_PATH="$HOME/start_display.sh"
 
 # Function to show usage
 show_usage() {
-    echo "Usage: $0 [docker|normal]"
-    echo "Switches the display service between Docker and normal mode"
+    echo "Usage: $0 [docker|normal|remote]"
+    echo "Switches the display service between Docker, normal, and remote server mode"
     exit 1
 }
 
@@ -36,15 +36,23 @@ switch_mode() {
     local service_source=""
     local script_source=""
     
-    if [ "$mode" = "docker" ]; then
-        service_source="$DISPLAY_PROGRAMME_PATH/docs/service/display.service.docker.example"
-        script_source="$DISPLAY_PROGRAMME_PATH/docs/service/start_display.sh.docker.example"
-        echo "Switching to Docker mode..."
-    else
-        service_source="$DISPLAY_PROGRAMME_PATH/docs/service/display.service.example"
-        script_source="$DISPLAY_PROGRAMME_PATH/docs/service/start_display.sh.example"
-        echo "Switching to normal mode..."
-    fi
+    case "$mode" in
+        docker)
+            service_source="$DISPLAY_PROGRAMME_PATH/docs/service/display.service.docker.example"
+            script_source="$DISPLAY_PROGRAMME_PATH/docs/service/start_display.sh.docker.example"
+            echo "Switching to Docker mode..."
+            ;;
+        remote)
+            service_source="$DISPLAY_PROGRAMME_PATH/docs/service/display.service.remote_server.example"
+            script_source="$DISPLAY_PROGRAMME_PATH/docs/service/start_display.sh.remote_server.example"
+            echo "Switching to remote server mode..."
+            ;;
+        *)
+            service_source="$DISPLAY_PROGRAMME_PATH/docs/service/display.service.example"
+            script_source="$DISPLAY_PROGRAMME_PATH/docs/service/start_display.sh.example"
+            echo "Switching to normal mode..."
+            ;;
+    esac
 
     # Copy service file
     echo "Updating service file..."
@@ -74,7 +82,7 @@ if [ "$#" -ne 1 ]; then
 fi
 
 case "$1" in
-    docker|normal)
+    docker|normal|remote)
         stop_service
         switch_mode "$1"
         ;;

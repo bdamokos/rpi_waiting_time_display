@@ -1,0 +1,125 @@
+#!/bin/bash
+
+# Example startup script for the display service
+# Copy this file to ~/start_display.sh and make it executable with:
+# cp start_display.sh.example ~/start_display.sh
+# chmod +x ~/start_display.sh
+echo "----------------------------------------"
+echo "Starting display service service script"
+echo "Version: 0.0.0 (2024-12-06)"  # AUTO-INCREMENT
+echo "----------------------------------------"
+echo "MIT License - Copyright (c) 2024 Bence Damokos"
+echo "----------------------------------------"
+
+# Sleep for 10 seconds to allow for network to be ready
+sleep 10
+
+# Step 1: Update display_programme first
+echo "----------------------------------------"
+cd ~/display_programme
+echo "Updating display_programme from git..."
+git fetch -v origin main
+git reset --hard origin/main
+git pull -v origin main
+echo "Display programme updated."
+echo "----------------------------------------"
+
+# Step 2: Check and update startup script if needed
+echo "Checking and updating startup script..."
+if [ -f ~/display_programme/docs/service/start_display.sh.remote_server.example ] && \
+   ! cmp -s ~/display_programme/docs/service/start_display.sh.remote_server.example ~/start_display.sh; then
+    echo "Updating start_display.sh script..."
+    cp ~/display_programme/docs/service/start_display.sh.remote_server.example ~/start_display.sh.new
+    chmod +x ~/start_display.sh.new
+    mv ~/start_display.sh.new ~/start_display.sh
+    echo "Script updated. Please restart the service."
+    echo "Exiting with status 0 - script update completed successfully"
+    systemd-notify --status="Script updated successfully. Service restart required."
+    exit 0
+fi
+echo "Startup script is up to date."
+echo "----------------------------------------"
+
+
+echo "Activating virtual environment..."
+# Step 3: Activate virtual environment
+source ~/display_env/bin/activate
+echo "Virtual environment activated."
+echo "----------------------------------------"
+
+# Step 4: Install requirements if changed
+echo "Checking display_programme requirements..."
+cd ~/display_programme
+if [ ! -f ~/.display_requirements_version ] || \
+   ! grep -q "$(grep "^# Version: " requirements.txt)" ~/.display_requirements_version; then
+    echo "Requirements changed, installing..."
+    pip install -r requirements.txt
+    grep "^# Version: " requirements.txt > ~/.display_requirements_version
+    echo "Requirements installed."
+else
+    echo "Requirements unchanged, skipping installation."
+fi
+
+
+echo "----------------------------------------"
+
+# Store PIDs for cleanup
+DISPLAY_PID=""
+
+# Function to clean up on exit
+cleanup() {
+    echo "Cleaning up..."
+    
+    # If display program is running, send SIGTERM to allow for clean shutdown
+    if [ ! -z "$DISPLAY_PID" ]; then
+        echo "Stopping display program..."
+        kill $DISPLAY_PID
+        # Wait for display program to cleanup
+        wait $DISPLAY_PID
+    fi
+    
+    exit 0
+}
+
+# Trap SIGTERM and SIGINT
+trap cleanup SIGTERM SIGINT
+
+# Add this function before starting the display program
+check_backend() {
+    local base_url=$(grep "^BUS_API_URL=" $HOME/display_programme/.env | cut -d '=' -f2)
+    # Remove any trailing slash and add /health
+    base_url="${base_url%/}"
+    local health_url="${base_url}/health"
+    echo "Checking backend server at: $health_url"
+    for i in {1..12}; do  # Try for 1 minute (5s * 12)
+        if curl -s "$health_url" > /dev/null; then
+            echo "Backend server is available."
+            return 0
+        fi
+        echo "Backend not ready, waiting 5 seconds..."
+        sleep 5
+    done
+    echo "Backend server not available after 1 minute"
+    return 1
+}
+
+# Instead of starting the backend server, check if remote server is available
+echo "Checking remote backend server..."
+if ! check_backend; then
+    echo "Failed to connect to remote backend server. Please check your .env configuration."
+    exit 1
+fi
+
+# Start the display program
+cd ~/display_programme
+echo "Starting display program..."
+python basic.py &
+DISPLAY_PID=$!
+echo "Display program started."
+echo "----------------------------------------"
+
+# Wait for display program to exit
+wait $DISPLAY_PID
+
+# Execute cleanup
+cleanup

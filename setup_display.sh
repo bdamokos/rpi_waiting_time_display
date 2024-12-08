@@ -103,6 +103,61 @@ cleanup() {
     echo "----------------------------------------"
 }
 
+# Function to clone a repository if it doesn't exist
+clone_repository() {
+    local repo_name="$1"
+    local target_dir="$2"  # Optional parameter for target directory name
+    local repo_path="$ACTUAL_HOME/$repo_name"
+    
+    # If target_dir is provided, use it instead of repo_name for the path
+    if [ ! -z "$target_dir" ]; then
+        repo_path="$ACTUAL_HOME/$target_dir"
+    fi
+    
+    if [ ! -d "$repo_path" ]; then
+        echo "Cloning $repo_name repository..."
+        cd "$ACTUAL_HOME"
+        su - "$ACTUAL_USER" -c "gh repo clone bdamokos/$repo_name $target_dir"
+        check_error "Failed to clone $repo_name"
+    else
+        echo "$repo_name repository already exists"
+    fi
+}
+
+# Function to setup service files with correct user and paths
+setup_service_files() {
+    local mode="$1"
+    local service_source=""
+    local script_source=""
+    
+    case "$mode" in
+        docker)
+            service_source="display.service.docker.example"
+            script_source="start_display.sh.docker.example"
+            ;;
+        remote)
+            service_source="display.service.remote_server.example"
+            script_source="start_display.sh.remote_server.example"
+            ;;
+        *)
+            service_source="display.service.example"
+            script_source="start_display.sh.example"
+            ;;
+    esac
+    
+    echo "Setting up service files for $mode mode..."
+    
+    # Copy and modify service file
+    sed -e "s|User=pi|User=$ACTUAL_USER|g" \
+        -e "s|/home/pi|$ACTUAL_HOME|g" \
+        "$ACTUAL_HOME/display_programme/docs/service/$service_source" > "/etc/systemd/system/display.service"
+    check_error "Failed to setup service file"
+    
+    # Copy start script
+    su - "$ACTUAL_USER" -c "cp '$ACTUAL_HOME/display_programme/docs/service/$script_source' '$ACTUAL_HOME/start_display.sh'"
+    check_error "Failed to copy start script"
+}
+
 # Create backup directory
 mkdir -p "$BACKUP_DIR"
 touch "$BACKUP_MANIFEST"
@@ -198,11 +253,8 @@ check_error "Failed to login to GitHub"
 # Clone repositories
 echo "Cloning repositories..."
 cd $ACTUAL_HOME
-su - $ACTUAL_USER -c "gh repo clone bdamokos/rpi_waiting_time_display display_programme"
+clone_repository "rpi_waiting_time_display" "display_programme"
 check_error "Failed to clone display programme"
-
-su - $ACTUAL_USER -c "gh repo clone bdamokos/brussels_transit"
-check_error "Failed to clone brussels transit"
 
 # Setup virtual environment
 echo "Setting up virtual environment..."
@@ -236,31 +288,51 @@ su - $ACTUAL_USER -c "chmod +x $ACTUAL_HOME/display_programme/docs/service/setup
 su - $ACTUAL_USER -c "chmod +x $ACTUAL_HOME/display_programme/docs/service/switch_display_mode.sh"
 su - $ACTUAL_USER -c "chmod +x $ACTUAL_HOME/display_programme/docs/service/uninstall_display.sh"
 
-# Copy and modify service file
-sed -e "s|User=pi|User=$ACTUAL_USER|g" \
-    -e "s|/home/pi|$ACTUAL_HOME|g" \
-    $ACTUAL_HOME/display_programme/docs/service/display.service.example > /etc/systemd/system/display.service
-check_error "Failed to setup service file"
-
 # Copy and setup scripts
 su - $ACTUAL_USER -c "cp $ACTUAL_HOME/display_programme/docs/service/switch_display_mode.sh $ACTUAL_HOME/switch_display_mode.sh"
 su - $ACTUAL_USER -c "chmod +x $ACTUAL_HOME/switch_display_mode.sh"
 
-# Ask user which mode they want to use
-if confirm "Would you like to use Docker mode? (No for normal mode)"; then
-    echo "Setting up Docker mode..."
-    # Install Docker if not present
-    if ! command -v docker &> /dev/null; then
-        curl -fsSL https://get.docker.com -o get-docker.sh
-        sh get-docker.sh
-        usermod -aG docker $ACTUAL_USER
-        check_error "Failed to install Docker"
-    fi
-    su - $ACTUAL_USER -c "cp $ACTUAL_HOME/display_programme/docs/service/start_display.sh.docker.example $ACTUAL_HOME/start_display.sh"
-else
-    echo "Setting up normal mode..."
-    su - $ACTUAL_USER -c "cp $ACTUAL_HOME/display_programme/docs/service/start_display.sh.example $ACTUAL_HOME/start_display.sh"
-fi
+# Replace the Docker mode question with a mode selection menu
+echo "Please select setup mode:"
+echo "1) Normal mode (local backend)"
+echo "2) Docker mode (containerized backend)"
+echo "3) Remote server mode (external backend)"
+read -p "Enter your choice (1-3): " mode_choice
+
+case $mode_choice in
+    1)
+        echo "Setting up normal mode..."
+        clone_repository "brussels_transit" ""
+        setup_service_files "normal"
+        ;;
+    2)
+        echo "Setting up Docker mode..."
+        clone_repository "brussels_transit" ""
+        setup_service_files "docker"
+        # Install Docker if not present
+        if ! command -v docker &> /dev/null; then
+            curl -fsSL https://get.docker.com -o get-docker.sh
+            sh get-docker.sh
+            usermod -aG docker $ACTUAL_USER
+            check_error "Failed to install Docker"
+        fi
+        ;;
+    3)
+        echo "Setting up remote server mode..."
+        echo "----------------------------------------"
+        echo "Remote server mode selected. You will need to:"
+        echo "1. Set up your remote backend server"
+        echo "2. Edit your .env file to set BUS_API_URL to point to your remote server"
+        echo "   For example: BUS_API_URL=https://your-server:5001"
+        echo "----------------------------------------"
+        setup_service_files "remote"
+        ;;
+    *)
+        echo "Invalid choice. Defaulting to normal mode..."
+        clone_repository "brussels_transit" ""
+        setup_service_files "normal"
+        ;;
+esac
 
 su - $ACTUAL_USER -c "chmod +x $ACTUAL_HOME/start_display.sh"
 

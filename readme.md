@@ -24,7 +24,7 @@ The server from [my other repository](https://github.com/bdamokos/brussels_trans
 An [API key for OpenWeatherMap](https://openweathermap.org/appid) is required to get the weather data. (Optional, without an API key, the weather will not be displayed.)
 
 ## Hardware
-Tested with:
+This project has been tested with the hardware listed below. It should work with more powerful Raspberry Pi models. Different displays may require changes to the display code
 
 Systems:
 - [Raspberry Pi Zero 2W](https://www.raspberrypi.com/products/raspberry-pi-zero-2-w/)
@@ -51,10 +51,10 @@ Can be extended with:
 
 You can configure the display by editing the .env file directly, or by using the web interface that starts when you run the setup script.
 
-![.env file edited using nano](docs/images/nano_env.png)
+![Web interface for editing the .env file](docs/images/edit_env.png)
 The .env file is used to configure the application:
 - Add your openweather API key
-- Input your location
+- Input your location (coordinates can be found on openstreetmap.org - right click your location and select "Show address")
 - Configure the monitored transit stops (see readme at the [backend server](https://github.com/bdamokos/brussels_transit) on how to find stop IDs)
 - Configure your display model
 
@@ -62,6 +62,7 @@ For manual editing:
 ``` bash
 nano ~/display_programme/.env
 ```
+![.env file edited using nano](docs/images/nano_env.png)
 For the web interface (assuming default host name _raspberrypi.local_): http://raspberrypi.local:5002/debug/env
 
 
@@ -78,6 +79,8 @@ sudo ./uninstall_display.sh
 ```
 
 ## Debugging
-To enable debugging, set the debug_port_enabled=true in the .env which will start a flask server on the port specified in debug_port. Access it at http://raspberrypi.local:5002/debug (or the IP address of the Raspberry Pi if you are not on the same network, and the port specified in debug_port).
+To enable debugging, set the debug_port_enabled=true in the .env (this is the default setting). This will start a flask server on the port specified in debug_port (5002 by default).
+ 
+ Access the debug server at http://raspberrypi.local:5002/debug (or the host name of the Raspberry Pi if you have changed it, and the port specified in debug_port). The debug server is only accessible on the local network.
 
 ![Debugging interface](docs/images/debug_screen.png)

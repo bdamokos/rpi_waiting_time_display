@@ -14,6 +14,21 @@ Under settings:
 - Input WiFi network name and password
 - Check the hostname (default is raspberrypi.local)
 
+# Hardware setup
+
+The hardware setup is quite straightforward:
+- If you have a case, follow the instructions in the case's documentation. With the case I had, this included:
+    - Adding a thermal pad to the bottom of the case
+    - Screwing the Raspberry Pi into the case with 4 screws
+
+    ![Raspberry Pi inserted into the bottom of the case, held in place by up to 4 screws (3 shown in the image)](images/hardware_setup_insert_screen_into_case.jpeg)
+
+    - Removing the film from the back of the screen and sticking it to the top of the case
+    - Carefully aligning the pin sockets on the display with the pins on the Raspberry Pi and firmly pressing them together
+    - Plugging in the display to either USB-C (with the adapter) or micro-USB (important, that one USB port is for power only, the second for data, this is marked on the case)
+- Without a case, you just need to press the display into the Raspberry Pi, making sure that you seat the screen firmly onto the pins (the bottom of the display's board should more or less touch the top of the Raspberry Pi's board).
+
+
 # Get the Raspberry Pi assembled and powered on
 
 Once the Raspberry Pi is assembled and powered on, connect to it with SSH.

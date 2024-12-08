@@ -283,6 +283,7 @@ def edit_env():
         # Add .env.example if it exists
         if example_path.exists():
             valid_restore_paths.add(str(example_path))
+            logger.info(f"Added .env.example to valid restore paths: {valid_restore_paths}")
 
         # Handle POST requests for saving/restoring
         if request.method == 'POST':
@@ -298,7 +299,7 @@ def edit_env():
                         logger.error(f"Error restoring .env file: {e}", exc_info=True)
                         return "Error restoring file", 500
                 else:
-                    logger.warning(f"Invalid restore file attempted: {restore_file}")
+                    logger.warning(f"Invalid restore file attempted: {restore_file}", exc_info=True)
                     return "Invalid restore file", 400
 
             elif 'confirm_settings' in request.form:

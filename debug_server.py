@@ -183,7 +183,7 @@ def debug_index():
                 <h2>⚠️ Danger Zone</h2>
                 <p>Use these controls with caution:</p>
                 <button class="danger-button" onclick="restartService()">
-                    {'I am happy with my initial settings, restart my Pi' if show_confirm_button else 'Restart Display Service'}
+                    Restart the display service
                 </button>
             </div>
 

@@ -16,6 +16,8 @@ echo "----------------------------------------"
 DISPLAY_PROGRAMME_PATH="$HOME/display_programme"
 SERVICE_PATH="/etc/systemd/system/display.service"
 SCRIPT_PATH="$HOME/start_display.sh"
+ACTUAL_USER=$(whoami)
+ACTUAL_HOME="$HOME"
 
 # Function to show usage
 show_usage() {
@@ -54,9 +56,11 @@ switch_mode() {
             ;;
     esac
 
-    # Copy service file
+    # Copy and modify service file
     echo "Updating service file..."
-    sudo cp "$service_source" "$SERVICE_PATH"
+    sudo sed -e "s|User=pi|User=$ACTUAL_USER|g" \
+        -e "s|/home/pi|$ACTUAL_HOME|g" \
+        "$service_source" > "$SERVICE_PATH"
     
     # Copy and make executable the start script
     echo "Updating start script..."

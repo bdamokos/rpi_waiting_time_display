@@ -487,6 +487,12 @@ def edit_env():
     except Exception as e:
         logger.error(f"Error in edit_env: {e}")
         return "Internal server error", 500
+    
+@app.route('/favicon.ico')
+def favicon():
+    """Return 204 No Content for favicon requests"""
+    return '', 204
+
 
 def start_debug_server():
     """Start the debug server if enabled"""
@@ -505,6 +511,8 @@ def start_debug_server():
     server_thread = threading.Thread(target=run_server, daemon=True)
     server_thread.start()
     logger.info("Debug server started in background thread")
+
+
 
 if __name__ == "__main__":
     # When run directly, start the server regardless of DEBUG_ENABLED setting

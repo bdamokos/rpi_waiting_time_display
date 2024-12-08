@@ -182,7 +182,9 @@ def debug_index():
             <div class="danger-zone">
                 <h2>⚠️ Danger Zone</h2>
                 <p>Use these controls with caution:</p>
-                <button class="danger-button" onclick="restartService()">Restart Display Service</button>
+                <button class="danger-button" onclick="restartService()">
+                    {'I am happy with my initial settings, restart my Pi' if show_confirm_button else 'Restart Display Service'}
+                </button>
             </div>
 
             <script>
@@ -313,7 +315,7 @@ def edit_env():
                         logger.error(f"Error updating .env file: {e}")
                         return "Error updating settings", 500
                 else:
-                    return redirect(url_for('restart_service'))
+                    return restart_service()
 
             else:
                 # Save the updated .env content

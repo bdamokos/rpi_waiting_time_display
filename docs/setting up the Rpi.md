@@ -25,8 +25,11 @@ The hardware setup is quite straightforward:
 
     - Removing the film from the back of the screen and sticking it to the top of the case
     - Carefully aligning the pin sockets on the display with the pins on the Raspberry Pi and firmly pressing them together
+    - Plug in the microSD card
     - Plugging in the display to either USB-C (with the adapter) or micro-USB (important, that one USB port is for power only, the second for data, this is marked on the case)
-- Without a case, you just need to press the display into the Raspberry Pi, making sure that you seat the screen firmly onto the pins (the bottom of the display's board should more or less touch the top of the Raspberry Pi's board).
+![Raspberry Pi side view with power plugged in to the correct port](images/hardware_setup_finished_side.png)
+
+- Without a case, you just need to press the display into the Raspberry Pi, making sure that you seat the screen firmly onto the pins (the bottom of the display's board should more or less touch the top of the Raspberry Pi's board), and plug in the microSD card.
 
 
 # Get the Raspberry Pi assembled and powered on
@@ -64,6 +67,8 @@ The script will:
 After running the script, you only need to:
 1. Edit your .env file with your settings (the script will start a web interface to help you with that)
 2. Reboot the Raspberry Pi (the script will also do that for you)
+
+![Assembled and configured display](images/hardware_setup_finished_top.png)
 
 # Setting up the backend server
 :warning: **Important:** The backend server needs to be set up for the display to work (otherwise the display will only display the weather). See the [backend server readme](https://github.com/bdamokos/brussels_transit) for more information. If the API keys are not configured, the service will not start.

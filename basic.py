@@ -758,7 +758,7 @@ def main():
                         update_display(epd, weather_data['current'], valid_bus_data, error_message, stop_name)
                     else:
                         weather_data = None
-                        update_display(epd, valid_bus_data, weather_data, error_message, stop_name)
+                        update_display(epd, weather_data, valid_bus_data, error_message, stop_name)
                     wait_time = DISPLAY_REFRESH_INTERVAL if not error_message else DISPLAY_REFRESH_MINIMAL_TIME
                     update_count += 1
                 elif weather_enabled:

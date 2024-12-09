@@ -64,7 +64,7 @@ DISPLAY_SCREEN_ROTATION = int(os.getenv('screen_rotation', 90))
 COORDINATES_LAT = float(os.getenv('COORDINATES_LAT', 48.1373))
 COORDINATES_LNG = float(os.getenv('COORDINATES_LNG', 11.5755))
 flights_enabled = True if os.getenv('flights_enabled', 'false').lower() == 'true' else False
-
+flight_check_interval = int(os.getenv('flight_check_interval', 10))
 if not weather_enabled:
     logger.warning("Weather is not enabled, weather data will not be displayed. Please set OPENWEATHER_API_KEY in .env to enable it.")
 
@@ -660,7 +660,7 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
     buffer = epd.getbuffer(Himage)
     epd.display(buffer)
 
-def check_flights_and_update_display(epd, get_flights):
+def check_flights_and_update_display(epd, get_flights, flight_check_interval=10):
     """Check for flights within 3 km and update the display if any are found."""
     while True:
         flights_within_3km = get_flights()
@@ -670,7 +670,7 @@ def check_flights_and_update_display(epd, get_flights):
             # You can customize this part to display flight details as needed
             update_display_with_flights(epd, flights_within_3km)
         
-        time.sleep(10)  # Check every 10 seconds
+        time.sleep(flight_check_interval)  # Check every 10 seconds
 
 def update_display_with_flights(epd, flights):
     """Update the display with flight information."""
@@ -767,7 +767,7 @@ def main():
             get_flights = gather_flights_within_radius(COORDINATES_LAT, COORDINATES_LNG, 20, 3)
             logger.debug(f"Flights within 10 km: {get_flights}")
             # Start flight checking in a separate thread
-            threading.Thread(target=check_flights_and_update_display, args=(epd, get_flights), daemon=True).start()
+            threading.Thread(target=check_flights_and_update_display, args=(epd, get_flights, flight_check_interval), daemon=True).start()
         
         # Counter for full refresh every hour
         update_count = 0

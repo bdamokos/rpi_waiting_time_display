@@ -788,7 +788,7 @@ def main():
                 time.sleep(wait_time)
                 
             except Exception as e:
-                logger.error(f"Error in main loop: {e}")
+                logger.error(f"Error in main loop: {e}", exc_info=True)
                 time.sleep(10)
                 continue
             

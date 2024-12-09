@@ -232,7 +232,7 @@ def main():
         logger.info("Shutting down...")
         cleanup_captive_portal()
     except Exception as e:
-        logger.error(f"Error in main loop: {e}")
+        logger.error(f"Error in main loop of wifi_manager.py: {e}", exc_info=True)
     finally:
         cleanup_captive_portal()
 

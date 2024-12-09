@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 dotenv.load_dotenv(override=True)
 app = Flask(__name__)
 HOTSPOT_ENABLED = os.getenv('hotspot_enabled', 'true').lower() == 'true'
-DISPLAY_SCREEN_ROTATION = os.getenv('screen_rotation', 90)
+DISPLAY_SCREEN_ROTATION = int(os.getenv('screen_rotation', 90))
 
 def get_hostname():
     """Get the Pi's hostname with .local suffix."""

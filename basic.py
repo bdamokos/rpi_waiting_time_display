@@ -57,7 +57,7 @@ hostname = get_hostname()
 HOTSPOT_SSID = os.getenv('hotspot_ssid', f'PiHotspot-{hostname}')
 HOTSPOT_PASSWORD = os.getenv('hotspot_password', 'YourPassword')
 
-DISPLAY_SCREEN_ROTATION = os.getenv('screen_rotation', 90)
+DISPLAY_SCREEN_ROTATION = int(os.getenv('screen_rotation', 90))
 
 if not weather_enabled:
     logger.warning("Weather is not enabled, weather data will not be displayed. Please set OPENWEATHER_API_KEY in .env to enable it.")

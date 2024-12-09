@@ -21,6 +21,8 @@ import traceback
 from debug_server import start_debug_server
 from wifi_manager import is_connected, show_no_wifi_display, get_hostname
 import subprocess
+import threading
+from flights import gather_flights_within_radius
 
 logger = logging.getLogger(__name__)
 # Set logging level for PIL.PngImagePlugin and urllib3.connectionpool to warning
@@ -58,6 +60,10 @@ HOTSPOT_SSID = os.getenv('hotspot_ssid', f'PiHotspot-{hostname}')
 HOTSPOT_PASSWORD = os.getenv('hotspot_password', 'YourPassword')
 
 DISPLAY_SCREEN_ROTATION = int(os.getenv('screen_rotation', 90))
+
+COORDINATES_LAT = float(os.getenv('COORDINATES_LAT', 48.1373))
+COORDINATES_LNG = float(os.getenv('COORDINATES_LNG', 11.5755))
+flights_enabled = True if os.getenv('flights_enabled', 'false').lower() == 'true' else False
 
 if not weather_enabled:
     logger.warning("Weather is not enabled, weather data will not be displayed. Please set OPENWEATHER_API_KEY in .env to enable it.")
@@ -654,6 +660,54 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
     buffer = epd.getbuffer(Himage)
     epd.display(buffer)
 
+def check_flights_and_update_display(epd, get_flights):
+    """Check for flights within 3 km and update the display if any are found."""
+    while True:
+        flights_within_3km = get_flights()
+        if flights_within_3km:
+            logger.info(f"Flights within 3 km: {len(flights_within_3km)}")
+            # Update the display with flight information
+            # You can customize this part to display flight details as needed
+            update_display_with_flights(epd, flights_within_3km)
+        
+        time.sleep(10)  # Check every 10 seconds
+
+def update_display_with_flights(epd, flights):
+    """Update the display with flight information."""
+    # Create a new image with mode 'RGB'
+    width = epd.height  # Account for rotation
+    height = epd.width
+    if epd.is_bw_display:
+        Himage = Image.new('1', (width, height), 1)  # 1 is white in 1-bit mode
+    else:
+        Himage = Image.new('RGB', (width, height), 'white')
+    draw = ImageDraw.Draw(Himage)
+
+    # Load fonts
+    font_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'fonts/DejaVuSans.ttf')
+    font = ImageFont.truetype(font_path, 14)
+
+    # Flight icon (using text-based icon since we can't load image files)
+    flight_icon = "✈"
+    MARGIN = 10
+    y_position = MARGIN
+    
+    for flight in flights:
+        # Draw flight icon
+        draw.text((MARGIN, y_position), flight_icon, font=font, fill=epd.BLACK)
+        
+        # Draw flight callsign and distance
+        text = f"{flight['callsign']} - {flight['last_distance']:.1f}km"
+        draw.text((MARGIN + 40, y_position), text, font=font, fill=epd.BLACK)
+        
+        y_position += 30  # Space for next flight
+
+    # Rotate image for display
+    Himage = Himage.rotate(DISPLAY_SCREEN_ROTATION, expand=True)
+    
+    # Display the image
+    buffer = epd.getbuffer(Himage)
+    epd.display(buffer)
 
 def main():
     epd = None
@@ -707,6 +761,13 @@ def main():
         # Initialize services
         weather = WeatherService() if weather_enabled else None
         bus = BusService()
+        
+        # Initialize flight monitoring
+        if flights_enabled:
+            get_flights = gather_flights_within_radius(COORDINATES_LAT, COORDINATES_LNG, 20, 3)
+            logger.debug(f"Flights within 10 km: {get_flights}")
+            # Start flight checking in a separate thread
+            threading.Thread(target=check_flights_and_update_display, args=(epd, get_flights), daemon=True).start()
         
         # Counter for full refresh every hour
         update_count = 0

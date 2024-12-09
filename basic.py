@@ -449,8 +449,8 @@ def update_display(epd, weather_data=None, bus_data=None, error_message=None, st
                 time_bbox = draw.textbbox((0, 0), time_text, font=font_medium)
                 time_text_width = time_bbox[2] - time_bbox[0]
                 time_width = time_text_width + emoji_width
-                draw.text((x_pos + MARGIN, y_pos), emoji_text, font=emoji_font_medium, fill=BLACK)
-                draw.text((x_pos + MARGIN + emoji_width, y_pos), time_text, font=font_medium, fill=BLACK)
+                draw.text((x_pos + MARGIN - 2, y_pos + 2), emoji_text, font=emoji_font_medium, fill=BLACK)
+                draw.text((x_pos + MARGIN + emoji_width, y_pos ), time_text, font=font_medium, fill=BLACK)
             else:
                 draw.text((x_pos + MARGIN, y_pos), time, font=font_medium, fill=BLACK)
 

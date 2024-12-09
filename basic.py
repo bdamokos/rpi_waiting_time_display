@@ -249,7 +249,7 @@ def get_weather_icon(icon_code, size, epd):
         logger.error(f"Error processing weather icon: {e}\n{traceback.format_exc()}")
     return None
 
-def update_display(epd, weather_data, bus_data, error_message=None, stop_name=None, first_run=False):
+def update_display(epd, weather_data=None, bus_data=None, error_message=None, stop_name=None, first_run=False):
     """Update the display with new weather data"""
     MARGIN = 8
 
@@ -285,18 +285,20 @@ def update_display(epd, weather_data, bus_data, error_message=None, stop_name=No
         emoji_font = font_small
         emoji_font_medium = font_medium
         logger.warning(f"No Noto Emoji font found, using {emoji_font.getname()} instead.")
-
-    weather_icon = WEATHER_ICONS.get(weather_data['description'], '')
-    logger.debug(f"Weather icon: {weather_icon}, description: {weather_data['description']}, font: {emoji_font.getname()}")
-    temp_text = f"{weather_data['temperature']}°"
-    
-    weather_text = f"{temp_text}"
-    weather_icon_bbox = draw.textbbox((0, 0), weather_icon, font=emoji_font)
-    weather_icon_width = weather_icon_bbox[2] - weather_icon_bbox[0]
-    weather_bbox = draw.textbbox((0, 0), weather_text, font=font_small)
-    weather_text_width = weather_bbox[2] - weather_bbox[0]
-    weather_width = weather_text_width + weather_icon_width
+    if not weather_enabled:
+        weather_data = None
+        logger.warning("Weather is not enabled, weather data will not be displayed. Do not forget to set OPENWEATHER_API_KEY in .env to enable it.")
     if weather_enabled:
+        weather_icon = WEATHER_ICONS.get(weather_data['description'], '')
+        logger.debug(f"Weather icon: {weather_icon}, description: {weather_data['description']}, font: {emoji_font.getname()}")
+        temp_text = f"{weather_data['temperature']}°"
+        
+        weather_text = f"{temp_text}"
+        weather_icon_bbox = draw.textbbox((0, 0), weather_icon, font=emoji_font)
+        weather_icon_width = weather_icon_bbox[2] - weather_icon_bbox[0]
+        weather_bbox = draw.textbbox((0, 0), weather_text, font=font_small)
+        weather_text_width = weather_bbox[2] - weather_bbox[0]
+        weather_width = weather_text_width + weather_icon_width
         draw.text((Himage.width - weather_width - weather_icon_width - MARGIN, MARGIN), weather_icon, font=emoji_font, fill=BLACK)
         draw.text((Himage.width - weather_width - MARGIN, MARGIN), weather_text, font=font_small, fill=BLACK)
     stop_name_height = 0

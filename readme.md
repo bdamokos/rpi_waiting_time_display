@@ -84,3 +84,11 @@ To enable debugging, set the debug_port_enabled=true in the .env (this is the de
  Access the debug server at http://raspberrypi.local:5002/debug (or the host name of the Raspberry Pi if you have changed it, and the port specified in debug_port). The debug server is only accessible on the local network.
 
 ![Debugging interface](docs/images/debug_screen.png)
+
+# Inspiration and similar projects
+- A video ad STIB made for their mobile app
+
+[![The advice of STIB ad](https://img.youtube.com/vi/scZsaJL7S8U/0.jpg)](https://www.youtube.com/watch?v=scZsaJL7S8U)
+- [This UK train waiting time display](https://github.com/chrisys/train-departure-display)
+
+

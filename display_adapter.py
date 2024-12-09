@@ -12,7 +12,7 @@ import os
 
 dotenv.load_dotenv(override=True)
 
-DISPLAY_SCREEN_ROTATION = os.getenv('screen_rotation', 90)
+DISPLAY_SCREEN_ROTATION = int(os.getenv('screen_rotation', 90))
 
 class MockDisplay:
     """Mock display class for development without hardware"""

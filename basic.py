@@ -789,6 +789,7 @@ def main():
                 if in_weather_mode:
                     next_update = f"weather update in {wait_time} seconds"
                 else:
+                    wait_time = DISPLAY_REFRESH_WEATHER_INTERVAL 
                     updates_until_refresh = FULL_REFRESH_INTERVAL - update_count - 1
                     next_update = f"bus update in {wait_time} seconds ({updates_until_refresh} until full refresh)"
                 

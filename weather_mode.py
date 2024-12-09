@@ -10,7 +10,7 @@ import os
 from display_adapter import DisplayAdapter
 import dotenv
 
-dotenv.load_dotenv(override=true)
+dotenv.load_dotenv(override=True)
 DISPLAY_SCREEN_ROTATION = os.getenv('screen_rotation', 90)
 
 logger = logging.getLogger(__name__)

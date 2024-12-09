@@ -7,6 +7,12 @@ import dotenv
 import inspect
 import traceback
 logger = logging.getLogger(__name__)
+import dotenv
+import os
+
+dotenv.load_dotenv(override=true)
+
+DISPLAY_SCREEN_ROTATION = os.getenv('screen_rotation', 90)
 
 class MockDisplay:
     """Mock display class for development without hardware"""
@@ -79,7 +85,7 @@ class DisplayAdapter:
         """Save a debug image of the current display buffer"""
         try:
             # Rotate the image back to normal orientation
-            image = image.rotate(-90, expand=True)
+            image = image.rotate(-DISPLAY_SCREEN_ROTATION, expand=True)
             debug_path = "debug_output.png"
             image.save(debug_path)
             logger.info(f"Debug image saved to {debug_path}")

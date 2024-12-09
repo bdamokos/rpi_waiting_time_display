@@ -57,6 +57,8 @@ hostname = get_hostname()
 HOTSPOT_SSID = os.getenv('hotspot_ssid', f'PiHotspot-{hostname}')
 HOTSPOT_PASSWORD = os.getenv('hotspot_password', 'YourPassword')
 
+DISPLAY_SCREEN_ROTATION = os.getenv('screen_rotation', 90)
+
 if not weather_enabled:
     logger.warning("Weather is not enabled, weather data will not be displayed. Please set OPENWEATHER_API_KEY in .env to enable it.")
 
@@ -501,7 +503,7 @@ def update_display(epd, weather_data=None, bus_data=None, error_message=None, st
     draw.rectangle([(0, 0), (Himage.width-1, Himage.height-1)], outline=border_color)
 
     # Rotate the image 90 degrees
-    Himage = Himage.rotate(90, expand=True)
+    Himage = Himage.rotate(DISPLAY_SCREEN_ROTATION, expand=True)
     
     # Convert image to buffer
     buffer = epd.getbuffer(Himage)
@@ -646,7 +648,7 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
     draw.rectangle([(0, 0), (Himage.width-1, Himage.height-1)], outline=border_color)
 
     # Rotate the image 90 degrees
-    Himage = Himage.rotate(90, expand=True)
+    Himage = Himage.rotate(DISPLAY_SCREEN_ROTATION, expand=True)
     
     # Display the image
     buffer = epd.getbuffer(Himage)

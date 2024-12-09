@@ -8,6 +8,10 @@ import qrcode
 from datetime import datetime
 import os
 from display_adapter import DisplayAdapter
+import dotenv
+
+dotenv.load_dotenv(override=true)
+DISPLAY_SCREEN_ROTATION = os.getenv('screen_rotation', 90)
 
 logger = logging.getLogger(__name__)
 
@@ -138,7 +142,7 @@ draw_box(100, 80, 100, 40, forecast_text, font_size='small')
 draw_box(200, 80, 50, 40, f"{datetime.now().strftime('%H:%M')}", font_size='small')
 
 # Rotate the image 90 degrees
-image = image.rotate(90, expand=True)
+image = image.rotate(DISPLAY_SCREEN_ROTATION, expand=True)
 
 # Convert and display the image
 buffer = epd.getbuffer(image)

@@ -754,7 +754,11 @@ def main():
                     in_weather_mode = False
                     last_weather_data = None  # Reset weather tracking
                     last_weather_update = current_time
-                    update_display(epd, weather_data['current'], valid_bus_data, error_message, stop_name)
+                    if weather_enabled:
+                        update_display(epd, weather_data['current'], valid_bus_data, error_message, stop_name)
+                    else:
+                        weather_data = None
+                        update_display(epd, valid_bus_data, weather_data, error_message, stop_name)
                     wait_time = DISPLAY_REFRESH_INTERVAL if not error_message else DISPLAY_REFRESH_MINIMAL_TIME
                     update_count += 1
                 elif weather_enabled:

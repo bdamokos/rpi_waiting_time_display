@@ -282,7 +282,7 @@ def update_display(epd, weather_data=None, bus_data=None, error_message=None, st
         logger.warning(f"No DejaVu fonts found, using default: {font_large}, {font_medium}, {font_small}. Install DeJaVu fonts with \n sudo apt install fonts-dejavu\n")
     try:
         emoji_font = ImageFont.truetype('/usr/local/share/fonts/noto/NotoEmoji-Regular.ttf', 16)
-        emoji_font_medium = ImageFont.truetype('/usr/local/share/fonts/noto/NotoEmoji-Regular.ttf', 22)
+        emoji_font_medium = ImageFont.truetype('/usr/local/share/fonts/noto/NotoEmoji-Regular.ttf', 20)
     except:
         emoji_font = font_small
         emoji_font_medium = font_medium

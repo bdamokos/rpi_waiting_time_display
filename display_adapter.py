@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 import dotenv
 import os
 
-dotenv.load_dotenv(override=true)
+dotenv.load_dotenv(override=True)
 
 DISPLAY_SCREEN_ROTATION = os.getenv('screen_rotation', 90)
 

@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 dotenv.load_dotenv(override=True)
 app = Flask(__name__)
 HOTSPOT_ENABLED = os.getenv('hotspot_enabled', 'true').lower() == 'true'
-
+DISPLAY_SCREEN_ROTATION = os.getenv('screen_rotation', 90)
 
 def get_hostname():
     """Get the Pi's hostname with .local suffix."""
@@ -311,7 +311,7 @@ def show_no_wifi_display(epd):
     draw.rectangle([(0, 0), (Himage.width-1, Himage.height-1)], outline=epd.BLACK)
 
     # Rotate the image 90 degrees
-    Himage = Himage.rotate(90, expand=True)
+    Himage = Himage.rotate(DISPLAY_SCREEN_ROTATION, expand=True)
     
     # Display the image
     buffer = epd.getbuffer(Himage)

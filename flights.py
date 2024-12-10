@@ -281,6 +281,19 @@ if __name__ == "__main__":
                               f"Operator: {flight['operator']}. "
                               f"Description: {flight['description']}. ")
                         seen_flights.append(flight)
+                    elif flight in seen_flights:
+                        for i, seen_flight in enumerate(seen_flights):
+                            if seen_flight['hex'] == flight['hex']:
+                                previous_distance = seen_flight['last_distance']
+                                current_distance = flight['last_distance']
+                                if current_distance < previous_distance:
+                                    print(f"Flight {flight['callsign']} is getting closer: now at {current_distance:.1f} km.")
+                                elif current_distance > previous_distance:
+                                    print(f"Flight {flight['callsign']} is getting farther away: now at {current_distance:.1f} km.")
+                                else:
+                                    print(f"Flight {flight['callsign']} remains at the same distance: {current_distance:.1f} km.")
+                                seen_flights[i] = flight
+                                break
             time.sleep(10)
     except KeyboardInterrupt:
         stop_event.set()  # Set the event to stop the thread

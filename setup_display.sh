@@ -443,6 +443,9 @@ REQUIRED_ENTRIES=(
     "$ACTUAL_USER ALL=(ALL) NOPASSWD: /sbin/iptables"
     "$ACTUAL_USER ALL=(ALL) NOPASSWD: /bin/systemctl"
     "$ACTUAL_USER ALL=(ALL) NOPASSWD: /usr/bin/nmcli"
+        # Add to REQUIRED_ENTRIES array
+    "$ACTUAL_USER ALL=(ALL) NOPASSWD: /sbin/iptables -t nat"
+    "$ACTUAL_USER ALL=(ALL) NOPASSWD: /usr/sbin/service dnsmasq restart"
 )
 
 # Create new sudoers content

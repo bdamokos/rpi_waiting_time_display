@@ -48,13 +48,15 @@ def haversine(lat1, lon1, lat2, lon2):
     a = math.sin(dLat / 2) * math.sin(dLat / 2) + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dLon / 2) * math.sin(dLon / 2)
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c / 1000
-
+stop_event = threading.Event()  # Add a threading event to control the thread
 def gather_flights_within_radius(lat, lon, radius=10, distance_threshold=3):
     monitored_flights = []
     lock = threading.Lock()
+    stop_event = threading.Event()  # Add a threading event to control the thread
     logger.debug(f"Monitoring flights within {radius}km of {lat}, {lon}, with threshold {distance_threshold} km")
+    
     def gather_data():
-        while True:
+        while not stop_event.is_set():  # Check the event to stop the loop
             response = requests.get(f"https://api.adsb.one/v2/point/{lat}/{lon}/{radius}")
             data = json.loads(response.text) if response.status_code == 200 else {}
             logger.debug(f"Found {len(data['ac']) if data else 0} flights.")
@@ -91,19 +93,10 @@ def gather_flights_within_radius(lat, lon, radius=10, distance_threshold=3):
                 closest_flight = min(monitored_flights, key=lambda x: x['last_distance'])
                 logger.debug(f"Closest flight: {closest_flight['callsign']} at {closest_flight['last_distance']:.1f}km")
             
-            # Log distances of all monitored flights
-            for flight in monitored_flights:
-                #logger.debug(f"Flight {flight['callsign']} ({flight['hex']}) is {flight['last_distance']:.1f}km away")
-                aeroapi_result = aeroapi_get_flight(flight['callsign'].strip())
-                if aeroapi_result:
-                    
-                    print(f"Flight {flight['callsign']} ({flight['hex']}) is {flight['last_distance']:.1f}km away. "
-                  f"Origin: {aeroapi_result['origin_name']} ({aeroapi_result['origin_code']}), "
-                  f"{aeroapi_result['origin_city']}. "
-                  f"Destination: {aeroapi_result['destination_name']} ({aeroapi_result['destination_code']}), "
-                  f"{aeroapi_result['destination_city']}. "
-                  f"Type: {aeroapi_result['type']}.")
-            return [flight for flight in monitored_flights if flight['last_distance'] <= distance_threshold]
+            # Filter flights within the distance threshold
+            flights_within_distance = [flight for flight in monitored_flights if flight['last_distance'] <= distance_threshold]
+            
+            return flights_within_distance
 
     # Start the data gathering in a separate thread
     threading.Thread(target=gather_data, daemon=True).start()
@@ -134,27 +127,58 @@ def aeroapi_get_data(endpoint, url_params=None, call_params=None):
         logger.error("AeroAPI key not found, please set the key in the .env file")
         return None
     if endpoint == "account":
-        logger.debug("Checking AeroAPI usage")
+        #logger.debug("Checking AeroAPI usage")
         return _aeroapi_get_data(endpoint, url_params, call_params)
     if aeroapi_get_usage():
         logger.debug(f"Getting data from AeroAPI endpoint: {endpoint}")
         return _aeroapi_get_data(endpoint, url_params, call_params)
+aeroapi_usage_data = []
 
 def aeroapi_get_usage():
-    usage_data = aeroapi_get_data("account", "usage")
-    
-    if usage_data is not None:
-        total_cost = usage_data.get("total_cost", 0)
-        if not aeroapi_enable_paid_usage and total_cost > 4.8:
-            logger.warning(f"Total cost exceeds 4.8 USD: {total_cost}, the free quota is 5 USD. Under current settings, further API calls are blocked.")
+    current_time = time.time()
+    last_real_data_time = None
+    last_real_data_index = -1
+
+    # Find the last recorded real usage data point
+    for index, entry in enumerate(reversed(aeroapi_usage_data)):
+        if entry[2] == "real":
+            last_real_data_time = entry[0]
+            last_real_data_index = len(aeroapi_usage_data) - 1 - index
+            break
+
+    # Check if we need to fetch fresh usage data
+    if last_real_data_time is None or (current_time - last_real_data_time >= 3600):
+        usage_data = aeroapi_get_data("account", "usage")
+        if usage_data is not None:
+            total_cost = usage_data.get("total_cost", 0)
+            # Remove old data before the last real usage data
+            if last_real_data_index != -1:
+                aeroapi_usage_data = aeroapi_usage_data[last_real_data_index + 1:]
+            aeroapi_usage_data.append((current_time, total_cost, "real"))
+        else:
             return False
-        elif aeroapi_enable_paid_usage and total_cost > 4.8:
-            logger.warning(f"Total cost exceeds 4.8 USD: {total_cost}, the free quota is 5 USD. Under current settings, further API calls are allowed.")
-            logger.info(f"Total cost: {total_cost}")
-            return True
-        elif total_cost <= 4.8:
-            logger.debug(f"AeroAPI total cost: {total_cost}, within free quota.")
-            return True
+
+    if aeroapi_usage_data and current_time - aeroapi_usage_data[-1][0] < 3600:
+        last_cost = aeroapi_usage_data[-1][1] + 0.01
+        aeroapi_usage_data.append((current_time, last_cost, "interpolated"))
+        logger.debug(f"Using interpolated usage cost: {last_cost}")
+        if last_cost >= 4.0 and not aeroapi_enable_paid_usage:
+            logger.warning(f"Interpolated cost reaches 4.0 USD: {last_cost}, blocking further API calls due to uncertainty in cost calculation and to avoid potential charges.")
+            return False
+        return True
+
+    total_cost = aeroapi_usage_data[-1][1]
+    if not aeroapi_enable_paid_usage and total_cost > 4.8:
+        logger.warning(f"Total cost exceeds 4.8 USD: {total_cost}, the free quota is 5 USD. Under current settings, further API calls are blocked.")
+        return False
+    elif aeroapi_enable_paid_usage and total_cost > 4.8:
+        logger.warning(f"Total cost exceeds 4.8 USD: {total_cost}, the free quota is 5 USD. Under current settings, further API calls are allowed.")
+        logger.info(f"Total cost: {total_cost}")
+        return True
+    elif total_cost <= 4.8:
+        logger.debug(f"AeroAPI total cost: {total_cost}, within free quota.")
+        return True
+    return False
 
 def aeroapi_get_flight(callsign):
         flight_data = aeroapi_get_data("flights", callsign, "max_pages=1")
@@ -185,16 +209,79 @@ def aeroapi_get_flight(callsign):
             return result
         else:
             return None
+        
+def aeroapi_get_operator(operator_code_iata):
+    operator_data = aeroapi_get_data("operators", operator_code_iata)
+    if operator_data:
+        operator_code = operator_data.get('iata', '')
+        operator_name = operator_data.get('name', '')
+
+        
+        # Check if operators.js exists and read its content
+        if os.path.exists('operators.js'):
+            with open('operators.js', 'r') as file:
+                cached_operators = json.load(file)
+        else:
+            cached_operators = {}
+
+        # Check if the operator is already cached
+        if operator_code in cached_operators:
+            return cached_operators[operator_code]
+
+        # Cache the new operator data
+        cached_operators[operator_code] = operator_name
+        operator_info = {
+            "icao": operator_data.get('icao', None),
+            "iata": operator_data.get('iata', None),
+            "callsign": operator_data.get('callsign', None),
+            "name": operator_data.get('name', ''),
+            "country": operator_data.get('country', None),
+            "location": operator_data.get('location', None),
+            "phone": operator_data.get('phone', None),
+            "shortname": operator_data.get('shortname', None),
+            "url": operator_data.get('url', None),
+            "wiki_url": operator_data.get('wiki_url', None),
+            "alternatives": []
+        }
+        
+        # Cache the new operator data
+        cached_operators[operator_code] = operator_info
+        with open('operators.js', 'w') as file:
+            json.dump(cached_operators, file)
+
+        return operator_name
+    return None
 
 if __name__ == "__main__":
     print("Starting flight monitoring")
-    get_flights = gather_flights_within_radius(lat, lon, radius=100, distance_threshold=80)
+    get_flights = gather_flights_within_radius(lat, lon, radius=100, distance_threshold=10)
     time.sleep(5)  # Add a short delay to allow data gathering
-    while True:
-        flights = get_flights()
-        if flights:
-            for flight in flights:
-                print(f"Flight: {flight['callsign']} ({flight['hex']}) is {flight['last_distance']:.1f}km away")
-        else:
-            print("No flights within the specified distance threshold.")
-        time.sleep(10)
+    seen_flights = []
+    try:
+        while True:
+            flights = get_flights()
+            if flights:
+                for flight in flights:
+                    if flight not in seen_flights:
+                        aeroapi_result = aeroapi_get_flight(flight['callsign'].strip())
+                        if not flight['operator'] and aeroapi_result:
+                            operator_iata = aeroapi_result.get('operator_iata', '').strip()
+                            if operator_iata:
+                                operator_name = aeroapi_get_operator(operator_iata)
+                                if operator_name:
+                                    flight['operator'] = operator_name
+                        if aeroapi_result:
+                            flight.update(aeroapi_result)
+                        print(f"Flight: {flight['callsign']} ({flight['hex']}) is {flight['last_distance']:.1f}km away. "
+                              f"Origin: {flight.get('origin_name', 'N/A')} ({flight.get('origin_code', 'N/A')}), "
+                              f"{flight.get('origin_city', 'N/A')}. "
+                              f"Destination: {flight.get('destination_name', 'N/A')} ({flight.get('destination_code', 'N/A')}), "
+                              f"{flight.get('destination_city', 'N/A')}. "
+                              f"Type: {flight.get('type', 'N/A')}. "
+                              f"Operator: {flight['operator']}. "
+                              f"Description: {flight['description']}. ")
+                        seen_flights.append(flight)
+            time.sleep(10)
+    except KeyboardInterrupt:
+        stop_event.set()  # Set the event to stop the thread
+        print("Stopping flight monitoring")

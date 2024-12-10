@@ -135,6 +135,7 @@ def aeroapi_get_data(endpoint, url_params=None, call_params=None):
 aeroapi_usage_data = []
 
 def aeroapi_get_usage():
+    global aeroapi_usage_data  # Ensure we are using the global variable
     current_time = time.time()
     last_real_data_time = None
     last_real_data_index = -1
@@ -159,11 +160,13 @@ def aeroapi_get_usage():
             return False
 
     if aeroapi_usage_data and current_time - aeroapi_usage_data[-1][0] < 3600:
-        last_cost = aeroapi_usage_data[-1][1] + 0.01
-        aeroapi_usage_data.append((current_time, last_cost, "interpolated"))
-        logger.debug(f"Using interpolated usage cost: {last_cost}")
-        if last_cost >= 4.0 and not aeroapi_enable_paid_usage:
-            logger.warning(f"Interpolated cost reaches 4.0 USD: {last_cost}, blocking further API calls due to uncertainty in cost calculation and to avoid potential charges.")
+        # Calculate the interpolated cost based on the number of API calls made since the last real data point
+        num_api_calls = len(aeroapi_usage_data) - last_real_data_index - 1
+        interpolated_cost = aeroapi_usage_data[last_real_data_index][1] + (num_api_calls * 0.01)
+        aeroapi_usage_data.append((current_time, interpolated_cost, "interpolated"))
+        logger.debug(f"Using interpolated usage cost: {interpolated_cost}")
+        if interpolated_cost >= 4.0 and not aeroapi_enable_paid_usage:
+            logger.warning(f"Interpolated cost reaches 4.0 USD: {interpolated_cost}, blocking further API calls due to uncertainty in cost calculation and to avoid potential charges.")
             return False
         return True
 
@@ -262,7 +265,8 @@ if __name__ == "__main__":
             flights = get_flights()
             if flights:
                 for flight in flights:
-                    if flight not in seen_flights:
+                    existing_flight = next((f for f in seen_flights if f['hex'] == flight['hex']), None)
+                    if not existing_flight:
                         aeroapi_result = aeroapi_get_flight(flight['callsign'].strip())
                         if not flight['operator'] and aeroapi_result:
                             operator_iata = aeroapi_result.get('operator_iata', '').strip()
@@ -281,19 +285,16 @@ if __name__ == "__main__":
                               f"Operator: {flight['operator']}. "
                               f"Description: {flight['description']}. ")
                         seen_flights.append(flight)
-                    elif flight in seen_flights:
-                        for i, seen_flight in enumerate(seen_flights):
-                            if seen_flight['hex'] == flight['hex']:
-                                previous_distance = seen_flight['last_distance']
-                                current_distance = flight['last_distance']
-                                if current_distance < previous_distance:
-                                    print(f"Flight {flight['callsign']} is getting closer: now at {current_distance:.1f} km.")
-                                elif current_distance > previous_distance:
-                                    print(f"Flight {flight['callsign']} is getting farther away: now at {current_distance:.1f} km.")
-                                else:
-                                    print(f"Flight {flight['callsign']} remains at the same distance: {current_distance:.1f} km.")
-                                seen_flights[i] = flight
-                                break
+                    else:
+                        previous_distance = existing_flight['last_distance']
+                        current_distance = flight['last_distance']
+                        if current_distance < previous_distance:
+                            print(f"Flight {flight['callsign']} is getting closer: now at {current_distance:.1f} km.")
+                        elif current_distance > previous_distance:
+                            print(f"Flight {flight['callsign']} is getting farther away: now at {current_distance:.1f} km.")
+                        else:
+                            print(f"Flight {flight['callsign']} remains at the same distance: {current_distance:.1f} km.")
+                        existing_flight.update(flight)
             time.sleep(10)
     except KeyboardInterrupt:
         stop_event.set()  # Set the event to stop the thread

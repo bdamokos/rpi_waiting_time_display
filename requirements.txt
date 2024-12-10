@@ -1,4 +1,4 @@
-# Version: 0.0.2 (2024-12-07) # AUTO-INCREMENT
+# Version: 0.0.3 (2024-12-10) # AUTO-INCREMENT
 # Add this file to pre-commit hook to auto-increment
 
 # Actual requirements below
@@ -53,3 +53,4 @@ waveshare-epd @ git+https://github.com/waveshare/e-Paper.git@ecdd8cf#subdirector
 
 flask>=3.1.0
 werkzeug>=3.1.3
+requests-cache >= 1.2.1

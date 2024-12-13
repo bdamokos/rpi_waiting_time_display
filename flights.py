@@ -12,32 +12,16 @@ import threading
 import requests_cache
 logger = logging.getLogger(__name__)
 # Initialize requests_cache with specific URLs excluded from caching
-try:
-    requests_cache.install_cache(
-        'flight_cache', 
-        backend='sqlite', 
-        expire_after=3600,  # Cache expires after 1 hour
-        urls_expire_after={
-            'https://api.adsb.one/v2/point': 0,  # Do not cache ADS-B API calls
-            'https://aeroapi.flightaware.com/aeroapi/account/usage': 0  # Do not cache usage endpoint check
-        }
-    )
-except Exception as e:
-    logger.warning(f"Error opening cache: {e}. Deleting and recreating cache.")
-    try:
-        os.remove('flight_cache.sqlite')
-        requests_cache.install_cache(
-            'flight_cache',
-            backend='sqlite',
-            expire_after=3600,
-            urls_expire_after={
-                'https://api.adsb.one/v2/point': 0,
-                'https://aeroapi.flightaware.com/aeroapi/account/usage': 0
-            }
-        )
-    except Exception as e:
-        logger.error(f"Failed to recreate cache: {e}")
-        raise
+
+requests_cache.install_cache(
+    'flight_cache', 
+    backend='memory', 
+    expire_after=3600,  # Cache expires after 1 hour
+    urls_expire_after={
+        'https://api.adsb.one/v2/point': 0,  # Do not cache ADS-B API calls
+        'https://aeroapi.flightaware.com/aeroapi/account/usage': 0  # Do not cache usage endpoint check
+    }
+)
 
 
 # Set urllib3 logging level to INFO to reduce debug noise
@@ -110,10 +94,9 @@ def gather_flights_within_radius(lat, lon, radius=10, distance_threshold=3, aero
         with lock:
             if monitored_flights:
                 closest_flight = min(monitored_flights, key=lambda x: x['last_distance'])
-                logger.debug(f"Closest flight: {closest_flight['callsign']} at {closest_flight['last_distance']:.1f}km")
-            
-
-
+                logger.debug(f"Closest flight: {closest_flight['callsign']}  at {closest_flight['last_distance']:.1f}km")
+                # logger.debug(closest_flight)
+                
                         # # Debug output
                         # for key, value in closest_flight.items():
                         #     print(f"{key}: {value}")
@@ -129,13 +112,15 @@ def gather_flights_within_radius(lat, lon, radius=10, distance_threshold=3, aero
 def enhance_flight_data(flight_data):
     '''Enhance flight data with additional information from AeroAPI'''
     logger.debug(f"Enhancing flight data for {flight_data['callsign']}")
-    if not flight_data['callsign']:
+    if not flight_data.get('callsign'):
         logger.error(f"No callsign found for {flight_data}")
         return flight_data
     flight_data_enhanced = aeroapi_get_flight(flight_data['callsign'].strip())
-    
+    if not flight_data_enhanced:
+        logger.error(f"No flight data found for {flight_data['callsign']}")
+        return flight_data
     # Add null check for closest_flight_data
-    if flight_data_enhanced:
+    elif flight_data_enhanced:
         # Update operator if not already set
         
         operator_iata = flight_data_enhanced.get('operator_iata', '')

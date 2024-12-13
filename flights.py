@@ -34,6 +34,7 @@ lon = os.getenv('Coordinates_LNG')
 
 radius = 5
 
+aeroapi_enabled = os.getenv("aeroapi_enabled", "false").lower() == "true"
 aeroapi_key = os.getenv("aeroapi_key")
 aeroapi_enable_paid_usage = os.getenv("aeroapi_enable_paid_usage", "false").lower() == "true"
 
@@ -49,7 +50,7 @@ def haversine(lat1, lon1, lat2, lon2):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c / 1000
 stop_event = threading.Event()  # Add a threading event to control the thread
-def gather_flights_within_radius(lat, lon, radius=10, distance_threshold=3):
+def gather_flights_within_radius(lat, lon, radius=10, distance_threshold=3, aeroapi_enabled=False):
     monitored_flights = []
     lock = threading.Lock()
     stop_event = threading.Event()  # Add a threading event to control the thread
@@ -76,7 +77,9 @@ def gather_flights_within_radius(lat, lon, radius=10, distance_threshold=3):
                             'description': flight.get('desc', 'N/A'),
                             'operator': flight.get('ownOp', 'N/A'),
                             'squawk': flight.get('squawk', 'N/A'),
-                            'emergency': flight.get('emergency', '')
+                            'emergency': flight.get('emergency', ''),
+                            'altitude': flight.get('alt_baro', ''),
+                            'heading': flight.get('true_heading', ''),  
                         })
                     else:
                         for monitored in monitored_flights:
@@ -88,20 +91,71 @@ def gather_flights_within_radius(lat, lon, radius=10, distance_threshold=3):
 
     def get_flights_within_distance():
         with lock:
-            # First print the closest flight from all monitored flights
             if monitored_flights:
                 closest_flight = min(monitored_flights, key=lambda x: x['last_distance'])
                 logger.debug(f"Closest flight: {closest_flight['callsign']} at {closest_flight['last_distance']:.1f}km")
             
-            # Filter flights within the distance threshold
-            flights_within_distance = [flight for flight in monitored_flights if flight['last_distance'] <= distance_threshold]
-            
-            return flights_within_distance
+
+
+                        # # Debug output
+                        # for key, value in closest_flight.items():
+                        #     print(f"{key}: {value}")
+
+            # Return flights within distance threshold
+            return [flight for flight in monitored_flights if flight['last_distance'] <= distance_threshold]
 
     # Start the data gathering in a separate thread
     threading.Thread(target=gather_data, daemon=True).start()
 
     return get_flights_within_distance
+
+def enhance_flight_data(flight_data):
+    '''Enhance flight data with additional information from AeroAPI'''
+
+    flight_data_enhanced = aeroapi_get_flight(flight_data['callsign'].strip())
+    
+    # Add null check for closest_flight_data
+    if flight_data_enhanced:
+        # Update operator if not already set
+        if not flight_data_enhanced['operator']:
+            operator_iata = flight_data_enhanced.get('operator_iata', '').strip()
+            if operator_iata:
+                operator_name = aeroapi_get_operator(operator_iata)
+                if operator_name:
+                    flight_data_enhanced['operator'] = operator_name
+
+        # Get aircraft type description - add null check
+        if flight_data_enhanced.get("aircraft_type"):
+            manufacturer, type = aeroapi_get_plane_type(flight_data_enhanced["aircraft_type"])
+            flight_data_enhanced["manufacturer"] = manufacturer 
+            flight_data_enhanced["type"] = type
+        if not flight_data_enhanced.get("aircraft_type") and flight_data_enhanced.get("description"):
+            flight_data_enhanced["type"] = flight_data_enhanced.get("description")
+        elif flight_data_enhanced.get("description"):
+                parts = flight_data_enhanced["description"].split(" ", 1)
+                if len(parts) == 2:
+                    flight_data_enhanced["manufacturer"] = parts[0]
+                    flight_data_enhanced["type"] = parts[1]
+                else:
+                    flight_data_enhanced["type"] = flight_data_enhanced["description"]
+
+        # Construct flight number - add null checks
+        if flight_data_enhanced.get("operator_iata") and flight_data_enhanced.get("flight_number"):
+            flight_data_enhanced["flight_number"] = format_flight_number(
+                flight_data_enhanced["operator_iata"],
+                flight_data_enhanced["flight_number"]
+            )
+
+        # Update closest flight with new data
+        flight_data.update(flight_data_enhanced)
+
+        return flight_data
+
+
+def format_flight_number(operator_iata, flight_number):
+    if operator_iata and flight_number:
+        return f"{operator_iata}{flight_number}"
+    return None
 
 def _aeroapi_get_data(endpoint, url_params=None, call_params=None):
     api_base_url = "https://aeroapi.flightaware.com/aeroapi"
@@ -123,7 +177,11 @@ def _aeroapi_get_data(endpoint, url_params=None, call_params=None):
         return response.json()
 
 def aeroapi_get_data(endpoint, url_params=None, call_params=None):
-    if not aeroapi_key:
+    if not aeroapi_enabled:
+        logger.info("AeroAPI is not enabled, please set aeroapi_enabled to true in the .env file")
+        return None
+
+    if not aeroapi_key and aeroapi_enabled:
         logger.error("AeroAPI key not found, please set the key in the .env file")
         return None
     if endpoint == "account":
@@ -209,9 +267,13 @@ def aeroapi_get_flight(callsign):
                 "destination_city": destination_city,
                 "type": type
             }
+            # Add all fields from first_flight to result
+            for key, value in first_flight.items():
+                if key not in result:  
+                    result[key] = value
+
             return result
-        else:
-            return None
+        return None
         
 def aeroapi_get_operator(operator_code_iata):
     operator_data = aeroapi_get_data("operators", operator_code_iata)
@@ -254,6 +316,44 @@ def aeroapi_get_operator(operator_code_iata):
 
         return operator_name
     return None
+
+
+def aeroapi_get_plane_type(aircraft_type):
+        if not aircraft_type:
+            return None, None
+
+        # Check if types.js exists and read its content
+        if os.path.exists('types.js'):
+            with open('types.js', 'r') as file:
+                cached_types = json.load(file)
+        else:
+            cached_types = {}
+
+        # Check if the type is already cached
+        if aircraft_type in cached_types:
+            type_info = cached_types[aircraft_type]
+            return type_info['manufacturer'], type_info['type']
+
+        # Get new data from API
+        type_data = aeroapi_get_data("aircraft/types", aircraft_type)
+        if type_data:
+            type_info = {
+                "manufacturer": type_data.get('manufacturer', ''),
+                "type": type_data.get('type', ''),
+                "description": type_data.get('description', ''),
+                "engine_count": type_data.get('engine_count', None),
+                "engine_type": type_data.get('engine_type', None)
+            }
+            
+            # Cache the new type data
+            cached_types[aircraft_type] = type_info
+            with open('types.js', 'w') as file:
+                json.dump(cached_types, file)
+
+            return type_info['manufacturer'], type_info['type']
+        
+        return None, None
+    
 
 if __name__ == "__main__":
     print("Starting flight monitoring")

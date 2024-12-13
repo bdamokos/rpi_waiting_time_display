@@ -22,6 +22,7 @@ from debug_server import start_debug_server
 from wifi_manager import is_connected, show_no_wifi_display, get_hostname
 import subprocess
 import threading
+import math
 from flights import gather_flights_within_radius, enhance_flight_data
 
 logger = logging.getLogger(__name__)
@@ -669,7 +670,15 @@ def check_flights_and_update_display(epd, get_flights, flight_check_interval=10)
             logger.info(f"Flights within 3 km: {len(flights_within_3km)}")
             # Update the display with flight information
             # You can customize this part to display flight details as needed
-            update_display_with_flights(epd, flights_within_3km)
+            # Get the closest flight (first one in the list)
+          
+            closest_flight = flights_within_3km[0]
+            # Enhance the flight data with additional details
+            enhanced_flight = enhance_flight_data(closest_flight)
+            # Update display with the enhanced flight data
+            update_display_with_flights(epd, [enhanced_flight])
+
+            # update_display_with_flights(epd, flights_within_3km)
         
         time.sleep(flight_check_interval)  # Check every 10 seconds
 
@@ -684,24 +693,137 @@ def update_display_with_flights(epd, flights):
         Himage = Image.new('RGB', (width, height), 'white')
     draw = ImageDraw.Draw(Himage)
 
-    # Load fonts
-    font_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'fonts/DejaVuSans.ttf')
-    font = ImageFont.truetype(font_path, 14)
+    # Try to load fonts
+    try:
+        font_tiny = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 12)
+        font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 14)
+        font_medium = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 18)
+        font_large = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 24)
+        font_xl = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 32)
+        emoji_font = ImageFont.truetype("/usr/local/share/fonts/noto/NotoEmoji-Regular.ttf", 18)
+        emoji_font_large = ImageFont.truetype("/usr/local/share/fonts/noto/NotoEmoji-Regular.ttf", 24)
+    except IOError:
+        font_tiny = font_small = font_medium = font_large = font_xl = emoji_font = emoji_font_large = ImageFont.load_default()
 
-    # Flight icon (using text-based icon since we can't load image files)
-    flight_icon = "✈"
     MARGIN = 10
-    y_position = MARGIN
+    flight_details = flights[0]
+
+    # Top section: Flight number and operator
+    # Map operator codes to full names
+    if not flight_details:
+        logger.error(f"Flight details not found: {flight_details}")
+        return
+    operator = flight_details.get('operator_name', '')
+    flight_number = flight_details.get('flight_number', '')
     
-    for flight in flights:
-        # Draw flight icon
-        draw.text((MARGIN, y_position), flight_icon, font=font, fill=epd.BLACK)
-        
-        # Draw flight callsign and distance
-        text = f"{flight['callsign']} - {flight['last_distance']:.1f}km"
-        draw.text((MARGIN + 40, y_position), text, font=font, fill=epd.BLACK)
-        
-        y_position += 30  # Space for next flight
+    # Draw operator name
+    if operator:
+        operator_name = operator.get('name', '') if isinstance(operator, dict) else operator
+        draw.text((MARGIN, MARGIN), operator_name, fill='black', font=font_medium)
+    
+    # Draw flight number with plane emoji
+    flight_text = f"✈️ {flight_number}"
+    flight_bbox = draw.textbbox((0, 0), flight_text, font=font_medium)
+    flight_width = flight_bbox[2] - flight_bbox[0]
+    draw.text((width - flight_width - MARGIN, MARGIN), flight_text, fill='black', font=font_medium)
+
+    # Draw horizontal line under header
+    draw.line([(MARGIN, 40), (width - MARGIN, 40)], fill='black', width=1)
+
+    # Main section: Origin -> Distance -> Destination
+    y_pos = 50
+    
+    # Origin
+    origin_code = flight_details.get('origin_code', '')
+    draw.text((MARGIN, y_pos), origin_code, fill='black', font=font_xl)
+    # Draw origin city name below the code
+    draw.text((MARGIN, y_pos + font_xl.size + 2), flight_details.get('origin_city', ''), fill='black', font=font_small)
+    
+    # Arrow and distance
+    distance = f"{flight_details['last_distance']:.1f}km"
+    distance_bbox = draw.textbbox((0, 0), distance, font=font_medium)
+    distance_width = distance_bbox[2] - distance_bbox[0]
+    distance_x = (width - distance_width) // 2
+    
+    # Draw arrow
+    arrow = "→"
+    arrow_bbox = draw.textbbox((0, 0), arrow, font=font_xl)
+    arrow_width = arrow_bbox[2] - arrow_bbox[0]
+    arrow_x = distance_x - arrow_width - 5
+    draw.text((arrow_x, y_pos + 5), arrow, fill='black', font=font_xl)
+    
+    # Draw distance
+    draw.text((distance_x, y_pos + 10), distance, fill='black', font=font_medium)
+    
+    # Destination
+    dest_code = flight_details.get('destination_code', '')
+    dest_city = flight_details.get('destination_city', '')
+    dest_bbox = draw.textbbox((0, 0), dest_code, font=font_xl)
+    dest_width = dest_bbox[2] - dest_bbox[0]
+    dest_x = width - dest_width - MARGIN
+    
+    # Draw destination code
+    draw.text((dest_x, y_pos), dest_code, fill='black', font=font_xl)
+    # Draw destination city name below the code
+    dest_city_bbox = draw.textbbox((0, 0), dest_city, font=font_small)
+    dest_city_width = dest_city_bbox[2] - dest_city_bbox[0]
+    dest_city_x = width - dest_city_width - MARGIN
+    draw.text((dest_city_x, y_pos + font_xl.size + 2), dest_city, fill='black', font=font_small)
+
+    # Draw compass
+    compass_y = y_pos + font_xl.size + font_small.size + 20  # Adjusted for city names
+    center_x = width // 2
+    compass_radius = 20
+    
+    # Draw compass circle and cardinal directions
+    draw.ellipse([center_x - compass_radius, compass_y - compass_radius, 
+                  center_x + compass_radius, compass_y + compass_radius], 
+                 outline='black', width=1)
+    
+    # Draw cardinal points
+    for label, angle in [('N', 0), ('E', 90), ('S', 180), ('W', 270)]:
+        label_x = center_x + int(compass_radius * 1.3 * math.sin(math.radians(angle)))
+        label_y = compass_y - int(compass_radius * 1.3 * math.cos(math.radians(angle)))
+        # Center the label around its position
+        label_bbox = draw.textbbox((0, 0), label, font=font_tiny)
+        label_width = label_bbox[2] - label_bbox[0]
+        label_height = label_bbox[3] - label_bbox[1]
+        draw.text((label_x - label_width//2, label_y - label_height//2), 
+                 label, fill='black', font=font_tiny)
+
+    # Draw heading arrow
+    heading = flight_details['heading']
+    arrow_length = compass_radius - 2
+    if heading:
+        end_x = center_x + int(arrow_length * math.sin(math.radians(heading)))
+        end_y = compass_y - int(arrow_length * math.cos(math.radians(heading)))
+        # Draw arrow with thicker line
+        draw.line([(center_x, compass_y), (end_x, end_y)], fill='black', width=2)
+    
+    # Bottom section: Aircraft details
+    bottom_y = height - 45
+    
+    # Draw horizontal line above bottom section
+    draw.line([(MARGIN, bottom_y - 10), (width - MARGIN, bottom_y - 10)], fill='black', width=1)
+    
+    # Aircraft type
+    aircraft_text = f"🛩️ {flight_details.get('manufacturer', '')} {flight_details.get('type', '')}"
+    draw.text((MARGIN, bottom_y), aircraft_text, fill='black', font=font_small)
+    
+    # # Registration
+    # reg_text = f"🏷️ {flight_details['registration']}"
+    # reg_bbox = draw.textbbox((0, 0), reg_text, font=font_small)
+    # reg_width = reg_bbox[2] - reg_bbox[0]
+    # draw.text((width - reg_width - MARGIN, bottom_y), reg_text, fill='black', font=font_small)
+    
+    # Altitude
+    if flight_details.get('altitude')=="ground":
+        alt_text = "🔴"
+    else:
+        alt_text = f"⬆️ {flight_details.get('altitude', '')} ft"
+    alt_bbox = draw.textbbox((0, 0), alt_text, font=font_small)
+    alt_width = alt_bbox[2] - alt_bbox[0]
+    draw.text((width - alt_width - MARGIN, bottom_y + 20), alt_text, fill='black', font=font_small)
 
     # Rotate image for display
     Himage = Himage.rotate(DISPLAY_SCREEN_ROTATION, expand=True)
@@ -765,7 +887,7 @@ def main():
         
         # Initialize flight monitoring
         if flights_enabled:
-            get_flights = gather_flights_within_radius(COORDINATES_LAT, COORDINATES_LNG, 20, 3, aeroapi_enabled=aeroapi_enabled)
+            get_flights = gather_flights_within_radius(COORDINATES_LAT, COORDINATES_LNG, 50, 50, aeroapi_enabled=aeroapi_enabled)
             logger.debug(f"Flights within 10 km: {get_flights}")
             # Start flight checking in a separate thread
             threading.Thread(target=check_flights_and_update_display, args=(epd, get_flights, flight_check_interval), daemon=True).start()

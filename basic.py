@@ -758,6 +758,9 @@ def update_display_with_flights(epd, flights):
     # Draw operator name
     if operator:
         operator_name = operator.get('name', '') if isinstance(operator, dict) else operator
+        # Trim operator name if it's too long
+        if len(operator_name) > 25:
+            operator_name = operator_name[:22] + "..."
         draw.text((MARGIN, MARGIN), operator_name, fill='black', font=font_small)
     
     # Draw flight number with plane emoji
@@ -766,10 +769,10 @@ def update_display_with_flights(epd, flights):
     draw.text((width - 60 - MARGIN, MARGIN), flight_number, fill='black', font=font_small)
 
     # Draw horizontal line under header
-    draw.line([(MARGIN, 25), (width - MARGIN, 25)], fill='black', width=1)
+    draw.line([(MARGIN, 22), (width - MARGIN, 22)], fill='black', width=1)
 
     # Main section: Origin -> Distance -> Destination
-    y_pos = 28  # Moved up further
+    y_pos = 24  # Moved up even further
     
     # Draw distance at the top
     distance = f"{flight_details['last_distance']:.1f}km"
@@ -779,13 +782,13 @@ def update_display_with_flights(epd, flights):
     draw.text((distance_x, y_pos), distance, fill='black', font=font_small)
     
     # Origin and Destination (moved up)
-    y_pos = y_pos + 12  # Reduced spacing further
+    y_pos = y_pos + 10  # Reduced spacing further
     
     # Origin
     origin_code = flight_details.get('origin_code', '')
     draw.text((MARGIN, y_pos), origin_code, fill='black', font=font_xl)
     # Draw origin city name below the code, but closer
-    draw.text((MARGIN, y_pos + font_xl.size - 8), flight_details.get('origin_city', ''), fill='black', font=font_tiny)
+    draw.text((MARGIN, y_pos + font_xl.size - 10), flight_details.get('origin_city', ''), fill='black', font=font_tiny)
     
     # Draw arrow
     arrow = "→"
@@ -807,7 +810,7 @@ def update_display_with_flights(epd, flights):
     dest_city_bbox = draw.textbbox((0, 0), dest_city, font=font_tiny)
     dest_city_width = dest_city_bbox[2] - dest_bbox[0]
     dest_city_x = width - dest_city_width - MARGIN
-    draw.text((dest_city_x, y_pos + font_xl.size - 8), dest_city, fill='black', font=font_tiny)
+    draw.text((dest_city_x, y_pos + font_xl.size - 10), dest_city, fill='black', font=font_tiny)
 
     # Bottom section: Aircraft details
     bottom_y = height - 25  # Moved up slightly

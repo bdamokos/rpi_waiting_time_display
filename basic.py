@@ -81,6 +81,7 @@ flight_altitude_convert_feet = True if os.getenv('flight_altitude_convert_feet',
 if not weather_enabled:
     logger.warning("Weather is not enabled, weather data will not be displayed. Please set OPENWEATHER_API_KEY in .env to enable it.")
 
+@lru_cache(maxsize=1024)
 def find_optimal_colors(pixel_rgb, epd):
     """Find optimal combination of available colors to represent an RGB value"""
     r, g, b = pixel_rgb[:3]

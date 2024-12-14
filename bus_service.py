@@ -6,7 +6,7 @@ import dotenv
 import log_config
 import socket
 from display_adapter import DisplayAdapter
-
+from functools import lru_cache
 logger = logging.getLogger(__name__)
 
 dotenv.load_dotenv(override=True)
@@ -104,16 +104,19 @@ class BusService:
                 # Fallback to direct IP if resolution fails
                 return "http://127.0.0.1:5001/"
         return base_url
-
+    
+    @lru_cache(maxsize=1024)
     def _hex_to_rgb(self, hex_color: str) -> Tuple[int, int, int]:
         """Convert hex color to RGB tuple"""
         hex_color = hex_color.lstrip('#')
         return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
 
+    @lru_cache(maxsize=1024)
     def _get_color_distance(self, color1: Tuple[int, int, int], color2: Tuple[int, int, int]) -> float:
         """Calculate Euclidean distance between two RGB colors"""
         return sum((a - b) ** 2 for a, b in zip(color1, color2)) ** 0.5
 
+    @lru_cache(maxsize=1024)
     def _get_dithering_colors(self, target_rgb: Tuple[int, int, int]) -> Tuple[str, str, float]:
         """
         Find the two closest display colors and the mix ratio for dithering.

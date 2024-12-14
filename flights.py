@@ -231,7 +231,7 @@ def aeroapi_get_usage():
         aeroapi_usage_data.append((current_time, interpolated_cost, "interpolated"))
         logger.debug(f"Using interpolated usage cost: {interpolated_cost}")
         if interpolated_cost >= 4.0 and not aeroapi_enable_paid_usage:
-            logger.warning(f"Interpolated cost reaches 4.0 USD: {interpolated_cost}, blocking further API calls due to uncertainty in cost calculation and to avoid potential charges.")
+            logger.warning(f"Interpolated cost reached 4.0 USD: {interpolated_cost}, blocking further API calls due to uncertainty in cost calculation and to avoid potential charges.")
             return False
         return True
 

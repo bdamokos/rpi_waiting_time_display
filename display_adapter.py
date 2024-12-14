@@ -9,7 +9,7 @@ import traceback
 logger = logging.getLogger(__name__)
 import dotenv
 import os
-
+from threading import Lock
 dotenv.load_dotenv(override=True)
 
 DISPLAY_SCREEN_ROTATION = int(os.getenv('screen_rotation', 90))
@@ -252,3 +252,7 @@ class DisplayAdapter:
         except Exception as e:
             logger.error(f"Error creating display instance: {str(e)}\n{traceback.format_exc()}")
             raise
+
+display_lock = Lock()  # Global lock for display operations
+def return_display_lock():
+    return display_lock

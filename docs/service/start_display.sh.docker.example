@@ -18,10 +18,16 @@ sleep 10
 echo "----------------------------------------"
 echo "Updating display_programme from git..."
 cd ~/display_programme
+echo "Updating display_programme from git..."
 git fetch -v origin main
-git reset --hard origin/main
-git pull -v origin main
-echo "Display programme updated."
+if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
+    echo "Updates found, resetting to origin/main..."
+    git reset --hard origin/main
+    git pull -v origin main
+    echo "Display programme updated."
+else
+    echo "Already up to date."
+fi
 echo "----------------------------------------"
 
 # Step 2: Check and update startup script if needed

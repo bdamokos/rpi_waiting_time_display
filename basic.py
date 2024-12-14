@@ -846,7 +846,7 @@ def update_display_with_flights(epd, flights):
     if flight_details.get('altitude') == "ground":
         draw.text((width - 20 - MARGIN, bottom_y - 3), "On the ground", fill='black', font=emoji_font)
     else:
-        if flight_altitude_convert_feet:
+        if not flight_altitude_convert_feet:
             alt_text = f"{flight_details.get('altitude', '')} ft"
         else:
             altitude_in_meters = float(flight_details.get('altitude', '')) * 0.3048

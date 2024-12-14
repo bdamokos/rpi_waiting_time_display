@@ -83,6 +83,9 @@ cleanup() {
     # Remove script files
     rm -f "$ACTUAL_HOME/start_display.sh"
     rm -f "$ACTUAL_HOME/switch_display_mode.sh"
+
+    # Remove docker installer script if present
+    rm -f "$ACTUAL_HOME/get-docker.sh"
     
     # Disable SPI interface
     if confirm "Disable SPI interface?"; then
@@ -148,13 +151,39 @@ setup_service_files() {
     echo "Setting up service files for $mode mode..."
     
     # Copy and modify service file
-    sed -e "s|User=pi|User=$ACTUAL_USER|g" \
-        -e "s|/home/pi|$ACTUAL_HOME|g" \
-        "$ACTUAL_HOME/display_programme/docs/service/$service_source" > "/etc/systemd/system/display.service"
-    check_error "Failed to setup service file"
+    SERVICE_FILE="/etc/systemd/system/display.service"
+    if [ -f "$SERVICE_FILE" ]; then
+        echo "Service file already exists."
+        if confirm "Do you want to overwrite it?"; then
+            backup_file "$SERVICE_FILE"
+            # Proceed with copying and modifying the service file
+            sed -e "s|User=pi|User=$ACTUAL_USER|g" \
+                -e "s|/home/pi|$ACTUAL_HOME|g" \
+                "$ACTUAL_HOME/display_programme/docs/service/$service_source" > "$SERVICE_FILE"
+            check_error "Failed to setup service file"
+        else
+            echo "Skipping service file setup."
+        fi
+    else
+        # Proceed with copying and modifying the service file
+        sed -e "s|User=pi|User=$ACTUAL_USER|g" \
+            -e "s|/home/pi|$ACTUAL_HOME|g" \
+            "$ACTUAL_HOME/display_programme/docs/service/$service_source" > "$SERVICE_FILE"
+        check_error "Failed to setup service file"
+    fi
     
     # Copy start script
-    su - "$ACTUAL_USER" -c "cp '$ACTUAL_HOME/display_programme/docs/service/$script_source' '$ACTUAL_HOME/start_display.sh'"
+    if [ -f "$ACTUAL_HOME/start_display.sh" ]; then
+        echo "start_display.sh already exists."
+        if confirm "Do you want to overwrite it?"; then
+            backup_file "$ACTUAL_HOME/start_display.sh"
+            su - "$ACTUAL_USER" -c "cp '$ACTUAL_HOME/display_programme/docs/service/$script_source' '$ACTUAL_HOME/start_display.sh'"
+        else
+            echo "Skipping start_display.sh."
+        fi
+    else
+        su - "$ACTUAL_USER" -c "cp '$ACTUAL_HOME/display_programme/docs/service/$script_source' '$ACTUAL_HOME/start_display.sh'"
+    fi
     check_error "Failed to copy start script"
 }
 
@@ -164,7 +193,7 @@ touch "$BACKUP_MANIFEST"
 
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.16 (2024-12-07)"  # AUTO-INCREMENT
+echo "Version: 0.0.17 (2024-12-14)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -207,9 +236,13 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# Get actual username (not root)
-ACTUAL_USER=$(who am i | awk '{print $1}')
-ACTUAL_HOME=$(eval echo ~$ACTUAL_USER)
+# Get actual username
+if [ -n "$SUDO_USER" ]; then
+    ACTUAL_USER="$SUDO_USER"
+else
+    ACTUAL_USER=$(logname)
+fi
+ACTUAL_HOME=$(eval echo "~$ACTUAL_USER")
 
 echo "Setting up for user: $ACTUAL_USER"
 echo "Home directory: $ACTUAL_HOME"
@@ -258,7 +291,17 @@ check_error "Failed to clone display programme"
 
 # Setup virtual environment
 echo "Setting up virtual environment..."
-su - $ACTUAL_USER -c "python3 -m venv $ACTUAL_HOME/display_env"
+if [ -d "$ACTUAL_HOME/display_env" ]; then
+    echo "Virtual environment already exists."
+    if confirm "Do you want to recreate it? This may remove any custom packages you've installed."; then
+        rm -rf "$ACTUAL_HOME/display_env"
+        su - $ACTUAL_USER -c "python3 -m venv $ACTUAL_HOME/display_env"
+    else
+        echo "Skipping virtual environment setup."
+    fi
+else
+    su - $ACTUAL_USER -c "python3 -m venv $ACTUAL_HOME/display_env"
+fi
 check_error "Failed to create virtual environment"
 
 # Install requirements
@@ -315,6 +358,8 @@ case $mode_choice in
             sh get-docker.sh
             usermod -aG docker $ACTUAL_USER
             check_error "Failed to install Docker"
+            rm -f get-docker.sh
+            echo "Docker installed successfully"
         fi
         ;;
     3)
@@ -362,12 +407,16 @@ else
     echo "dnsmasq already installed"
 fi
 
-# Enable IP forwarding if not already enabled
+# Setup network permissions
+# Backup sysctl.conf before modification
+if [ -f "/etc/sysctl.conf" ]; then
+    backup_file "/etc/sysctl.conf"
+fi
+
+# Enable IP forwarding
 if ! grep -q "net.ipv4.ip_forward=1" /etc/sysctl.conf; then
     echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
     sysctl -p
-else
-    echo "IP forwarding already enabled"
 fi
 
 # Setup network permissions
@@ -394,6 +443,11 @@ else
     echo "PolicyKit configuration already exists"
 fi
 check_error "Failed to setup network permissions"
+
+# Backup dnsmasq.conf before modification
+if [ -f "/etc/dnsmasq.conf" ]; then
+    backup_file "/etc/dnsmasq.conf"
+fi
 
 # Create a script that can be called with sudo
 if [ ! -f "/usr/local/bin/wifi-portal-setup" ]; then
@@ -470,7 +524,6 @@ fi
 
 # Download noto font
 echo "Downloading Noto font..."
-#!/bin/bash
 
 # Create system font directory if it doesn't exist
 sudo mkdir -p /usr/local/share/fonts/noto
@@ -490,7 +543,7 @@ else
     sudo chmod 644 /usr/local/share/fonts/noto/NotoEmoji-Regular.ttf
 
     # Update font cache
-    sudo fc-cache -f -v
+    sudo fc-cache -f
 
     echo "Noto Emoji font installed successfully."
 fi
@@ -499,34 +552,58 @@ fi
 echo "Verifying Noto font installation..."
 fc-list | grep -i noto
 
-# Start the debug server
-echo "Starting the debug server..."
-su - $ACTUAL_USER -c "source $ACTUAL_HOME/display_env/bin/activate && python3 $ACTUAL_HOME/display_programme/debug_server.py &"
-DEBUG_SERVER_PID=$!
-check_error "Failed to start debug server"
+# Start the debug server if .env doesn't exist
+if [ ! -f "$ACTUAL_HOME/display_programme/.env" ]; then
+    echo "Starting the debug server..."
+    su - $ACTUAL_USER -c "source $ACTUAL_HOME/display_env/bin/activate && python3 $ACTUAL_HOME/display_programme/debug_server.py &"
+    DEBUG_SERVER_PID=$!
+    wait $DEBUG_SERVER_PID
 
-# Wait for the debug server to exit
-wait $DEBUG_SERVER_PID
+    echo "----------------------------------------"
+    echo "Setup completed!"
+    echo ""
+    echo "Next steps:"
+    echo "1. Edit your .env file by visiting: http://hostname:5002/debug/env or manually by:"
+    echo "   nano $ACTUAL_HOME/display_programme/.env"
+    echo "2. Once you are happy with your settings, press the 'I am happy with my initial settings, restart my Pi' button."
+    echo ""
+    echo "The Raspberry Pi will restart automatically in 10 seconds with the new settings."
+    echo ""
+    echo "To uninstall in the future, run: sudo ~/uninstall_display.sh"
+    echo "You will find this readme at: https://github.com/bdamokos/rpi_waiting_time_display"
+    echo "----------------------------------------"
+else
+    echo "----------------------------------------"
+    echo "Setup completed!"
+    echo ""
+    echo "Your .env file already exists. You can edit it manually if needed:"
+    echo "   nano $ACTUAL_HOME/display_programme/.env"
+    echo ""
+    echo "After your Pi restarts, you will also be able to edit your settings at http://hostname:5002/debug/env."
+    echo ""
+    echo "The application is now starting with your existing settings."
+    echo ""
+    echo "To uninstall in the future, run: sudo ~/uninstall_display.sh"
+    echo "You will find this readme at: https://github.com/bdamokos/rpi_waiting_time_display"
+    echo "----------------------------------------"
+fi
 
-echo "----------------------------------------"
-echo "Setup completed!"
-echo ""
-echo "Next steps:"
-echo "1. Edit your .env file by visiting: http://hostname:5002/debug/env" or manually by:
-echo "   nano $ACTUAL_HOME/display_programme/.env"
-echo "2. Once you are happy with your settings, press the 'I am happy with my initial settings, restart my Pi' button."
-echo ""
-echo "The Raspberry Pi will restart automatically in 10 seconds with the new settings."
-echo ""
-echo "To uninstall in the future, run: sudo ~/uninstall_display.sh"
-echo "You will find this readme at: https://github.com/bdamokos/rpi_waiting_time_display"
-echo "----------------------------------------"
-
-# Enable and start service
+# Enable and start services with error checking
 systemctl daemon-reload
 systemctl enable display.service
+check_error "Failed to enable display.service"
 systemctl start display.service
-# Restart the Raspberry Pi after a timeout
-echo "Restarting Raspberry Pi in 10 seconds..."
-sleep 10
-reboot
+check_error "Failed to start display.service"
+
+# Start watchdog with error checking
+systemctl enable watchdog
+systemctl start watchdog
+check_error "Failed to start watchdog service"
+
+# Offer to restart now or later
+if confirm "Would you like to restart your Raspberry Pi now?"; then
+    echo "Restarting Raspberry Pi..."
+    reboot
+else
+    echo "You can restart your Raspberry Pi later to complete the setup."
+fi

@@ -1,4 +1,4 @@
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 import requests
 import os
 from datetime import datetime, timedelta
@@ -7,6 +7,8 @@ import qrcode
 from io import BytesIO
 import logging
 from dithering import process_icon_for_epd
+from font_utils import get_font_paths
+from display_adapter import return_display_lock
 import log_config
 import json
 import traceback
@@ -15,6 +17,10 @@ logger = logging.getLogger(__name__)
 
 WEATHER_ICON_URL = "https://openweathermap.org/img/wn/{}@4x.png"
 CACHE_DIR = Path(os.path.dirname(os.path.realpath(__file__))) / "cache" / "weather_icons"
+DISPLAY_SCREEN_ROTATION = int(os.getenv('screen_rotation', 90))
+
+CURRENT_ICON_SIZE = (46, 46)  # Size for current weather icon
+FORECAST_ICON_SIZE = (28, 28)  # Smaller size for forecast icons
 
 dotenv.load_dotenv(override=True)
 weather_api_key = os.getenv('OPENWEATHER_API_KEY')
@@ -23,7 +29,7 @@ coordinates_lng = os.getenv('Coordinates_LNG')
 city = os.getenv('City')
 country = os.getenv('Country')
 
-
+display_lock = return_display_lock()
 
 class WeatherService:
     def __init__(self):
@@ -328,3 +334,147 @@ WEATHER_ICONS = {
     'Drizzle': '🌦',
     'Mist': '🌫',
 }
+
+
+def draw_weather_display(epd, weather_data, last_weather_data=None):
+    """Draw a weather-focused display when no bus times are available"""
+        # Handle different color definitions
+    BLACK = epd.BLACK
+    WHITE = epd.WHITE
+    RED = getattr(epd, 'RED', BLACK)  # Fall back to BLACK if RED not available
+    YELLOW = getattr(epd, 'YELLOW', BLACK)  # Fall back to BLACK if YELLOW not available
+
+    # Create a new image with white background
+    if epd.is_bw_display:
+        Himage = Image.new('1', (epd.height, epd.width), 1)  # 1 is white in 1-bit mode
+    else:
+        Himage = Image.new('RGB', (epd.height, epd.width), WHITE)
+
+ # 250x120 width x height
+    draw = ImageDraw.Draw(Himage)
+    font_paths = get_font_paths()
+    try:
+        font_xl = ImageFont.truetype(font_paths['dejavu_bold'], 42)
+        font_large = ImageFont.truetype(font_paths['dejavu_bold'], 28)
+        font_medium = ImageFont.truetype(font_paths['dejavu'], 18)
+        font_small = ImageFont.truetype(font_paths['dejavu'], 14)
+        font_tiny = ImageFont.truetype(font_paths['dejavu'], 10)
+    except:
+        font_xl = ImageFont.load_default()
+        font_large = font_medium = font_small = font_tiny = font_xl
+
+    MARGIN = 5
+
+    # Top row: Large temperature and weather icon
+    temp_text = f"{weather_data['current']['temperature']}°C"
+
+    # Get and draw weather icon
+    icon = get_weather_icon(weather_data['current']['icon'], CURRENT_ICON_SIZE, epd)
+
+    # Center temperature and icon
+    temp_bbox = draw.textbbox((0, 0), temp_text, font=font_xl)
+    temp_width = temp_bbox[2] - temp_bbox[0]
+
+    total_width = temp_width + CURRENT_ICON_SIZE[0] + 65
+    # start_x = (Himage.width - total_width) // 2
+    start_x = MARGIN
+
+    # Draw temperature
+    draw.text((start_x, MARGIN), temp_text, font=font_xl, fill=epd.BLACK, align="left")
+
+    # Draw icon
+    if icon:
+        icon_x = start_x + temp_width + 20
+        icon_y = MARGIN
+        Himage.paste(icon, (icon_x, icon_y))
+    else:
+        # Fallback to text icon if image loading fails
+        weather_icon = WEATHER_ICONS.get(weather_data['current']['description'], '?')
+        draw.text((start_x + temp_width + 20, MARGIN), weather_icon,
+                  font=font_xl, fill=epd.BLACK)
+
+    # Middle row: Next sun event (moved left and smaller)
+    y_pos = 55
+
+    # Show either sunrise or sunset based on time of day
+    if weather_data['is_daytime']:
+        sun_text = f"{weather_data['sunset']}"
+        sun_icon = "☀"
+    else:
+        sun_text = f"{weather_data['sunrise']}"
+        sun_icon = "☀"
+
+    # Draw sun info on left side with smaller font
+    sun_full = f"{sun_icon} {sun_text}"
+    draw.text((MARGIN , y_pos), sun_full, font=font_medium, fill=epd.BLACK)
+
+    # Bottom row: Three day forecast (today + next 2 days)
+    y_pos = 85
+    logger.debug(f"Forecasts: {weather_data['forecasts']}")
+    forecasts = weather_data['forecasts'][:3]
+    logger.debug(f"Forecasts: {forecasts}")
+
+    # Calculate available width
+    available_width = Himage.width - (2 * MARGIN)
+    # Width for each forecast block (icon + temp)
+    forecast_block_width = available_width // 3
+
+    for idx, forecast in enumerate(forecasts):
+        # Calculate starting x position for this forecast block
+        current_x = MARGIN + (idx * forecast_block_width)
+
+        # Get and draw icon
+        icon = get_weather_icon(forecast['icon'], FORECAST_ICON_SIZE, epd)
+        if icon:
+            # Center icon and text within their block
+            forecast_text = f"{forecast['min']}-{forecast['max']}°"
+            text_bbox = draw.textbbox((0, 0), forecast_text, font=font_medium)
+            text_width = text_bbox[2] - text_bbox[0]
+            total_element_width = FORECAST_ICON_SIZE[0] + 5 + text_width
+
+            # Center the whole block
+            block_start_x = current_x + (forecast_block_width - total_element_width) // 2
+
+            # Draw icon and text
+            icon_y = y_pos + (font_medium.size - FORECAST_ICON_SIZE[1]) // 2
+            Himage.paste(icon, (block_start_x, icon_y))
+
+            # Draw temperature
+            text_x = block_start_x + FORECAST_ICON_SIZE[0] + 3
+            draw.text((text_x, y_pos), forecast_text, font=font_medium, fill=epd.BLACK)
+
+    # Generate and draw QR code (larger size)
+    qr = qrcode.QRCode(version=1, box_size=2, border=1)
+    qr_code_address = os.getenv("weather_mode_qr_code_address", "http://raspberrypi.local:5002/debug")
+    qr.add_data(qr_code_address)
+    qr.make(fit=True)
+    qr_img = qr.make_image(fill_color="black", back_color="white")
+    qr_img = qr_img.convert('RGB')
+
+    # Scale QR code to larger size
+    qr_size = 60
+    qr_img = qr_img.resize((qr_size, qr_size))
+    qr_x = Himage.width - qr_size - MARGIN
+    qr_y = MARGIN
+    Himage.paste(qr_img, (qr_x, qr_y))
+
+    # Draw time under QR code
+    current_time = datetime.now().strftime("%H:%M")
+    time_bbox = draw.textbbox((0, 0), current_time, font=font_tiny)
+    time_width = time_bbox[2] - time_bbox[0]
+    time_x = Himage.width - time_width - MARGIN
+    time_y = Himage.height - time_bbox[3]- (MARGIN // 2)
+    draw.text((time_x, time_y),
+              current_time, font=font_tiny, fill=epd.BLACK, align="right")
+
+    # Draw a border around the display
+    # border_color = getattr(epd, 'RED', epd.BLACK)  # Fall back to BLACK if RED not available
+    # draw.rectangle([(0, 0), (Himage.width-1, Himage.height-1)], outline=border_color)
+
+    # Rotate the image 90 degrees
+    Himage = Himage.rotate(DISPLAY_SCREEN_ROTATION, expand=True)
+
+    with display_lock:
+        # Display the image
+        buffer = epd.getbuffer(Himage)
+        epd.display(buffer)

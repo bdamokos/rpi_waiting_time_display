@@ -238,7 +238,7 @@ class BusService:
                     logger.warning(f"No data found for line {line}")
                     bus_times.append({
                         "line": line,
-                        "times": ["--", "--"],
+                        "times": [],
                         "colors": ('black', 'black', 1.0),
                         "message": None
                     })
@@ -288,7 +288,7 @@ class BusService:
                             elif "Theoretical time" in msg:
                                 message = "theor."
                             elif "End of service" in msg:
-                                time = "--"
+                                time = ""
                                 message = "End of service"
                         logger.debug(f"Time: {time}, Message: {message}, Minutes: {bus.get(minutes_source, None)}, Destination: {destination}")
                         all_times.append({
@@ -311,7 +311,7 @@ class BusService:
                 if all_times:
                     # Special handling for end of service
                     if any(t['message'] == "End of service" for t in all_times):
-                        waiting_times = ["--"]
+                        waiting_times = [""]
                         messages = ["End of service"]
                     # Special handling for last departure
                     elif any(t['message'] == "Last" for t in all_times):
@@ -326,7 +326,7 @@ class BusService:
 
                 # Ensure at least one slot
                 if not waiting_times:
-                    waiting_times = ["--"]
+                    waiting_times = [""]
                     messages = [None]
 
                 # Get colors for dithering
@@ -350,8 +350,8 @@ class BusService:
     def _get_error_data(self) -> List[Dict]:
         """Return error data structure when something goes wrong"""
         return [
-            {"line": "56", "times": ["--", "--"], "colors": ('black', 'black', 1.0)},
-            {"line": "59", "times": ["--", "--"], "colors": ('black', 'black', 1.0)}
+            {"line": "56", "times": [""], "colors": ('black', 'black', 1.0)},
+            {"line": "59", "times": [""], "colors": ('black', 'black', 1.0)}
         ]
 
 if __name__ == "__main__":

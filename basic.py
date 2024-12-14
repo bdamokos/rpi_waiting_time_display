@@ -26,15 +26,6 @@ import math
 from flights import gather_flights_within_radius, enhance_flight_data
 from functools import lru_cache
 logger = logging.getLogger(__name__)
-
-# Flight mode management
-last_non_flight_image = None
-in_flight_mode = False
-flight_mode_start_time = None
-flight_mode_cooldown_end = None
-FLIGHT_MODE_DURATION = 15  # Duration in seconds for flight mode
-FLIGHT_MODE_COOLDOWN = 300  # Cooldown period in seconds (5 minutes)
-
 # Set logging level for PIL.PngImagePlugin and urllib3.connectionpool to warning
 logging.getLogger('PIL.PngImagePlugin').setLevel(logging.WARNING)
 logging.getLogger('urllib3.connectionpool').setLevel(logging.WARNING)
@@ -273,8 +264,6 @@ def get_weather_icon(icon_code, size, epd):
 
 def update_display(epd, weather_data=None, bus_data=None, error_message=None, stop_name=None, first_run=False):
     """Update the display with new weather data"""
-    global last_non_flight_image
-    
     MARGIN = 8
 
     # Handle different color definitions
@@ -386,6 +375,11 @@ def update_display(epd, weather_data=None, bus_data=None, error_message=None, st
         logger.error(f"Unexpected number of bus lines: {len(bus_data)}. Display currently supports up to 2 lines from the same provider and stop.")
         draw.text((MARGIN, MARGIN), "Error, see logs", font=font_large, fill=RED)
         return
+
+
+
+
+
 
     # Draw bus information
     for idx, bus in enumerate(bus_data):
@@ -522,11 +516,6 @@ def update_display(epd, weather_data=None, bus_data=None, error_message=None, st
     # Rotate the image 90 degrees
     Himage = Himage.rotate(DISPLAY_SCREEN_ROTATION, expand=True)
     
-    # Store the current image state if not in flight mode
-    if not in_flight_mode:
-        last_non_flight_image = Himage.copy()
-        logger.debug("Stored current display state")
-    
     # Convert image to buffer
     buffer = epd.getbuffer(Himage)
     
@@ -536,9 +525,7 @@ def update_display(epd, weather_data=None, bus_data=None, error_message=None, st
 
 def draw_weather_display(epd, weather_data, last_weather_data=None):
     """Draw a weather-focused display when no bus times are available"""
-    global last_non_flight_image
-    
-    # Handle different color definitions
+        # Handle different color definitions
     BLACK = epd.BLACK
     WHITE = epd.WHITE
     RED = getattr(epd, 'RED', BLACK)  # Fall back to BLACK if RED not available
@@ -550,7 +537,7 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
     else:
         Himage = Image.new('RGB', (epd.height, epd.width), WHITE)
 
-    # 250x120 width x height
+ # 250x120 width x height
     draw = ImageDraw.Draw(Himage)
     
     try:
@@ -674,41 +661,26 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
     # Rotate the image 90 degrees
     Himage = Himage.rotate(DISPLAY_SCREEN_ROTATION, expand=True)
     
-    # Store the current image state if not in flight mode
-    if not in_flight_mode:
-        last_non_flight_image = Himage.copy()
-        logger.debug("Stored current weather display state")
-    
     # Display the image
     buffer = epd.getbuffer(Himage)
     epd.display(buffer)
 
 def check_flights_and_update_display(epd, get_flights, flight_check_interval=10):
-    """Check for flights within radius and manage flight mode display."""
-    global last_non_flight_image, in_flight_mode, flight_mode_start_time, flight_mode_cooldown_end
-    
+    """Check for flights within 3 km and update the display if any are found."""
     while True:
-        current_time = time.time()
-        
-        # Check if we're in cooldown period
-        if flight_mode_cooldown_end and current_time < flight_mode_cooldown_end:
-            logger.debug(f"Flight mode in cooldown for {flight_mode_cooldown_end - current_time:.1f} more seconds")
-            time.sleep(flight_check_interval)
-            continue
-            
-        flights_within_radius = get_flights()
-        
-        if flights_within_radius:
-            logger.info(f"Flights within the set radius: {len(flights_within_radius)}")
-            
-            # Get the closest flight
-            closest_flight = flights_within_radius[0]
-            
-            # Skip if flight is on ground and look for next airborne flight
+        flights_within_3km = get_flights()
+        if flights_within_3km:
+            logger.info(f"Flights within the set radius: {len(flights_within_3km)}")
+            # Update the display with flight information
+            # You can customize this part to display flight details as needed
+            # Get the closest flight (first one in the list)
+          
+            closest_flight = flights_within_3km[0]
+            # If the closest flight is on the ground, don't show it and get the next one
             if closest_flight.get('altitude') == "ground":
                 logger.debug("Closest flight is on the ground. Looking for next airborne flight.")
                 found_airborne = False
-                for flight in flights_within_radius[1:]:
+                for flight in flights_within_3km[1:]:
                     if flight.get('altitude') != "ground":
                         closest_flight = flight
                         found_airborne = True
@@ -716,40 +688,21 @@ def check_flights_and_update_display(epd, get_flights, flight_check_interval=10)
                 if not found_airborne:
                     logger.debug("No airborne flights found in the list.")
                     closest_flight = None
+                else:
+                    logger.debug("No flights in the air within the max radius. Skipping update.")
+                    closest_flight = None
             
+
+            # Enhance the flight data with additional details
+            logger.debug(f"Closest flight: {closest_flight}")
             if closest_flight:
-                # If not in flight mode, enter it and save current display
-                if not in_flight_mode:
-                    logger.info("Entering flight mode")
-                    
-                    in_flight_mode = True
-                    flight_mode_start_time = current_time
-                
-                # Check if we should exit flight mode
-                if in_flight_mode and (current_time - flight_mode_start_time) >= FLIGHT_MODE_DURATION:
-                    logger.info("Flight mode duration exceeded, exiting flight mode")
-                    if last_non_flight_image:
-                        try:
-                            # Restore the previous display state
-                            buffer = epd.getbuffer(last_non_flight_image)
-                            epd.display(buffer)
-                            logger.debug("Restored previous display state")
-                        except Exception as e:
-                            logger.error(f"Failed to restore previous display state: {e}")
-                    
-                    # Set cooldown period
-                    in_flight_mode = False
-                    flight_mode_cooldown_end = current_time + FLIGHT_MODE_COOLDOWN
-                    last_non_flight_image = None
-                    logger.info(f"Entering cooldown period for {FLIGHT_MODE_COOLDOWN} seconds")
-                    continue
-                
-                # Update display with flight information if in flight mode
-                if in_flight_mode:
-                    enhanced_flight = enhance_flight_data(closest_flight)
-                    logger.debug(f"Enhanced flight data: {enhanced_flight}")
-                    update_display_with_flights(epd, [enhanced_flight])
-            
+                enhanced_flight = enhance_flight_data(closest_flight)
+                logger.debug(f"Enhanced flight: {enhanced_flight}")
+                # Update display with the enhanced flight data
+                update_display_with_flights(epd, [enhanced_flight])
+
+            # update_display_with_flights(epd, flights_within_3km)
+        
         time.sleep(flight_check_interval)  # Check every 10 seconds
 
 @lru_cache(maxsize=32)

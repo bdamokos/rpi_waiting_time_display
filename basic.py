@@ -711,6 +711,9 @@ def update_display_with_flights(epd, flights):
         emoji_font_small = font_small
     
     flight_details = flights[0]
+    if not flight_details:
+        logger.warning("No flight details available to display")
+        return
     # Top section: Airline and Flight Number
     draw.text((5, 5), flight_details.get('operator', ''), fill='black', font=font_large)
     # Flight number with emoji using emoji font for the plane symbol

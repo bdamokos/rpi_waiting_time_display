@@ -193,7 +193,7 @@ touch "$BACKUP_MANIFEST"
 
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.17 (2024-12-14)"  # AUTO-INCREMENT
+echo "Version: 0.0.18 (2024-12-14)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -258,7 +258,7 @@ apt-get update
 check_error "Failed to update package list"
 
 # Install dependencies
-apt-get install -y git gh fonts-dejavu watchdog python3-dev nmcli
+apt-get install -y git gh fonts-dejavu watchdog python3-dev network-manager
 check_error "Failed to install packages"
 
 # Setup watchdog

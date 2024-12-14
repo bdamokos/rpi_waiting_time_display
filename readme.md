@@ -17,7 +17,7 @@ Features:
     ![No Wi-Fi - a hotspot has been set up](docs/images/no_wifi.png)
 - [Debugging interface](#debugging) to check the data being displayed
 
-- WIP, optional: Displays flights that are overhead (in a 3 km circle)
+- WIP, optional: Displays flights that are overhead (in a set circle - 3 km by default)
 
 # Requirements
 The server from [my other repository](https://github.com/bdamokos/brussels_transit) is set up and is providing data for the stop we are interested in. It can run directly on the Raspberry Pi, or on a remote server. (You can choose between the two modes in the setup script.)

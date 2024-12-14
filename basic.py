@@ -32,7 +32,7 @@ DISPLAY_REFRESH_INTERVAL = int(os.getenv("refresh_interval", 90))
 DISPLAY_REFRESH_MINIMAL_TIME = int(os.getenv("refresh_minimal_time", 30))
 DISPLAY_REFRESH_FULL_INTERVAL = int(os.getenv("refresh_full_interval", 3600))
 WEATHER_UPDATE_INTERVAL = int(os.getenv("refresh_weather_interval", 600))
-BUS_DATA_MAX_AGE = 60  # Consider bus data stale after 60 seconds
+BUS_DATA_MAX_AGE = max(90, DISPLAY_REFRESH_INTERVAL)  # Ensure bus data doesn't become stale before next refresh
 
 weather_enabled = True if os.getenv("OPENWEATHER_API_KEY") else False
 
@@ -207,34 +207,36 @@ class BusManager:
         logger.info("Bus update loop started")
         while not self._stop_event.is_set():
             try:
+                logger.debug("Starting bus data update cycle")
                 self._update_bus_data_once()
+                logger.debug("Bus data update cycle completed")
             except Exception as e:
                 logger.error(f"Error in bus update loop: {e}")
                 logger.debug(traceback.format_exc())
             
-            sleep_time = DISPLAY_REFRESH_INTERVAL
+            sleep_time = min(30, BUS_DATA_MAX_AGE - 5)  # Update at least 5 seconds before data becomes stale
             logger.debug(f"Sleeping for {sleep_time} seconds")
             time.sleep(sleep_time)
 
     def get_bus_data(self):
-        """Get current bus data"""
+        """Get current bus data"""  
         with self._lock:
             current_time = datetime.now()
             if self.last_update is None:
                 logger.warning("No bus data has been received yet")
                 return [], "Waiting for initial bus data...", None
-            
+        
             time_since_update = (current_time - self.last_update).total_seconds()
             if time_since_update > BUS_DATA_MAX_AGE:
                 logger.warning(f"Bus data is stale (last update: {time_since_update:.0f} seconds ago)")
                 return [], f"Data stale ({time_since_update:.0f}s old)", self.bus_data['stop_name']
             
-            logger.debug(f"Returning bus data from {self.last_update.strftime('%H:%M:%S')}")
+            logger.debug(f"Returning bus data from {self.last_update.strftime('%H:%M:%S')} (age: {time_since_update:.1f}s) with times: {[bus.get('times', []) for bus in self.bus_data['data']]}")
             return (
                 self.bus_data['data'],
                 self.bus_data['error_message'],
                 self.bus_data['stop_name']
-            )
+        )
 
     def stop(self):
         if self._thread:
@@ -475,6 +477,7 @@ class DisplayManager:
                 with self._display_lock:
                     # Priority 1: Bus data
                     if valid_bus_data and not error_message:
+                        logger.debug(f"Time since last update: {time_since_last_update:.1f}s, DISPLAY_REFRESH_INTERVAL: {DISPLAY_REFRESH_INTERVAL}s, in_weather_mode: {self.in_weather_mode}")
                         if time_since_last_update >= DISPLAY_REFRESH_INTERVAL or self.in_weather_mode:
                             logger.info("Updating bus display...")
                             self.in_weather_mode = False
@@ -484,6 +487,8 @@ class DisplayManager:
                             self.last_display_update = datetime.now()
                             self.update_count += 1
                             logger.info("Bus display updated successfully")
+                        else:
+                            logger.debug(f"Skipping bus display update (waiting {DISPLAY_REFRESH_INTERVAL - time_since_last_update:.1f}s)")
                     
                     # Priority 2: Weather
                     elif weather_enabled and weather_data:

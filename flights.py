@@ -1,4 +1,3 @@
-
 from PIL import Image, ImageDraw, ImageFont
 import dotenv
 import logging
@@ -14,6 +13,7 @@ import threading
 import requests_cache
 from functools import lru_cache
 from threading import Event, Lock
+from requests_cache import CachedSession
 logger = logging.getLogger(__name__)
 
 
@@ -22,18 +22,16 @@ DISPLAY_SCREEN_ROTATION = int(os.getenv('screen_rotation', 90))
 flight_altitude_convert_feet = True if os.getenv('flight_altitude_convert_feet', 'false').lower() == 'true' else False
 display_lock = return_display_lock()
 
-# Initialize requests_cache with specific URLs excluded from caching
-
-requests_cache.install_cache(
-    'flight_cache', 
-    backend='memory', 
+# Create a cached session specifically for flight requests
+flight_session = CachedSession(
+    'flight_cache',
+    backend='memory',
     expire_after=3600,  # Cache expires after 1 hour
     urls_expire_after={
         'https://api.adsb.one/v2/point': 0,  # Do not cache ADS-B API calls
-        'https://aeroapi.flightaware.com/aeroapi/account/usage': 0  # Do not cache usage endpoint check
+        'https://aeroapi.flightaware.com/aeroapi/account/usage': 0,  # Do not cache usage endpoint check
     }
 )
-
 
 # Set urllib3 logging level to INFO to reduce debug noise
 logging.getLogger('urllib3').setLevel(logging.INFO)
@@ -83,7 +81,8 @@ def gather_flights_within_radius(lat, lon, radius=radius*2, distance_threshold=r
                 continue
                 
             try:
-                response = requests.get(f"https://api.adsb.one/v2/point/{lat}/{lon}/{radius}")
+                # Use the cached session instead of global requests
+                response = flight_session.get(f"https://api.adsb.one/v2/point/{lat}/{lon}/{radius}")
                 if response.status_code == 200:
                     data = response.json()
                     logger.debug(f"Found {len(data['ac']) if data and 'ac' in data else 0} flights.")
@@ -207,16 +206,15 @@ def _aeroapi_get_data(endpoint, url_params=None, call_params=None):
         "Content-Type": "application/json"
     }
     if url_params and call_params:
-        response = requests.get(f"{api_base_url}/{endpoint}/{url_params}?{call_params}", headers=headers)
+        response = flight_session.get(f"{api_base_url}/{endpoint}/{url_params}?{call_params}", headers=headers)
     elif call_params:
-        response = requests.get(f"{api_base_url}/{endpoint}?{call_params}", headers=headers)
+        response = flight_session.get(f"{api_base_url}/{endpoint}?{call_params}", headers=headers)
     elif url_params:
-        response = requests.get(f"{api_base_url}/{endpoint}/{url_params}", headers=headers)
+        response = flight_session.get(f"{api_base_url}/{endpoint}/{url_params}", headers=headers)
     else:
-        response = requests.get(f"{api_base_url}/{endpoint}", headers=headers)
+        response = flight_session.get(f"{api_base_url}/{endpoint}", headers=headers)
     
     if response.status_code == 200:
-        
         return response.json()
 
 def aeroapi_get_data(endpoint, url_params=None, call_params=None):

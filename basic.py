@@ -523,9 +523,9 @@ def update_display(epd, weather_data=None, bus_data=None, error_message=None, st
     Himage = Himage.rotate(DISPLAY_SCREEN_ROTATION, expand=True)
     
     # Store the current image state if not in flight mode
-    
-    last_non_flight_image = Himage.copy()
-    logger.debug("Stored current display state")
+    if not in_flight_mode:
+        last_non_flight_image = Himage.copy()
+        logger.debug("Stored current display state")
     
     # Convert image to buffer
     buffer = epd.getbuffer(Himage)
@@ -675,9 +675,9 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
     Himage = Himage.rotate(DISPLAY_SCREEN_ROTATION, expand=True)
     
     # Store the current image state if not in flight mode
-    
-    last_non_flight_image = Himage.copy()
-    logger.debug("Stored current weather display state")
+    if not in_flight_mode:
+        last_non_flight_image = Himage.copy()
+        logger.debug("Stored current weather display state")
     
     # Display the image
     buffer = epd.getbuffer(Himage)
@@ -754,6 +754,7 @@ def check_flights_and_update_display(epd, get_flights_func, flight_check_interva
                     # Set cooldown period
                     in_flight_mode = False
                     flight_mode_cooldown_end = current_time + FLIGHT_MODE_COOLDOWN
+                    last_non_flight_image = None
                     logger.info(f"Entering cooldown period for {FLIGHT_MODE_COOLDOWN} seconds")
                     continue
                 

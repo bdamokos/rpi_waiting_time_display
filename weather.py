@@ -316,3 +316,15 @@ def get_weather_icon(icon_code, size, epd):
     except Exception as e:
         logger.error(f"Error processing weather icon: {e}\n{traceback.format_exc()}")
     return None
+
+
+# Weather icon mapping
+WEATHER_ICONS = {
+    'Clear': '☀',
+    'Clouds': '☁',
+    'Rain': '🌧',
+    'Snow': '❄',
+    'Thunderstorm': '⚡',
+    'Drizzle': '🌦',
+    'Mist': '🌫',
+}

@@ -1,12 +1,18 @@
+from PIL import Image, ImageDraw, ImageFont
+from datetime import datetime
 import requests
 import logging
 from typing import List, Dict, Tuple
 import os
 import dotenv
+from dithering import draw_dithered_box
+from font_utils import get_font_paths
 import log_config
 import socket
-from display_adapter import DisplayAdapter
+from display_adapter import DisplayAdapter, return_display_lock
 from functools import lru_cache
+
+from weather import WEATHER_ICONS
 logger = logging.getLogger(__name__)
 
 dotenv.load_dotenv(override=True)
@@ -16,6 +22,9 @@ bus_api_base_url = os.getenv("BUS_API_BASE_URL", "http://localhost:5001/")
 bus_provider = os.getenv("Provider", "stib")
 logging.debug(f"Bus provider: {bus_provider}. Base URL: {bus_api_base_url}. Monitoring lines: {Lines} and stop: {Stop}")
 
+DISPLAY_SCREEN_ROTATION = int(os.getenv('screen_rotation', 90))
+weather_enabled = True if os.getenv("OPENWEATHER_API_KEY") else False
+display_lock = return_display_lock() # Global lock for display operations
 # Define our available colors and their RGB values
 DISPLAY_COLORS = {
     'black': (0, 0, 0),
@@ -350,3 +359,265 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
     bus_service = BusService()
     print(bus_service.get_waiting_times()) 
+
+
+def update_display(epd, weather_data=None, bus_data=None, error_message=None, stop_name=None, first_run=False):
+    """Update the display with new weather and waiting timesdata"""
+    MARGIN = 8
+
+    # Handle different color definitions
+    BLACK = epd.BLACK
+    WHITE = epd.WHITE
+    RED = getattr(epd, 'RED', BLACK)  # Fall back to BLACK if RED not available
+    YELLOW = getattr(epd, 'YELLOW', BLACK)  # Fall back to BLACK if YELLOW not available
+
+    logger.info(f"Display dimensions: {epd.height}x{epd.width} (height x width)")
+
+    # Create a new image with white background
+    if epd.is_bw_display:
+        Himage = Image.new('1', (epd.height, epd.width), 1)  # 1 is white in 1-bit mode
+    else:
+        Himage = Image.new('RGB', (epd.height, epd.width), WHITE)
+    draw = ImageDraw.Draw(Himage)
+    font_paths = get_font_paths()
+    try:
+        font_large = ImageFont.truetype(font_paths['dejavu_bold'], 32)
+        font_medium = ImageFont.truetype(font_paths['dejavu'], 24)
+        font_small = ImageFont.truetype(font_paths['dejavu'], 16)
+
+        # logger.info(f"Found DejaVu fonts: {font_large}, {font_medium}, {font_small}")
+    except:
+        font_large = ImageFont.load_default()
+        font_medium = font_small = font_large
+        logger.warning(f"No DejaVu fonts found, using default: {font_large}, {font_medium}, {font_small}. Install DeJaVu fonts with \n sudo apt install fonts-dejavu\n")
+    try:
+        emoji_font = ImageFont.truetype(font_paths['emoji'], 16)
+        emoji_font_medium = ImageFont.truetype(font_paths['emoji'], 20)
+    except:
+        emoji_font = font_small
+        emoji_font_medium = font_medium
+        logger.warning(f"No Noto Emoji font found, using {emoji_font.getname()} instead.")
+    if not weather_enabled:
+        weather_data = None
+        logger.warning("Weather is not enabled, weather data will not be displayed. Do not forget to set OPENWEATHER_API_KEY in .env to enable it.")
+    if weather_enabled:
+        weather_icon = WEATHER_ICONS.get(weather_data['description'], '')
+        logger.debug(f"Weather icon: {weather_icon}, description: {weather_data['description']}, font: {emoji_font.getname()}")
+        temp_text = f"{weather_data['temperature']}°"
+
+        weather_text = f"{temp_text}"
+        weather_icon_bbox = draw.textbbox((0, 0), weather_icon, font=emoji_font)
+        weather_icon_width = weather_icon_bbox[2] - weather_icon_bbox[0]
+        weather_bbox = draw.textbbox((0, 0), weather_text, font=font_small)
+        weather_text_width = weather_bbox[2] - weather_bbox[0]
+        weather_width = weather_text_width + weather_icon_width
+        draw.text((Himage.width - weather_width - weather_icon_width - MARGIN, MARGIN), weather_icon, font=emoji_font, fill=BLACK)
+        draw.text((Himage.width - weather_width - MARGIN, MARGIN), weather_text, font=font_small, fill=BLACK)
+    stop_name_height = 0
+    if stop_name:
+        stop_name_bbox = draw.textbbox((0, 0), stop_name, font=font_small)
+        stop_name_width = stop_name_bbox[2] - stop_name_bbox[0]
+        if (weather_enabled and (Himage.width - weather_width - stop_name_width - MARGIN) < 0) or (not weather_enabled and (Himage.width - stop_name_width - MARGIN) < 0):
+            logger.debug(f"Stop name width: {stop_name_width}, weather width: {weather_width if weather_enabled else 0}, total width: {Himage.width}, margin: {MARGIN}. The total width is too small for the stop name and weather.")
+            # Split stop name into two lines
+            stop_name_parts = stop_name.split(' ', 1)
+            logger.debug(f"Stop name parts: {stop_name_parts}")
+            if len(stop_name_parts) > 1:
+                line1, line2 = stop_name_parts
+            else:
+                line1 = stop_name
+                line2 = ""
+
+            # Draw first line
+            draw.text((MARGIN, MARGIN), line1, font=font_small, fill=BLACK)
+            line1_bbox = draw.textbbox((0, 0), line1, font=font_small)
+            stop_name_height = line1_bbox[3] - line1_bbox[1] + MARGIN
+
+
+            # Draw second line if it exists
+            if line2:
+                line1_bbox = draw.textbbox((0, 0), line1, font=font_small)
+                line1_height = line1_bbox[3] - line1_bbox[1]
+                draw.text((MARGIN, MARGIN + line1_height+MARGIN), line2, font=font_small, fill=BLACK)
+                line2_bbox = draw.textbbox((0, 0), line2, font=font_small)
+                line2_height = line2_bbox[3] - line2_bbox[1]
+                stop_name_height = line1_height + line2_height + MARGIN + MARGIN + MARGIN
+                logger.debug(f"Stop name height: {stop_name_height}")
+        else:
+            logger.debug(f"Stop name width: {stop_name_width}, weather width: {weather_width if weather_enabled else 0}, total width: {Himage.width}, margin: {MARGIN}")
+            draw.text((MARGIN, MARGIN), stop_name, font=font_small, fill=BLACK)
+            stop_name_bbox = draw.textbbox((0, 0), stop_name, font=font_small)
+            stop_name_height = stop_name_bbox[3] - stop_name_bbox[1] + MARGIN
+    logger.debug(f"Stop name height: {stop_name_height}")
+    # Calculate layout
+
+    HEADER_HEIGHT = stop_name_height + MARGIN
+    BOX_HEIGHT = 40
+
+    # Adjust spacing based on number of bus lines
+    if len(bus_data) == 1:
+        # Center the single bus line vertically
+        first_box_y = MARGIN + HEADER_HEIGHT + ((Himage.height - HEADER_HEIGHT - BOX_HEIGHT - stop_name_height) // 2)
+        logger.debug(f"First box y: {first_box_y}. Header height: {HEADER_HEIGHT}, box height: {BOX_HEIGHT}. Himage height: {Himage.height}")
+        second_box_y = first_box_y  # Not used but kept for consistency
+    elif len(bus_data) == 2:
+        # Calculate spacing for two lines to be evenly distributed
+        total_available_height = Himage.height - HEADER_HEIGHT - (2 * BOX_HEIGHT)
+        SPACING = total_available_height // 3  # Divide remaining space into thirds
+
+        first_box_y = HEADER_HEIGHT + SPACING
+        second_box_y = first_box_y + BOX_HEIGHT + SPACING
+
+        logger.debug(f"Two-line layout: Header height: {HEADER_HEIGHT}, Available height: {total_available_height}")
+        logger.debug(f"Spacing: {SPACING}, First box y: {first_box_y}, Second box y: {second_box_y}")
+    else:
+        logger.error(f"Unexpected number of bus lines: {len(bus_data)}. Display currently supports up to 2 lines from the same provider and stop.")
+        draw.text((MARGIN, MARGIN), "Error, see logs", font=font_large, fill=RED)
+        return
+
+
+
+
+
+
+    # Draw bus information
+    for idx, bus in enumerate(bus_data):
+        y_position = first_box_y if idx == 0 else second_box_y
+
+        # Draw dithered box with line number
+        primary_color, secondary_color, ratio = bus['colors']
+        line_text_length = len(bus['line'])
+        line_text_width = 35 + (line_text_length * 9)
+        stop_name_bbox = draw_dithered_box(
+            draw=draw,
+            epd=epd,
+            x=10,
+            y=y_position,
+            width=line_text_width,
+            height=BOX_HEIGHT,
+            text=bus['line'],
+            primary_color=primary_color,
+            secondary_color=secondary_color,
+            ratio=ratio,
+            font=font_large
+        )
+
+
+        # Draw arrow
+        draw.text((line_text_width + MARGIN+10, y_position + (BOX_HEIGHT - 24) // 2), "→",
+                  font=font_medium, fill=BLACK)
+        # Calculate width of arrow
+        arrow_bbox = draw.textbbox((0, 0), "→", font=font_medium)
+        arrow_width = arrow_bbox[2] - arrow_bbox[0] + MARGIN
+
+        # Process times and messages
+        times = bus["times"]
+        messages = bus.get("messages", [None] * len(times))
+
+        x_pos = line_text_width + arrow_width + MARGIN + MARGIN
+        y_pos = y_position + (BOX_HEIGHT - 24) // 2
+
+        # Calculate maximum available width
+        max_width = Himage.width - x_pos - MARGIN - MARGIN  # Available width
+        times_shown = 0
+        len_times = len(times)
+        if len_times <=2:
+            EXTRA_SPACING = 10
+        else:
+            EXTRA_SPACING = 0
+        for time, message in zip(times, messages):
+            if not time.lower().endswith("'"):
+                time = str(time) + "'"
+            if time.lower()=="0'" or time.lower()=="0":
+                time = "↓↓"
+            # Calculate width needed for this time + message
+            time_bbox = draw.textbbox((0, 0), time, font=font_medium)
+            time_width = time_bbox[2] - time_bbox[0]
+
+
+            message_width = 0
+            if message:
+                if message == "Last":
+                    msg_text = "Last departure"
+                elif message == "theor.":
+                    msg_text = "(theor.)"
+                elif message:
+                    msg_text = message
+                msg_bbox = draw.textbbox((0, 0), msg_text, font=font_small)
+                message_width = msg_bbox[2] - msg_bbox[0] + 5  # 5px spacing
+
+            # Check if we have space for this time + message + spacing
+            if times_shown > 0 and (time_width + message_width + MARGIN + EXTRA_SPACING > max_width):
+                break
+
+            # Check if there is an emoji to show
+            if '🕒' in time or '⚡' in time:
+                emoji_text = '🕒' if '🕒' in time else '⚡'
+                emoji_bbox = draw.textbbox((0, 0), emoji_text, font=emoji_font)
+                emoji_width = emoji_bbox[2] - emoji_bbox[0]
+                time_text = time.replace('🕒', '').replace('⚡', '')
+                time_bbox = draw.textbbox((0, 0), time_text, font=font_medium)
+                time_text_width = time_bbox[2] - time_bbox[0]
+                time_width = time_text_width + emoji_width
+                draw.text((x_pos + MARGIN - 2, y_pos + 2), emoji_text, font=emoji_font_medium, fill=BLACK)
+                draw.text((x_pos + MARGIN + emoji_width, y_pos ), time_text, font=font_medium, fill=BLACK)
+            else:
+                draw.text((x_pos + MARGIN, y_pos), time, font=font_medium, fill=BLACK)
+
+
+
+            # Draw message if present
+            if message:
+                msg_x = x_pos + time_width + MARGIN
+                if message == "Last":
+                    draw.text((msg_x, y_pos + MARGIN), "Last departure",
+                              font=font_small, fill=BLACK)
+                    break  # Don't show more times after "Last departure"
+                elif message == "theor.":
+                    draw.text((msg_x, y_pos + MARGIN), "(theor.)",
+                              font=font_small, fill=BLACK)
+                elif message:
+                    draw.text((msg_x, y_pos + MARGIN), msg_text,
+                              font=font_small, fill=BLACK)
+
+            # Move x position for next time
+            x_pos += time_width + message_width + MARGIN + EXTRA_SPACING  # Add spacing between times
+            max_width -= (time_width + message_width + MARGIN + EXTRA_SPACING)  # Deduct used width
+            times_shown += 1
+
+    # Draw current time at the bottom
+    current_time = datetime.now().strftime("%H:%M")
+    time_bbox = draw.textbbox((0, 0), current_time, font=font_small)
+    time_width = time_bbox[2] - time_bbox[0]
+    time_height = time_bbox[3] - time_bbox[1]
+
+    # Adjust time position based on number of bus lines
+    if len(bus_data) == 1:
+        time_y = Himage.height - time_height - MARGIN
+    else:
+        time_y = Himage.height - time_height - MARGIN
+
+    draw.text((Himage.width - time_width - MARGIN, time_y),
+              current_time, font=font_small, fill=BLACK)
+
+    # Draw error message if present
+    if error_message:
+        error_bbox = draw.textbbox((0, 0), error_message, font=font_small)
+        error_width = error_bbox[2] - error_bbox[0]
+        error_x = (Himage.width - error_width) // 2
+        error_y = time_y + time_height + MARGIN if len(bus_data) == 1 else second_box_y + BOX_HEIGHT + MARGIN
+        draw.text((error_x, error_y), error_message, font=font_small, fill=RED)
+
+    # Draw a border around the display
+    border_color = getattr(epd, 'RED', epd.BLACK)  # Fall back to BLACK if RED not available
+    draw.rectangle([(0, 0), (Himage.width-1, Himage.height-1)], outline=border_color)
+
+    # Rotate the image 90 degrees
+    Himage = Himage.rotate(DISPLAY_SCREEN_ROTATION, expand=True)
+    with display_lock:
+        # Convert image to buffer
+        buffer = epd.getbuffer(Himage)
+
+        # Add debug log before display command
+        logger.debug("About to call epd.display() with new buffer")
+        epd.display(buffer)

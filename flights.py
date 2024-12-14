@@ -33,11 +33,14 @@ dotenv.load_dotenv(override=True)
 lat = os.getenv('Coordinates_LAT')
 lon = os.getenv('Coordinates_LNG')
 
-radius = os.getenv('flight_max_radius', 3)
-
+radius = int(os.getenv('flight_max_radius', 3))
+flight_check_interval = int(os.getenv('flight_check_interval', 10))
 aeroapi_enabled = os.getenv("aeroapi_enabled", "false").lower() == "true"
 aeroapi_key = os.getenv("aeroapi_key")
 aeroapi_enable_paid_usage = os.getenv("aeroapi_enable_paid_usage", "false").lower() == "true"
+
+# Add at the top with other global variables
+pause_event = threading.Event()  # Global pause event for flight gathering
 
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371000
@@ -51,14 +54,23 @@ def haversine(lat1, lon1, lat2, lon2):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c / 1000
 stop_event = threading.Event()  # Add a threading event to control the thread
-def gather_flights_within_radius(lat, lon, radius=10, distance_threshold=3, aeroapi_enabled=False):
+def gather_flights_within_radius(lat, lon, radius=radius*2, distance_threshold=radius,flight_check_interval=flight_check_interval, aeroapi_enabled=False):
     monitored_flights = []
     lock = threading.Lock()
-    stop_event = threading.Event()  # Add a threading event to control the thread
+    stop_event = threading.Event()  # Event to stop the thread completely
+    # Use the global pause event instead of creating a new one
+    global pause_event
     logger.debug(f"Monitoring flights within {radius}km of {lat}, {lon}, with threshold {distance_threshold} km")
     
     def gather_data():
         while not stop_event.is_set():  # Check the event to stop the loop
+            if pause_event.is_set():
+                now = time.time()
+                if now % 10 == 0:
+                    logger.debug("Flight gathering paused")
+                time.sleep(1)  # Sleep briefly to prevent busy waiting
+                continue
+                
             response = requests.get(f"https://api.adsb.one/v2/point/{lat}/{lon}/{radius}")
             data = json.loads(response.text) if response.status_code == 200 else {}
             logger.debug(f"Found {len(data['ac']) if data else 0} flights.")
@@ -88,7 +100,7 @@ def gather_flights_within_radius(lat, lon, radius=10, distance_threshold=3, aero
                                 monitored['last_distance'] = current_distance
                                 break
 
-            time.sleep(10)
+            time.sleep(flight_check_interval)
 
     def get_flights_within_distance():
         with lock:
@@ -102,12 +114,27 @@ def gather_flights_within_radius(lat, lon, radius=10, distance_threshold=3, aero
                         #     print(f"{key}: {value}")
 
             # Return flights within distance threshold
-            return [flight for flight in monitored_flights if flight['last_distance'] <= distance_threshold]
+            # Sort monitored flights by distance
+            sorted_flights = sorted(monitored_flights, key=lambda x: x['last_distance'])
+            # Return flights within distance threshold from sorted list
+            return [flight for flight in sorted_flights if flight['last_distance'] <= distance_threshold]
+
+    def pause_gathering():
+        """Pause the flight data gathering"""
+        pause_event.set()
+        logger.debug("Flight gathering paused")
+
+    def resume_gathering():
+        """Resume the flight data gathering"""
+        pause_event.clear()
+        logger.debug("Flight gathering resumed")
 
     # Start the data gathering in a separate thread
-    threading.Thread(target=gather_data, daemon=True).start()
+    gathering_thread = threading.Thread(target=gather_data, daemon=True)
+    gathering_thread.start()
 
-    return get_flights_within_distance
+    # Return both the get_flights function and the control functions
+    return get_flights_within_distance, pause_gathering, resume_gathering
 
 def enhance_flight_data(flight_data):
     '''Enhance flight data with additional information from AeroAPI'''

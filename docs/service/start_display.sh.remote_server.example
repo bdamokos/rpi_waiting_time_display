@@ -5,8 +5,8 @@
 # cp start_display.sh.example ~/start_display.sh
 # chmod +x ~/start_display.sh
 echo "----------------------------------------"
-echo "Starting display service service script"
-echo "Version: 0.0.0 (2024-12-06)"  # AUTO-INCREMENT
+echo "Starting display service script"
+echo "Version: 0.0.1 (2024-12-14)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"

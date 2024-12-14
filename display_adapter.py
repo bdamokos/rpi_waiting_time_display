@@ -256,3 +256,49 @@ class DisplayAdapter:
 display_lock = Lock()  # Global lock for display operations
 def return_display_lock():
     return display_lock
+
+def display_full_refresh(epd):
+    with display_lock:
+        epd.init()
+        epd.Clear()
+        epd.init_Fast()
+
+
+def initialize_display():
+    epd = None
+    with display_lock:
+                # Initialize display using adapter
+        logger.debug("About to initialize display")
+        epd = DisplayAdapter.get_display()
+
+        # Add debug logs before EPD commands
+        logger.debug("About to call epd.init()")
+        try:
+
+            epd.init()
+        except Exception as e:
+            logger.error(f"Error initializing display: {str(e)}\n{traceback.format_exc()}")
+            raise
+
+        logger.debug("About to call epd.Clear()")
+        try:
+
+            epd.Clear()
+        except Exception as e:
+            logger.error(f"Error clearing display: {str(e)}\n{traceback.format_exc()}")
+            raise
+        logger.info("Display initialized")
+
+        logger.debug("About to call epd.init_Fast()")
+
+        epd.init_Fast()
+        logger.info("Fast mode initialized")
+    return epd
+
+def display_cleanup(epd):
+    with display_lock:
+        epd.init()
+        epd.Clear()
+        epd.sleep()
+        epd.epdconfig.module_exit(cleanup=True)
+        logger.info("Display cleanup completed")

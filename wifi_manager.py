@@ -8,12 +8,13 @@ import dotenv
 import platform
 from PIL import Image, ImageDraw, ImageFont
 import qrcode
+from display_adapter import return_display_lock
 logger = logging.getLogger(__name__)
 dotenv.load_dotenv(override=True)
 app = Flask(__name__)
 HOTSPOT_ENABLED = os.getenv('hotspot_enabled', 'true').lower() == 'true'
 DISPLAY_SCREEN_ROTATION = int(os.getenv('screen_rotation', 90))
-
+display_lock = return_display_lock()
 def get_hostname():
     """Get the Pi's hostname with .local suffix."""
     try:
@@ -314,8 +315,28 @@ def show_no_wifi_display(epd):
     Himage = Himage.rotate(DISPLAY_SCREEN_ROTATION, expand=True)
     
     # Display the image
-    buffer = epd.getbuffer(Himage)
-    epd.display(buffer)
+    with display_lock:
+        buffer = epd.getbuffer(Himage)
+        epd.display(buffer)
 
 if __name__ == '__main__':
     main()
+
+
+def no_wifi_loop(epd):
+    logger.info("Not connected to Wi-Fi. Starting Wi-Fi manager...")
+    subprocess.Popen(['python3', 'wifi_manager.py'])
+    show_no_wifi_display(epd)
+
+    # Wait and check for WiFi connection
+    while not is_connected():
+        logger.info("Waiting for WiFi connection...")
+        time.sleep(30)  # Check every 30 seconds
+
+    logger.info("WiFi connected. Continuing with main loop...")
+    # Reinitialize display after WiFi setup
+    with display_lock:
+        epd.init()
+        epd.Clear()
+        epd.init_Fast()
+        return True

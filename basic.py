@@ -18,7 +18,7 @@ from wifi_manager import is_connected, no_wifi_loop, get_hostname
 from display_adapter import return_display_lock
 import threading
 import math
-from flights import check_flights, gather_flights_within_radius
+from flights import check_flights, gather_flights_within_radius, update_display_with_flights, enhance_flight_data
 from threading import Lock, Event
 
 logger = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ DISPLAY_REFRESH_INTERVAL = int(os.getenv("refresh_interval", 90))
 DISPLAY_REFRESH_MINIMAL_TIME = int(os.getenv("refresh_minimal_time", 30))
 DISPLAY_REFRESH_FULL_INTERVAL = int(os.getenv("refresh_full_interval", 3600))
 WEATHER_UPDATE_INTERVAL = int(os.getenv("refresh_weather_interval", 600))
-BUS_DATA_MAX_AGE = 45  # Consider bus data stale after 30 seconds
+BUS_DATA_MAX_AGE = 60  # Consider bus data stale after 60 seconds
 
 weather_enabled = True if os.getenv("OPENWEATHER_API_KEY") else False
 
@@ -152,6 +152,11 @@ class WeatherManager:
             except TimeoutError:
                 logger.warning("Weather thread did not stop cleanly")
 
+    def get_weather_data(self):
+        """Return the current weather data with thread safety"""
+        with self._lock:
+            return self.weather_data
+
 class BusManager:
     def __init__(self):
         self.bus_service = BusService()
@@ -241,6 +246,18 @@ class BusManager:
             except TimeoutError:
                 logger.warning("Bus thread did not stop cleanly")
 
+    def get_valid_bus_data(self):
+        """Get current bus data if it's valid"""
+        data, error_message, stop_name = self.get_bus_data()
+        if error_message:
+            return None
+        return data
+
+    def get_stop_name(self):
+        """Get the current stop name"""
+        with self._lock:
+            return self.bus_data.get('stop_name')
+
 class DisplayManager:
     def __init__(self, epd):
         self.epd = epd
@@ -262,8 +279,16 @@ class DisplayManager:
         self.coordinates_lat = float(os.getenv('Coordinates_LAT'))
         self.coordinates_lng = float(os.getenv('Coordinates_LNG'))
         self.flight_getter = None
+        self.in_flight_mode = False
+        self.flight_mode_start = None
+        self.flight_mode_duration = 30  # Duration in seconds for flight mode
+        self.flight_mode_cooldown = 30  # Cooldown period before showing flights again
+        self.last_flight_mode_end = None
+        self.flight_monitoring_paused = False
+        self._flight_lock = threading.Lock()
         logger.info(f"DisplayManager initialized with min refresh interval: {self.min_refresh_interval}s")
         logger.info(f"DisplayManager initialized with coordinates: {self.coordinates_lat}, {self.coordinates_lng}")
+        logger.info(f"DisplayManager initialized with flight mode duration: {self.flight_mode_duration}s")
         
     def start(self):
         logger.info("Starting display manager components...")
@@ -273,10 +298,7 @@ class DisplayManager:
         
         # Initialize flight monitoring if enabled
         if self.flights_enabled:
-            self.flight_getter = gather_flights_within_radius(
-                lat=self.coordinates_lat,
-                lon=self.coordinates_lng
-            )
+            self.initialize_flight_monitoring()
             logger.info("Flight monitoring initialized")
         
         # Wait briefly for initial data
@@ -290,29 +312,94 @@ class DisplayManager:
         self._check_data_thread.start()
         logger.info("Display manager started - all components running")
 
+    def initialize_flight_monitoring(self):
+        """Initialize flight monitoring with cooldown control"""
+        search_radius = FLIGHT_MAX_RADIUS * 2
+        self.flight_getter = gather_flights_within_radius(
+            COORDINATES_LAT, 
+            COORDINATES_LNG, 
+            search_radius, 
+            FLIGHT_MAX_RADIUS, 
+            flight_check_interval=flight_check_interval,
+            aeroapi_enabled=aeroapi_enabled
+        )
+        self.flight_thread = threading.Thread(
+            target=self._check_flights,
+            daemon=True
+        )
+        self.flight_thread.start()
+
+    def _can_enter_flight_mode(self, current_time):
+        """Check if we can enter flight mode based on cooldown"""
+        with self._flight_lock:
+            if self.last_flight_mode_end is None:
+                return True
+            cooldown_passed = (current_time - self.last_flight_mode_end).total_seconds() >= self.flight_mode_cooldown
+            logger.debug(f"Time since last flight mode: {(current_time - self.last_flight_mode_end).total_seconds():.1f}s, cooldown: {self.flight_mode_cooldown}s")
+            return cooldown_passed
+
     def _check_flights(self):
         """Monitor flights and display when relevant"""
         while not self._stop_event.is_set():
             try:
                 current_time = datetime.now()
+
+                # First, check if we're in cooldown
+                if not self._can_enter_flight_mode(current_time):
+                    logger.debug("In flight cooldown period, skipping flight processing entirely")
+                    # Sleep for a longer period during cooldown
+                    time.sleep(DISPLAY_REFRESH_MINIMAL_TIME)
+                    continue
+
+                # Only check flights if enough time has passed since last check
                 if (current_time - self.last_flight_update).total_seconds() >= self.flight_check_interval:
                     if self.flight_getter:
-                        flights = self.flight_getter()
-                        if flights:
-                            # Only update display if minimum refresh interval has passed
-                            if self._can_update_display(current_time):
+                        flights_within_3km = self.flight_getter()
+                        if flights_within_3km:
+                            logger.info(f"Flights within the set radius: {len(flights_within_3km)}")
+
+                            closest_flight = flights_within_3km[0]
+                            # If the closest flight is on the ground, don't show it and get the next one
+                            if closest_flight.get('altitude') == "ground":
+                                logger.debug("Closest flight is on the ground. Looking for next airborne flight.")
+                                found_airborne = False
+                                for flight in flights_within_3km[1:]:
+                                    if flight.get('altitude') != "ground":
+                                        closest_flight = flight
+                                        found_airborne = True
+                                        break
+                                if not found_airborne:
+                                    logger.debug("No airborne flights found in the list.")
+                                    closest_flight = None
+
+                            # Enhance the flight data with additional details
+                            if closest_flight:
+                                logger.debug(f"Closest flight: {closest_flight}")
+                                enhanced_flight = enhance_flight_data(closest_flight)
+                                logger.debug(f"Enhanced flight: {enhanced_flight}")
+                                
                                 with self._display_lock:
-                                    logger.info("Displaying flight information")
-                                    check_flights(self.epd, self.flight_getter)
+                                    with self._flight_lock:
+                                        if not self.in_flight_mode:
+                                            logger.debug("Entering flight mode")
+                                            self.in_flight_mode = True
+                                            self.flight_mode_start = current_time
+                                            logger.debug(f"Flight mode start time: {self.flight_mode_start}")
+                                        else:
+                                            logger.debug("Updating flight display while in flight mode")
+                                        update_display_with_flights(self.epd, [enhanced_flight])
                                     self.last_display_update = datetime.now()
                                     self.last_flight_update = current_time
                         else:
-                            self.last_flight_update = current_time
+                            logger.debug("No flights found within the radius")
+
+                # Sleep for the flight check interval
+                time.sleep(self.flight_check_interval)
+
             except Exception as e:
-                logger.error(f"Error in flight monitoring: {e}")
+                logger.error(f"Error in flight check loop: {e}")
                 logger.debug(traceback.format_exc())
-            
-            time.sleep(1)
+                time.sleep(self.flight_check_interval)
 
     def _force_display_update(self):
         """Force an immediate display update"""
@@ -351,30 +438,44 @@ class DisplayManager:
 
     def _check_display_updates(self):
         """Continuously check for updates and switch modes as needed"""
-        logger.info("Starting display update checker thread")
-        
+        last_flight_log = 0
         while not self._stop_event.is_set():
             try:
                 current_time = datetime.now()
                 
-                # Only proceed if minimum refresh interval has passed
-                if not self._can_update_display(current_time):
+                # Check if we need to exit flight mode
+                with self._flight_lock:
+                    if self.in_flight_mode:
+                        time_in_flight_mode = (current_time - self.flight_mode_start).total_seconds()
+                        if time_in_flight_mode - last_flight_log >= 5:
+                            logger.debug(f"Time in flight mode: {time_in_flight_mode:.1f}s of {self.flight_mode_duration}s")
+                            last_flight_log = time_in_flight_mode
+                        if time_in_flight_mode >= self.flight_mode_duration:
+                            logger.info(f"Exiting flight mode after {time_in_flight_mode:.1f} seconds")
+                            self.in_flight_mode = False
+                            self.last_flight_mode_end = current_time
+                            self.flight_mode_start = None
+                            logger.info(f"Starting flight cooldown period of {self.flight_mode_cooldown} seconds")
+                            # Force an immediate update to normal display
+                            self._force_display_update()
+                        time.sleep(1)  # Add sleep when in flight mode
+                        continue
+
+                # Only check for updates every DISPLAY_REFRESH_MINIMAL_TIME seconds
+                time_since_last_update = (current_time - self.last_display_update).total_seconds()
+                if time_since_last_update < DISPLAY_REFRESH_MINIMAL_TIME:
                     time.sleep(1)
                     continue
-                
-                bus_data, error_message, stop_name = self.bus_manager.get_bus_data()
-                weather_data = self.weather_manager.get_weather()
-                
-                valid_bus_data = [
-                    bus for bus in bus_data 
-                    if any(time != "--" for time in bus["times"])
-                ]
+
+                weather_data = self.weather_manager.get_weather_data() if weather_enabled else None
+                valid_bus_data = self.bus_manager.get_valid_bus_data()
+                error_message = None
+                stop_name = self.bus_manager.get_stop_name()
 
                 with self._display_lock:
-                    time_since_last_update = (current_time - self.last_display_update).total_seconds()
-                    
+                    # Priority 1: Bus data
                     if valid_bus_data and not error_message:
-                        if self.in_weather_mode or time_since_last_update >= DISPLAY_REFRESH_INTERVAL:
+                        if time_since_last_update >= DISPLAY_REFRESH_INTERVAL or self.in_weather_mode:
                             logger.info("Updating bus display...")
                             self.in_weather_mode = False
                             self.perform_full_refresh()
@@ -383,6 +484,8 @@ class DisplayManager:
                             self.last_display_update = datetime.now()
                             self.update_count += 1
                             logger.info("Bus display updated successfully")
+                    
+                    # Priority 2: Weather
                     elif weather_enabled and weather_data:
                         if (not self.in_weather_mode or 
                             time_since_last_update >= WEATHER_UPDATE_INTERVAL):
@@ -399,8 +502,7 @@ class DisplayManager:
                 logger.error(f"Error in display update checker: {e}")
                 logger.debug(traceback.format_exc())
 
-            # Sleep for a short interval but ensure we don't miss our update windows
-            time.sleep(1)
+            time.sleep(DISPLAY_REFRESH_MINIMAL_TIME)  # Add minimum sleep between checks
 
     def needs_full_refresh(self):
         return self.update_count >= (DISPLAY_REFRESH_FULL_INTERVAL // DISPLAY_REFRESH_INTERVAL)
@@ -433,23 +535,6 @@ class DisplayManager:
         self.bus_manager.stop()
         logger.info("Display manager cleanup completed")
 
-def initialize_flight_monitoring(epd):
-    search_radius = FLIGHT_MAX_RADIUS * 2
-    get_flights = gather_flights_within_radius(
-        COORDINATES_LAT, 
-        COORDINATES_LNG, 
-        search_radius, 
-        FLIGHT_MAX_RADIUS, 
-        flight_check_interval=flight_check_interval,
-        aeroapi_enabled=aeroapi_enabled
-    )
-    flight_thread = threading.Thread(
-        target=check_flights,
-        args=(epd, get_flights, flight_check_interval),
-        daemon=True
-    )
-    flight_thread.start()
-
 def main():
     epd = None
     display_manager = None
@@ -463,9 +548,6 @@ def main():
             
         display_manager = DisplayManager(epd)
         display_manager.start()
-        
-        if flights_enabled:
-            initialize_flight_monitoring(epd)
         
         # Main loop just keeps the program running and handles interrupts
         while True:

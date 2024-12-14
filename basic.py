@@ -23,7 +23,7 @@ from wifi_manager import is_connected, show_no_wifi_display, get_hostname
 import subprocess
 import threading
 import math
-from flights import gather_flights_within_radius, enhance_flight_data, pause_event
+from flights import gather_flights_within_radius, enhance_flight_data
 from functools import lru_cache
 logger = logging.getLogger(__name__)
 
@@ -32,8 +32,8 @@ last_non_flight_image = None
 in_flight_mode = False
 flight_mode_start_time = None
 flight_mode_cooldown_end = None
-FLIGHT_MODE_DURATION = int(os.getenv('FLIGHT_MODE_DURATION', 15))  # Duration in seconds for flight mode
-FLIGHT_MODE_COOLDOWN = int(os.getenv('FLIGHT_MODE_COOLDOWN', 60))  # Cooldown period in seconds (5 minutes)
+FLIGHT_MODE_DURATION = 15  # Duration in seconds for flight mode
+FLIGHT_MODE_COOLDOWN = 300  # Cooldown period in seconds (5 minutes)
 
 # Set logging level for PIL.PngImagePlugin and urllib3.connectionpool to warning
 logging.getLogger('PIL.PngImagePlugin').setLevel(logging.WARNING)
@@ -683,33 +683,19 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
     buffer = epd.getbuffer(Himage)
     epd.display(buffer)
 
-def check_flights_and_update_display(epd, get_flights_func, flight_check_interval=10):
+def check_flights_and_update_display(epd, get_flights, flight_check_interval=10):
     """Check for flights within radius and manage flight mode display."""
     global last_non_flight_image, in_flight_mode, flight_mode_start_time, flight_mode_cooldown_end
-    
-    # Unpack the returned functions
-    get_flights, pause_gathering, resume_gathering = get_flights_func
     
     while True:
         current_time = time.time()
         
         # Check if we're in cooldown period
         if flight_mode_cooldown_end and current_time < flight_mode_cooldown_end:
-            cooldown_remaining = flight_mode_cooldown_end - current_time
-            if not pause_event.is_set():  # Only pause if not already paused
-                logger.debug(f"Flight mode in cooldown for {cooldown_remaining:.1f} more seconds, pausing flight gathering")
-                pause_gathering()
-            # Sleep for the shorter of the remaining cooldown time or the check interval
-            sleep_time = min(cooldown_remaining, flight_check_interval)
-            time.sleep(sleep_time)
+            logger.debug(f"Flight mode in cooldown for {flight_mode_cooldown_end - current_time:.1f} more seconds")
+            time.sleep(flight_check_interval)
             continue
             
-        # Resume gathering if we were in cooldown
-        if pause_event.is_set():
-            logger.debug("Cooldown period over, resuming flight gathering")
-            resume_gathering()
-            
-        # Only check flights if we're not in cooldown
         flights_within_radius = get_flights()
         
         if flights_within_radius:
@@ -763,9 +749,8 @@ def check_flights_and_update_display(epd, get_flights_func, flight_check_interva
                     enhanced_flight = enhance_flight_data(closest_flight)
                     logger.debug(f"Enhanced flight data: {enhanced_flight}")
                     update_display_with_flights(epd, [enhanced_flight])
-        
-        # Sleep for the check interval
-        time.sleep(flight_check_interval)
+            
+        time.sleep(flight_check_interval)  # Check every 10 seconds
 
 @lru_cache(maxsize=32)
 def get_font_paths():
@@ -993,20 +978,10 @@ def main():
         # Initialize flight monitoring
         if flights_enabled:
             search_radius = FLIGHT_MAX_RADIUS * 2
-            flight_functions = gather_flights_within_radius(
-                COORDINATES_LAT, 
-                COORDINATES_LNG, 
-                search_radius, 
-                FLIGHT_MAX_RADIUS, 
-                aeroapi_enabled=aeroapi_enabled
-            )
-            logger.debug(f"Flight monitoring initialized")
+            get_flights = gather_flights_within_radius(COORDINATES_LAT, COORDINATES_LNG, search_radius, FLIGHT_MAX_RADIUS, aeroapi_enabled=aeroapi_enabled)
+            logger.debug(f"Flights within the set radius: {get_flights}")
             # Start flight checking in a separate thread
-            threading.Thread(
-                target=check_flights_and_update_display, 
-                args=(epd, flight_functions, flight_check_interval), 
-                daemon=True
-            ).start()
+            threading.Thread(target=check_flights_and_update_display, args=(epd, get_flights, flight_check_interval), daemon=True).start()
         
         # Counter for full refresh every hour
         update_count = 0

@@ -248,20 +248,36 @@ class DisplayManager:
         self.last_weather_data = None
         self.last_weather_update = datetime.now()
         self.last_display_update = datetime.now()
+        self.last_flight_update = datetime.now()
         self.in_weather_mode = False
         self.weather_manager = WeatherManager()
         self.bus_manager = BusManager()
         self._display_lock = threading.Lock()
         self._check_data_thread = None
+        self._flight_thread = None
         self._stop_event = threading.Event()
         self.min_refresh_interval = int(os.getenv("refresh_minimal_time", 30))
+        self.flight_check_interval = int(os.getenv("flight_check_interval", 10))
+        self.flights_enabled = os.getenv("flights_enabled", "false").lower() == "true"
+        self.coordinates_lat = float(os.getenv('Coordinates_LAT'))
+        self.coordinates_lng = float(os.getenv('Coordinates_LNG'))
+        self.flight_getter = None
         logger.info(f"DisplayManager initialized with min refresh interval: {self.min_refresh_interval}s")
+        logger.info(f"DisplayManager initialized with coordinates: {self.coordinates_lat}, {self.coordinates_lng}")
         
     def start(self):
         logger.info("Starting display manager components...")
         # Start data managers first
         self.weather_manager.start()
         self.bus_manager.start()
+        
+        # Initialize flight monitoring if enabled
+        if self.flights_enabled:
+            self.flight_getter = gather_flights_within_radius(
+                lat=self.coordinates_lat,
+                lon=self.coordinates_lng
+            )
+            logger.info("Flight monitoring initialized")
         
         # Wait briefly for initial data
         time.sleep(2)
@@ -273,6 +289,30 @@ class DisplayManager:
         self._check_data_thread = threading.Thread(target=self._check_display_updates, daemon=True)
         self._check_data_thread.start()
         logger.info("Display manager started - all components running")
+
+    def _check_flights(self):
+        """Monitor flights and display when relevant"""
+        while not self._stop_event.is_set():
+            try:
+                current_time = datetime.now()
+                if (current_time - self.last_flight_update).total_seconds() >= self.flight_check_interval:
+                    if self.flight_getter:
+                        flights = self.flight_getter()
+                        if flights:
+                            # Only update display if minimum refresh interval has passed
+                            if self._can_update_display(current_time):
+                                with self._display_lock:
+                                    logger.info("Displaying flight information")
+                                    check_flights(self.epd, self.flight_getter)
+                                    self.last_display_update = datetime.now()
+                                    self.last_flight_update = current_time
+                        else:
+                            self.last_flight_update = current_time
+            except Exception as e:
+                logger.error(f"Error in flight monitoring: {e}")
+                logger.debug(traceback.format_exc())
+            
+            time.sleep(1)
 
     def _force_display_update(self):
         """Force an immediate display update"""
@@ -380,12 +420,15 @@ class DisplayManager:
     def cleanup(self):
         logger.info("Starting display manager cleanup...")
         self._stop_event.set()
-        if self._check_data_thread:
-            try:
-                self._check_data_thread.join(timeout=1.0)
-                logger.info("Display checker thread stopped")
-            except TimeoutError:
-                logger.warning("Display checker thread did not stop cleanly")
+        
+        for thread in [self._check_data_thread, self._flight_thread]:
+            if thread:
+                try:
+                    thread.join(timeout=1.0)
+                    logger.info(f"{thread.name} stopped")
+                except TimeoutError:
+                    logger.warning(f"{thread.name} did not stop cleanly")
+        
         self.weather_manager.stop()
         self.bus_manager.stop()
         logger.info("Display manager cleanup completed")

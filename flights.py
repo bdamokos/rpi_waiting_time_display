@@ -10,6 +10,7 @@ import math
 import time
 import threading
 import requests_cache
+from functools import lru_cache
 logger = logging.getLogger(__name__)
 # Initialize requests_cache with specific URLs excluded from caching
 
@@ -42,6 +43,7 @@ aeroapi_enable_paid_usage = os.getenv("aeroapi_enable_paid_usage", "false").lowe
 # Add at the top with other global variables
 pause_event = threading.Event()  # Global pause event for flight gathering
 
+@lru_cache(maxsize=1024)
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371000
     lat1 = float(lat1)

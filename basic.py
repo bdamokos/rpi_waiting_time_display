@@ -39,7 +39,7 @@ WEATHER_ICONS = {
     'Snow': '❄',
     'Thunderstorm': '⚡',
     'Drizzle': '🌦',
-    'Mist': '����',
+    'Mist': '🌫',
 }
 
 # Add to top of file with other constants

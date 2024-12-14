@@ -32,6 +32,7 @@ DISPLAY_REFRESH_INTERVAL = int(os.getenv("refresh_interval", 90))
 DISPLAY_REFRESH_MINIMAL_TIME = int(os.getenv("refresh_minimal_time", 30))
 DISPLAY_REFRESH_FULL_INTERVAL = int(os.getenv("refresh_full_interval", 3600))
 WEATHER_UPDATE_INTERVAL = int(os.getenv("refresh_weather_interval", 600))
+BUS_DATA_MAX_AGE = 45  # Consider bus data stale after 30 seconds
 
 weather_enabled = True if os.getenv("OPENWEATHER_API_KEY") else False
 
@@ -151,50 +152,94 @@ class WeatherManager:
             except TimeoutError:
                 logger.warning("Weather thread did not stop cleanly")
 
-def handle_bus_mode(epd, weather_data, valid_bus_data, error_message, stop_name, current_time):
-    """Handle bus display mode updates"""
-    in_weather_mode = False
-    wait_time = DISPLAY_REFRESH_INTERVAL if not error_message else DISPLAY_REFRESH_MINIMAL_TIME
-    
-    current_weather = {
-        'temperature': '--',
-        'description': 'Unknown',
-        'humidity': '--',
-        'time': datetime.now().strftime('%H:%M'),
-        'icon': 'unknown'
-    }
-    
-    if weather_data and 'current' in weather_data:
-        current_weather = weather_data['current']
-    
-    if weather_enabled:
-        update_display(epd, current_weather, valid_bus_data, error_message, stop_name)
-    else:
-        update_display(epd, None, valid_bus_data, error_message, stop_name)
-    
-    return in_weather_mode, wait_time
+class BusManager:
+    def __init__(self):
+        self.bus_service = BusService()
+        self.bus_data = {
+            'data': [],
+            'error_message': None,
+            'stop_name': None
+        }
+        self.last_update = None
+        self._lock = threading.Lock()
+        self._thread = None
+        self._stop_event = threading.Event()
+        logger.info("BusManager initialized")
 
-def handle_weather_mode(epd, weather_data, last_weather_data, last_weather_update, current_time):
-    """Handle weather display mode updates"""
-    in_weather_mode = True
-    weather_changed = (
-        last_weather_data is None or
-        weather_data['current'] != last_weather_data['current'] or
-        weather_data['forecast'] != last_weather_data['forecast']
-    )
-    
-    time_since_update = (current_time - last_weather_update).total_seconds()
-    
-    if (last_weather_data is None or 
-        (weather_changed and time_since_update >= WEATHER_UPDATE_INTERVAL) or 
-        time_since_update >= 3600):
-        
-        draw_weather_display(epd, weather_data)
-        last_weather_data = weather_data
-        last_weather_update = current_time
-    
-    wait_time = WEATHER_UPDATE_INTERVAL
-    return in_weather_mode, wait_time, last_weather_data, last_weather_update
+    def start(self):
+        logger.info("Starting bus manager thread...")
+        self._thread = threading.Thread(target=self._update_bus_data, daemon=True)
+        self._thread.start()
+        logger.info("Bus manager thread started")
+        # Get initial bus data
+        logger.info("Getting initial bus data...")
+        self._update_bus_data_once()
+
+    def _update_bus_data_once(self):
+        """Get bus data once"""
+        try:
+            logger.debug("Fetching new bus data...")
+            data, error_message, stop_name = self.bus_service.get_waiting_times()
+            
+            with self._lock:
+                self.bus_data = {
+                    'data': data,
+                    'error_message': error_message,
+                    'stop_name': stop_name
+                }
+                self.last_update = datetime.now()
+                logger.info(f"Bus data updated at {self.last_update.strftime('%H:%M:%S')}")
+                if data:
+                    logger.debug(f"Received {len(data)} bus entries")
+                if error_message:
+                    logger.warning(f"Bus error message: {error_message}")
+        except Exception as e:
+            logger.error(f"Error updating bus data: {e}")
+            logger.debug(traceback.format_exc())
+
+    def _update_bus_data(self):
+        """Bus update loop"""
+        logger.info("Bus update loop started")
+        while not self._stop_event.is_set():
+            try:
+                self._update_bus_data_once()
+            except Exception as e:
+                logger.error(f"Error in bus update loop: {e}")
+                logger.debug(traceback.format_exc())
+            
+            sleep_time = DISPLAY_REFRESH_INTERVAL
+            logger.debug(f"Sleeping for {sleep_time} seconds")
+            time.sleep(sleep_time)
+
+    def get_bus_data(self):
+        """Get current bus data"""
+        with self._lock:
+            current_time = datetime.now()
+            if self.last_update is None:
+                logger.warning("No bus data has been received yet")
+                return [], "Waiting for initial bus data...", None
+            
+            time_since_update = (current_time - self.last_update).total_seconds()
+            if time_since_update > BUS_DATA_MAX_AGE:
+                logger.warning(f"Bus data is stale (last update: {time_since_update:.0f} seconds ago)")
+                return [], f"Data stale ({time_since_update:.0f}s old)", self.bus_data['stop_name']
+            
+            logger.debug(f"Returning bus data from {self.last_update.strftime('%H:%M:%S')}")
+            return (
+                self.bus_data['data'],
+                self.bus_data['error_message'],
+                self.bus_data['stop_name']
+            )
+
+    def stop(self):
+        if self._thread:
+            logger.info("Stopping bus manager thread...")
+            self._stop_event.set()
+            try:
+                self._thread.join(timeout=1.0)
+                logger.info("Bus manager thread stopped")
+            except TimeoutError:
+                logger.warning("Bus thread did not stop cleanly")
 
 class DisplayManager:
     def __init__(self, epd):
@@ -202,13 +247,121 @@ class DisplayManager:
         self.update_count = 0
         self.last_weather_data = None
         self.last_weather_update = datetime.now()
+        self.last_display_update = datetime.now()
         self.in_weather_mode = False
         self.weather_manager = WeatherManager()
-        self.bus_service = BusService()
+        self.bus_manager = BusManager()
+        self._display_lock = threading.Lock()
+        self._check_data_thread = None
+        self._stop_event = threading.Event()
+        self.min_refresh_interval = int(os.getenv("refresh_minimal_time", 30))
+        logger.info(f"DisplayManager initialized with min refresh interval: {self.min_refresh_interval}s")
         
     def start(self):
+        logger.info("Starting display manager components...")
+        # Start data managers first
         self.weather_manager.start()
+        self.bus_manager.start()
         
+        # Wait briefly for initial data
+        time.sleep(2)
+        
+        # Force first display update
+        self._force_display_update()
+        
+        # Start the update checker thread
+        self._check_data_thread = threading.Thread(target=self._check_display_updates, daemon=True)
+        self._check_data_thread.start()
+        logger.info("Display manager started - all components running")
+
+    def _force_display_update(self):
+        """Force an immediate display update"""
+        logger.info("Forcing initial display update...")
+        try:
+            with self._display_lock:
+                bus_data, error_message, stop_name = self.bus_manager.get_bus_data()
+                weather_data = self.weather_manager.get_weather()
+                
+                valid_bus_data = [
+                    bus for bus in bus_data 
+                    if any(time != "--" for time in bus["times"])
+                ]
+                
+                if valid_bus_data and not error_message:
+                    logger.info(f"Initial display: showing bus data ({len(valid_bus_data)} entries)")
+                    current_weather = weather_data['current'] if weather_data else None
+                    update_display(self.epd, current_weather, valid_bus_data, error_message, stop_name)
+                    self.in_weather_mode = False
+                elif weather_enabled and weather_data:
+                    logger.info("Initial display: showing weather data")
+                    draw_weather_display(self.epd, weather_data)
+                    self.in_weather_mode = True
+                else:
+                    logger.warning("No valid data for initial display")
+                
+                self.last_display_update = datetime.now()
+        except Exception as e:
+            logger.error(f"Error in initial display update: {e}")
+            logger.debug(traceback.format_exc())
+
+    def _can_update_display(self, current_time):
+        """Check if enough time has passed since last display update"""
+        time_since_last_update = (current_time - self.last_display_update).total_seconds()
+        return time_since_last_update >= self.min_refresh_interval
+
+    def _check_display_updates(self):
+        """Continuously check for updates and switch modes as needed"""
+        logger.info("Starting display update checker thread")
+        
+        while not self._stop_event.is_set():
+            try:
+                current_time = datetime.now()
+                
+                # Only proceed if minimum refresh interval has passed
+                if not self._can_update_display(current_time):
+                    time.sleep(1)
+                    continue
+                
+                bus_data, error_message, stop_name = self.bus_manager.get_bus_data()
+                weather_data = self.weather_manager.get_weather()
+                
+                valid_bus_data = [
+                    bus for bus in bus_data 
+                    if any(time != "--" for time in bus["times"])
+                ]
+
+                with self._display_lock:
+                    time_since_last_update = (current_time - self.last_display_update).total_seconds()
+                    
+                    if valid_bus_data and not error_message:
+                        if self.in_weather_mode or time_since_last_update >= DISPLAY_REFRESH_INTERVAL:
+                            logger.info("Updating bus display...")
+                            self.in_weather_mode = False
+                            self.perform_full_refresh()
+                            current_weather = weather_data['current'] if weather_data else None
+                            update_display(self.epd, current_weather, valid_bus_data, error_message, stop_name)
+                            self.last_display_update = datetime.now()
+                            self.update_count += 1
+                            logger.info("Bus display updated successfully")
+                    elif weather_enabled and weather_data:
+                        if (not self.in_weather_mode or 
+                            time_since_last_update >= WEATHER_UPDATE_INTERVAL):
+                            logger.info("Updating weather display...")
+                            self.in_weather_mode = True
+                            self.perform_full_refresh()
+                            draw_weather_display(self.epd, weather_data)
+                            self.last_weather_data = weather_data
+                            self.last_weather_update = current_time
+                            self.last_display_update = datetime.now()
+                            logger.info("Weather display updated successfully")
+
+            except Exception as e:
+                logger.error(f"Error in display update checker: {e}")
+                logger.debug(traceback.format_exc())
+
+            # Sleep for a short interval but ensure we don't miss our update windows
+            time.sleep(1)
+
     def needs_full_refresh(self):
         return self.update_count >= (DISPLAY_REFRESH_FULL_INTERVAL // DISPLAY_REFRESH_INTERVAL)
         
@@ -225,7 +378,17 @@ class DisplayManager:
         return f"public transport update in {wait_time} seconds ({updates_until_refresh} until full refresh)"
 
     def cleanup(self):
+        logger.info("Starting display manager cleanup...")
+        self._stop_event.set()
+        if self._check_data_thread:
+            try:
+                self._check_data_thread.join(timeout=1.0)
+                logger.info("Display checker thread stopped")
+            except TimeoutError:
+                logger.warning("Display checker thread did not stop cleanly")
         self.weather_manager.stop()
+        self.bus_manager.stop()
+        logger.info("Display manager cleanup completed")
 
 def initialize_flight_monitoring(epd):
     search_radius = FLIGHT_MAX_RADIUS * 2
@@ -261,44 +424,9 @@ def main():
         if flights_enabled:
             initialize_flight_monitoring(epd)
         
+        # Main loop just keeps the program running and handles interrupts
         while True:
-            try:
-                # Get data
-                weather_data = display_manager.weather_manager.get_weather()
-                bus_data, error_message, stop_name = display_manager.bus_service.get_waiting_times()
-                
-                valid_bus_data = [
-                    bus for bus in bus_data 
-                    if any(time != "--" for time in bus["times"])
-                ]
-                
-                current_time = datetime.now()
-                display_manager.perform_full_refresh()
-                
-                # Update display based on mode
-                if valid_bus_data:
-                    display_manager.in_weather_mode, wait_time = handle_bus_mode(
-                        epd, weather_data, valid_bus_data, error_message, stop_name, current_time
-                    )
-                    display_manager.update_count += 1
-                    display_manager.last_weather_data = None
-                    display_manager.last_weather_update = current_time
-                elif weather_enabled:
-                    (display_manager.in_weather_mode, wait_time, 
-                     display_manager.last_weather_data, 
-                     display_manager.last_weather_update) = handle_weather_mode(
-                        epd, weather_data, display_manager.last_weather_data,
-                        display_manager.last_weather_update, current_time
-                    )
-                
-                next_update = display_manager.get_next_update_message(wait_time)
-                logger.info(f"Waiting {wait_time} seconds until next update ({next_update})")
-                time.sleep(wait_time)
-                
-            except Exception as e:
-                logger.error(f"Error in main loop: {e}", exc_info=True)
-                time.sleep(10)
-                continue
+            time.sleep(1)
                 
     except KeyboardInterrupt:
         logger.info("Ctrl+C pressed - Cleaning up...")

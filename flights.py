@@ -10,12 +10,11 @@ import math
 import time
 import threading
 import requests_cache
-logger = logging.getLogger(__name__)
-# Initialize requests_cache with specific URLs excluded from caching
 
+# Initialize requests_cache with specific URLs excluded from caching
 requests_cache.install_cache(
     'flight_cache', 
-    backend='memory', 
+    backend='sqlite', 
     expire_after=3600,  # Cache expires after 1 hour
     urls_expire_after={
         'https://api.adsb.one/v2/point': 0,  # Do not cache ADS-B API calls
@@ -23,7 +22,7 @@ requests_cache.install_cache(
     }
 )
 
-
+logger = logging.getLogger(__name__)
 # Set urllib3 logging level to INFO to reduce debug noise
 logging.getLogger('urllib3').setLevel(logging.INFO)
 logging.getLogger('requests_cache').setLevel(logging.INFO)
@@ -71,13 +70,13 @@ def gather_flights_within_radius(lat, lon, radius=10, distance_threshold=3, aero
                         monitored_flights.append({
                             'hex': hex_id,
                             'last_distance': current_distance,
-                            'callsign': flight.get('flight', ''),
-                            'lat': flight.get('lat', ''),
-                            'lon': flight.get('lon', ''),
-                            'registration': flight.get('r', ''),
-                            'description': flight.get('desc', ''),
-                            'operator': flight.get('ownOp', ''),
-                            'squawk': flight.get('squawk', ''),
+                            'callsign': flight.get('flight', 'N/A'),
+                            'lat': flight.get('lat', 'N/A'),
+                            'lon': flight.get('lon', 'N/A'),
+                            'registration': flight.get('r', 'N/A'),
+                            'description': flight.get('desc', 'N/A'),
+                            'operator': flight.get('ownOp', 'N/A'),
+                            'squawk': flight.get('squawk', 'N/A'),
                             'emergency': flight.get('emergency', ''),
                             'altitude': flight.get('alt_baro', ''),
                             'heading': flight.get('true_heading', ''),  
@@ -94,9 +93,10 @@ def gather_flights_within_radius(lat, lon, radius=10, distance_threshold=3, aero
         with lock:
             if monitored_flights:
                 closest_flight = min(monitored_flights, key=lambda x: x['last_distance'])
-                logger.debug(f"Closest flight: {closest_flight['callsign']}  at {closest_flight['last_distance']:.1f}km")
-                # logger.debug(closest_flight)
-                
+                logger.debug(f"Closest flight: {closest_flight['callsign']} at {closest_flight['last_distance']:.1f}km")
+            
+
+
                         # # Debug output
                         # for key, value in closest_flight.items():
                         #     print(f"{key}: {value}")
@@ -111,28 +111,21 @@ def gather_flights_within_radius(lat, lon, radius=10, distance_threshold=3, aero
 
 def enhance_flight_data(flight_data):
     '''Enhance flight data with additional information from AeroAPI'''
-    logger.debug(f"Enhancing flight data for {flight_data['callsign']}")
-    if not flight_data.get('callsign'):
-        logger.error(f"No callsign found for {flight_data}")
-        return flight_data
+
     flight_data_enhanced = aeroapi_get_flight(flight_data['callsign'].strip())
-    if not flight_data_enhanced:
-        logger.error(f"No flight data found for {flight_data['callsign']}")
-        return flight_data
+    
     # Add null check for closest_flight_data
-    elif flight_data_enhanced:
+    if flight_data_enhanced:
         # Update operator if not already set
-        
-        operator_iata = flight_data_enhanced.get('operator_iata', '')
-        if operator_iata:
-            operator_name = aeroapi_get_operator(operator_iata.strip())
-            if operator_name:
-                flight_data_enhanced['operator_name'] = operator_name
-                logger.debug(f"Operator name set for {flight_data['callsign']}: {operator_name}")
+        if not flight_data_enhanced['operator']:
+            operator_iata = flight_data_enhanced.get('operator_iata', '').strip()
+            if operator_iata:
+                operator_name = aeroapi_get_operator(operator_iata)
+                if operator_name:
+                    flight_data_enhanced['operator'] = operator_name
 
         # Get aircraft type description - add null check
         if flight_data_enhanced.get("aircraft_type"):
-            logger.debug(f"Aircraft type set for {flight_data['callsign']}: {flight_data_enhanced['aircraft_type']}")
             manufacturer, type = aeroapi_get_plane_type(flight_data_enhanced["aircraft_type"])
             flight_data_enhanced["manufacturer"] = manufacturer 
             flight_data_enhanced["type"] = type
@@ -145,14 +138,14 @@ def enhance_flight_data(flight_data):
                     flight_data_enhanced["type"] = parts[1]
                 else:
                     flight_data_enhanced["type"] = flight_data_enhanced["description"]
-        
+
         # Construct flight number - add null checks
         if flight_data_enhanced.get("operator_iata") and flight_data_enhanced.get("flight_number"):
             flight_data_enhanced["flight_number"] = format_flight_number(
                 flight_data_enhanced["operator_iata"],
                 flight_data_enhanced["flight_number"]
             )
-            logger.debug(f"Flight number set for {flight_data['callsign']}: {flight_data_enhanced['flight_number']}")
+
         # Update closest flight with new data
         flight_data.update(flight_data_enhanced)
 
@@ -250,23 +243,20 @@ def aeroapi_get_usage():
 
 def aeroapi_get_flight(callsign):
         flight_data = aeroapi_get_data("flights", callsign, "max_pages=1")
-        if not flight_data or 'flights' not in flight_data or not flight_data['flights']:
-            logger.error(f"No flight data found for {callsign}")
-            return None
         if flight_data and 'flights' in flight_data and flight_data['flights']:
             first_flight = flight_data['flights'][0]
             origin = first_flight.get('origin', {}) or {}
             destination = first_flight.get('destination', {}) or {}
 
-            origin_code = origin.get('code_iata', '')
-            origin_name = origin.get('name', '')
-            origin_city = origin.get('city', '')
+            origin_code = origin.get('code_iata', 'N/A')
+            origin_name = origin.get('name', 'N/A')
+            origin_city = origin.get('city', 'N/A')
             
-            destination_code = destination.get('code_iata', '')
-            destination_name = destination.get('name', '')
-            destination_city = destination.get('city', '')
+            destination_code = destination.get('code_iata', 'N/A')
+            destination_name = destination.get('name', 'N/A')
+            destination_city = destination.get('city', 'N/A')
 
-            type = first_flight.get('type', '')
+            type = first_flight.get('type', 'N/A')
             
             result = {
                 "origin_code": origin_code,
@@ -286,16 +276,15 @@ def aeroapi_get_flight(callsign):
         return None
         
 def aeroapi_get_operator(operator_code_iata):
-    logger.debug(f"Getting operator data for {operator_code_iata}")
     operator_data = aeroapi_get_data("operators", operator_code_iata)
     if operator_data:
         operator_code = operator_data.get('iata', '')
         operator_name = operator_data.get('name', '')
 
         
-        # Check if operators.json exists and read its content
-        if os.path.exists('operators.json'):
-            with open('operators.json', 'r') as file:
+        # Check if operators.js exists and read its content
+        if os.path.exists('operators.js'):
+            with open('operators.js', 'r') as file:
                 cached_operators = json.load(file)
         else:
             cached_operators = {}
@@ -322,9 +311,9 @@ def aeroapi_get_operator(operator_code_iata):
         
         # Cache the new operator data
         cached_operators[operator_code] = operator_info
-        with open('operators.json', 'w') as file:
+        with open('operators.js', 'w') as file:
             json.dump(cached_operators, file)
-        logger.debug(f"Operator name set for {operator_code}: {operator_name}")
+
         return operator_name
     return None
 
@@ -333,9 +322,9 @@ def aeroapi_get_plane_type(aircraft_type):
         if not aircraft_type:
             return None, None
 
-        # Check if types.json exists and read its content
-        if os.path.exists('types.json'):
-            with open('types.json', 'r') as file:
+        # Check if types.js exists and read its content
+        if os.path.exists('types.js'):
+            with open('types.js', 'r') as file:
                 cached_types = json.load(file)
         else:
             cached_types = {}
@@ -358,7 +347,7 @@ def aeroapi_get_plane_type(aircraft_type):
             
             # Cache the new type data
             cached_types[aircraft_type] = type_info
-            with open('types.json', 'w') as file:
+            with open('types.js', 'w') as file:
                 json.dump(cached_types, file)
 
             return type_info['manufacturer'], type_info['type']
@@ -380,19 +369,19 @@ if __name__ == "__main__":
                     if not existing_flight:
                         aeroapi_result = aeroapi_get_flight(flight['callsign'].strip())
                         if not flight['operator'] and aeroapi_result:
-                            operator_iata = aeroapi_result.get('operator_iata', '')
+                            operator_iata = aeroapi_result.get('operator_iata', '').strip()
                             if operator_iata:
-                                operator_name = aeroapi_get_operator(operator_iata.strip())
+                                operator_name = aeroapi_get_operator(operator_iata)
                                 if operator_name:
                                     flight['operator'] = operator_name
                         if aeroapi_result:
                             flight.update(aeroapi_result)
                         print(f"Flight: {flight['callsign']} ({flight['hex']}) is {flight['last_distance']:.1f}km away. "
-                              f"Origin: {flight.get('origin_name', '')} ({flight.get('origin_code', '')}), "
-                              f"{flight.get('origin_city', '')}. "
-                              f"Destination: {flight.get('destination_name', '')} ({flight.get('destination_code', '')}), "
-                              f"{flight.get('destination_city', '')}. "
-                              f"Type: {flight.get('type', '')}. "
+                              f"Origin: {flight.get('origin_name', 'N/A')} ({flight.get('origin_code', 'N/A')}), "
+                              f"{flight.get('origin_city', 'N/A')}. "
+                              f"Destination: {flight.get('destination_name', 'N/A')} ({flight.get('destination_code', 'N/A')}), "
+                              f"{flight.get('destination_city', 'N/A')}. "
+                              f"Type: {flight.get('type', 'N/A')}. "
                               f"Operator: {flight['operator']}. "
                               f"Description: {flight['description']}. ")
                         seen_flights.append(flight)

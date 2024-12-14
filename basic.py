@@ -4,7 +4,7 @@ import sys
 import os
 from pathlib import Path
 import logging
-from display_adapter import DisplayAdapter
+from display_adapter import display_full_refresh, initialize_display, display_cleanup
 import time
 from datetime import datetime
 from weather import WeatherService, draw_weather_display
@@ -14,9 +14,8 @@ import log_config
 import random
 import traceback
 from debug_server import start_debug_server
-from wifi_manager import is_connected, show_no_wifi_display, get_hostname
+from wifi_manager import is_connected, no_wifi_loop, get_hostname
 from display_adapter import return_display_lock
-import subprocess
 import threading
 import math
 from flights import check_flights, gather_flights_within_radius
@@ -58,6 +57,7 @@ flight_altitude_convert_feet = True if os.getenv('flight_altitude_convert_feet',
 if not weather_enabled:
     logger.warning("Weather is not enabled, weather data will not be displayed. Please set OPENWEATHER_API_KEY in .env to enable it.")
 
+
 def main():
     epd = None
     try:
@@ -66,51 +66,11 @@ def main():
         # Start debug server if enabled
         start_debug_server()
         
-        # Initialize display using adapter
-        logger.debug("About to initialize display")
-        epd = DisplayAdapter.get_display()
-        
-        # Add debug logs before EPD commands
-        logger.debug("About to call epd.init()")
-        try:
-            with display_lock:
-                epd.init()
-        except Exception as e:
-            logger.error(f"Error initializing display: {str(e)}\n{traceback.format_exc()}")
-            raise
-        
-        logger.debug("About to call epd.Clear()")
-        try:
-            with display_lock:
-                epd.Clear()
-        except Exception as e:
-            logger.error(f"Error clearing display: {str(e)}\n{traceback.format_exc()}")
-            raise
-        logger.info("Display initialized")
-        
-        logger.debug("About to call epd.init_Fast()")
-        with display_lock:
-            epd.init_Fast()
-        logger.info("Fast mode initialized")
+        epd = initialize_display()
         
         # Check Wi-Fi connectivity
         if not is_connected():
-            logger.info("Not connected to Wi-Fi. Starting Wi-Fi manager...")
-            subprocess.Popen(['python3', 'wifi_manager.py'])
-            with display_lock:
-                show_no_wifi_display(epd)
-            
-            # Wait and check for WiFi connection
-            while not is_connected():
-                logger.info("Waiting for WiFi connection...")
-                time.sleep(30)  # Check every 30 seconds
-            
-            logger.info("WiFi connected. Continuing with main loop...")
-            # Reinitialize display after WiFi setup
-            with display_lock:
-                epd.init()
-                epd.Clear()
-                epd.init_Fast()
+            no_wifi_loop(epd)
 
         # Initialize services
         weather = WeatherService() if weather_enabled else None
@@ -170,15 +130,7 @@ def main():
                 
                 if needs_full_refresh:
                     logger.info("Performing hourly full refresh...")
-                    logger.debug("About to call epd.init()")
-                    with display_lock:
-                        epd.init()
-                    logger.debug("About to call epd.Clear()")
-                    with display_lock:
-                        epd.Clear()
-                    logger.debug("About to call epd.init_Fast()")
-                    with display_lock:
-                        epd.init_Fast()
+                    display_full_refresh(epd)
                     update_count = 0
                 
                 # Determine display mode
@@ -243,19 +195,7 @@ def main():
         logger.info("Cleaning up...")
         if epd is not None:
             try:
-                logger.debug("About to call final epd.init()")
-                with display_lock:
-                    epd.init()
-                logger.debug("About to call final epd.Clear()")
-                with display_lock:
-                    epd.Clear()
-                logger.debug("About to call epd.sleep()")
-                with display_lock:
-                    epd.sleep()
-                logger.debug("About to call module_exit")
-                with display_lock:
-                    epd.epdconfig.module_exit(cleanup=True)
-                logger.info("Display cleanup completed")
+                display_cleanup(epd)
             except Exception as e:
                 logger.error(f"Error during cleanup: {str(e)}\n{traceback.format_exc()}")
         sys.exit(0)

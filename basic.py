@@ -24,7 +24,7 @@ import subprocess
 import threading
 import math
 from flights import gather_flights_within_radius, enhance_flight_data
-
+from functools import lru_cache
 logger = logging.getLogger(__name__)
 # Set logging level for PIL.PngImagePlugin and urllib3.connectionpool to warning
 logging.getLogger('PIL.PngImagePlugin').setLevel(logging.WARNING)
@@ -39,7 +39,7 @@ WEATHER_ICONS = {
     'Snow': '❄',
     'Thunderstorm': '⚡',
     'Drizzle': '🌦',
-    'Mist': '🌫',
+    'Mist': '����',
 }
 
 # Add to top of file with other constants
@@ -674,8 +674,20 @@ def check_flights_and_update_display(epd, get_flights, flight_check_interval=10)
             # Get the closest flight (first one in the list)
           
             closest_flight = flights_within_3km[0]
+            # If the closest flight is on the ground, don't show it and get the next one
+            if closest_flight.get('altitude') == "ground":
+                logger.debug("Closest flight is on the ground. Getting next one.")
+                if len(flights_within_3km) > 1:
+                    closest_flight = flights_within_3km[1]
+                else:
+                    logger.debug("No flights in the air within the max radius. Skipping update.")
+                    continue
+            
+
             # Enhance the flight data with additional details
+            logger.debug(f"Closest flight: {closest_flight}")
             enhanced_flight = enhance_flight_data(closest_flight)
+            logger.debug(f"Enhanced flight: {enhanced_flight}")
             # Update display with the enhanced flight data
             update_display_with_flights(epd, [enhanced_flight])
 
@@ -683,6 +695,28 @@ def check_flights_and_update_display(epd, get_flights, flight_check_interval=10)
         
         time.sleep(flight_check_interval)  # Check every 10 seconds
 
+@lru_cache(maxsize=32)
+def get_font_paths():
+    """Get the appropriate font paths based on the operating system."""
+    import platform
+    import os
+    
+    system = platform.system()
+    
+    if system == "Darwin":  # macOS
+        return {
+            'dejavu': '/System/Library/Fonts/Supplemental/DejaVuSans.ttf',
+            'dejavu_bold': '/System/Library/Fonts/Supplemental/DejaVuSans-Bold.ttf',
+            'emoji': os.path.expanduser('~/Library/Fonts/NotoEmoji[wght].ttf')  # Use user's Noto Emoji font
+        }
+    else:  # Assume Raspberry Pi/Linux
+        return {
+            'dejavu': '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+            'dejavu_bold': '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+            'emoji': '/usr/local/share/fonts/noto/NotoEmoji-Regular.ttf'
+        }
+
+font_paths = get_font_paths()
 def update_display_with_flights(epd, flights):
     """Update the display with flight information."""
     # Create a new image with mode 'RGB'
@@ -694,86 +728,108 @@ def update_display_with_flights(epd, flights):
         Himage = Image.new('RGB', (width, height), 'white')
     draw = ImageDraw.Draw(Himage)
 
-
-        # Try to load fonts
+    # Get font paths based on the operating system
+    
+    
+    # Try to load fonts
     try:
-        # Adjust font paths as needed
-        font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 10)
-        font_medium = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 12)
-        font_large = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 20)
-        font_xlarge = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 24)
-        emoji_font_small = ImageFont.truetype("/usr/local/share/fonts/noto/NotoEmoji-Regular.ttf", 10)
-    except IOError:
-        # Fallback to default font
-        font_small = ImageFont.load_default()
-        font_medium = ImageFont.load_default()
-        font_large = ImageFont.load_default()
-        font_xlarge = ImageFont.load_default()
-        emoji_font_small = font_small
-    
+        font_tiny = ImageFont.truetype(font_paths['dejavu'], 10)
+        font_small = ImageFont.truetype(font_paths['dejavu'], 12)
+        font_medium = ImageFont.truetype(font_paths['dejavu_bold'], 16)
+        font_large = ImageFont.truetype(font_paths['dejavu_bold'], 24)
+        font_xl = ImageFont.truetype(font_paths['dejavu_bold'], 36)  # Slightly smaller but still prominent
+        emoji_font = ImageFont.truetype(font_paths['emoji'], 16)
+        emoji_font_large = ImageFont.truetype(font_paths['emoji'], 20)
+        logger.debug(f"Loaded fonts successfully from paths: {font_paths}")
+    except IOError as e:
+        logger.error(f"Failed to load fonts: {str(e)}")
+        font_tiny = font_small = font_medium = font_large = font_xl = emoji_font = emoji_font_large = ImageFont.load_default()
+
+    MARGIN = 8  # Slightly smaller margin
     flight_details = flights[0]
+
+    # Top section: Flight number and operator
     if not flight_details:
-        logger.warning("No flight details available to display")
+        logger.error(f"Flight details not found: {flight_details}")
         return
-    # Top section: Airline and Flight Number
-    draw.text((5, 5), flight_details.get('operator', ''), fill='black', font=font_large)
-    # Flight number with emoji using emoji font for the plane symbol
-    draw.text((200, 5), "✈️", fill='black', font=emoji_font_small)
-    flight_text = f" {flight_details.get('flight_number', '')}"
-    draw.text((215, 5), flight_text, fill='black', font=font_large)
+    operator = flight_details.get('operator_name', '')
+    flight_number = flight_details.get('flight_number', '')
     
-    # Origin Code
-    draw.text((10, 35), flight_details.get('origin','').get('code',''), fill='black', font=font_xlarge)
+    # Draw operator name
+    if operator:
+        operator_name = operator.get('name', '') if isinstance(operator, dict) else operator
+        # Trim operator name if it's too long
+        if len(operator_name) > 25:
+            operator_name = operator_name[:22] + "..."
+        draw.text((MARGIN, MARGIN), operator_name, fill='black', font=font_small)
     
-    # Distance
-    distance_text = f"{flight_details['last_distance']:.1f}"
-    draw.text((100, 45), distance_text, fill='black', font=font_xlarge)
-    draw.text((100, 70), "km away", fill='black', font=font_small)
-    
-    # Destination Code
-    draw.text((190, 35), flight_details['destination']['code'], fill='black', font=font_xlarge)
-    
-    # Bottom information bar
-    # Manufacturer info
-    draw.text((5, 100), "🛩️", fill='black', font=emoji_font_small)
-    draw.text((20, 100), f"{flight_details['manufacturer']} {flight_details['type']}", fill='black', font=font_small)
-    
-    # Registration
-    draw.text((100, 100), "🏷️", fill='black', font=emoji_font_small)
-    draw.text((115, 100), f"{flight_details['registration']}", fill='black', font=font_small)
-    
-    # Altitude 
-    draw.text((200, 100), "⬆️", fill='black', font=emoji_font_small)
-    draw.text((215, 100), f"{flight_details['altitude']} ft", fill='black', font=font_small)
-    
-    # Improved Heading Indicator
-    center_x, center_y = 125, 110
-    compass_radius = 15
-    heading = flight_details['heading']
-    
-    # Draw compass circle
-    draw.ellipse([center_x-compass_radius, center_y-compass_radius, 
-                  center_x+compass_radius, center_y+compass_radius], 
-                 outline='lightgray', width=1)
-    
-    # Draw cardinal directions
-    directions = [
-        ('N', 0), ('E', 90), ('S', 180), ('W', 270)
-    ]
-    for label, angle in directions:
-        # Calculate position for direction labels
-        label_x = center_x + int(compass_radius * 1.2 * math.sin(math.radians(angle)))
-        label_y = center_y - int(compass_radius * 1.2 * math.cos(math.radians(angle)))
-        draw.text((label_x-5, label_y-5), label, fill='lightgray', font=font_small)
-    
-    # Draw heading line
-    line_length = compass_radius
-    end_x = center_x + int(line_length * math.sin(math.radians(heading)))
-    end_y = center_y - int(line_length * math.cos(math.radians(heading)))
-    draw.line([(center_x, center_y), (end_x, end_y)], fill='black', width=2)
-    
+    # Draw flight number with plane emoji
+    # Split emoji and text to use different fonts
+    draw.text((width - 75 - MARGIN, MARGIN), "✈️", fill='black', font=emoji_font)
+    draw.text((width - 60 - MARGIN, MARGIN), flight_number, fill='black', font=font_small)
 
+    # Draw horizontal line under header
+    draw.line([(MARGIN, 22), (width - MARGIN, 22)], fill='black', width=1)
 
+    # Main section: Origin -> Distance -> Destination
+    y_pos = 24  # Moved up even further
+    
+    # Draw distance at the top
+    distance = f"{flight_details['last_distance']:.1f}km"
+    distance_bbox = draw.textbbox((0, 0), distance, font=font_small)
+    distance_width = distance_bbox[2] - distance_bbox[0]
+    distance_x = (width - distance_width) // 2
+    draw.text((distance_x, y_pos), distance, fill='black', font=font_small)
+    
+    # Origin and Destination (moved up)
+    y_pos = y_pos + 10  # Reduced spacing further
+    
+    # Origin
+    origin_code = flight_details.get('origin_code', '')
+    draw.text((MARGIN, y_pos), origin_code, fill='black', font=font_xl)
+    # Draw origin city name below the code, but closer
+    draw.text((MARGIN, y_pos + font_xl.size - 10), flight_details.get('origin_city', ''), fill='black', font=font_tiny)
+    
+    # Draw arrow
+    arrow = "→"
+    arrow_bbox = draw.textbbox((0, 0), arrow, font=font_large)
+    arrow_width = arrow_bbox[2] - arrow_bbox[0]
+    arrow_x = (width - arrow_width) // 2
+    draw.text((arrow_x, y_pos + 8), arrow, fill='black', font=font_large)
+    
+    # Destination
+    dest_code = flight_details.get('destination_code', '')
+    dest_city = flight_details.get('destination_city', '')
+    dest_bbox = draw.textbbox((0, 0), dest_code, font=font_xl)
+    dest_width = dest_bbox[2] - dest_bbox[0]
+    dest_x = width - dest_width - MARGIN
+    
+    # Draw destination code
+    draw.text((dest_x, y_pos), dest_code, fill='black', font=font_xl)
+    # Draw destination city name below the code, but closer
+    dest_city_bbox = draw.textbbox((0, 0), dest_city, font=font_tiny)
+    dest_city_width = dest_city_bbox[2] - dest_bbox[0]
+    dest_city_x = width - dest_city_width - MARGIN
+    draw.text((dest_city_x, y_pos + font_xl.size - 10), dest_city, fill='black', font=font_tiny)
+
+    # Bottom section: Aircraft details
+    bottom_y = height - 25  # Moved up slightly
+    
+    # Draw horizontal line above bottom section
+    draw.line([(MARGIN, bottom_y - 15), (width - MARGIN, bottom_y - 15)], fill='black', width=1)
+    
+    # Aircraft type with emoji
+    draw.text((MARGIN, bottom_y - 3), "🛩️", fill='black', font=emoji_font)
+    aircraft_text = f"{flight_details.get('manufacturer', '')} {flight_details.get('type', '')}"
+    draw.text((MARGIN + 20, bottom_y - 3), aircraft_text, fill='black', font=font_tiny)
+    
+    # Altitude with emoji
+    if flight_details.get('altitude') == "ground":
+        draw.text((width - 20 - MARGIN, bottom_y - 3), "On the ground", fill='black', font=emoji_font)
+    else:
+        draw.text((width - 85 - MARGIN, bottom_y - 3), "⛰️", fill='black', font=emoji_font)
+        alt_text = f"{flight_details.get('altitude', '')} ft"
+        draw.text((width - 65 - MARGIN, bottom_y - 3), alt_text, fill='black', font=font_tiny)
 
     # Rotate image for display
     Himage = Himage.rotate(DISPLAY_SCREEN_ROTATION, expand=True)

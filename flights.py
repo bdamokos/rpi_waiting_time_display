@@ -33,7 +33,7 @@ dotenv.load_dotenv(override=True)
 lat = os.getenv('Coordinates_LAT')
 lon = os.getenv('Coordinates_LNG')
 
-radius = 5
+radius = os.getenv('flight_max_radius', 3)
 
 aeroapi_enabled = os.getenv("aeroapi_enabled", "false").lower() == "true"
 aeroapi_key = os.getenv("aeroapi_key")

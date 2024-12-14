@@ -62,12 +62,13 @@ HOTSPOT_PASSWORD = os.getenv('hotspot_password', 'YourPassword')
 
 DISPLAY_SCREEN_ROTATION = int(os.getenv('screen_rotation', 90))
 
-COORDINATES_LAT = float(os.getenv('COORDINATES_LAT', 48.1373))
-COORDINATES_LNG = float(os.getenv('COORDINATES_LNG', 11.5755))
+COORDINATES_LAT = float(os.getenv('Coordinates_LAT'))
+COORDINATES_LNG = float(os.getenv('Coordinates_LNG'))
 flights_enabled = True if os.getenv('flights_enabled', 'false').lower() == 'true' else False
 aeroapi_enabled = True if os.getenv('aeroapi_enabled', 'false').lower() == 'true' else False
 flight_check_interval = int(os.getenv('flight_check_interval', 10))
 FLIGHT_MAX_RADIUS = int(os.getenv('flight_max_radius', 3))
+flight_altitude_convert_feet = True if os.getenv('flight_altitude_convert_feet', 'false').lower() == 'true' else False
 if not weather_enabled:
     logger.warning("Weather is not enabled, weather data will not be displayed. Please set OPENWEATHER_API_KEY in .env to enable it.")
 
@@ -541,7 +542,7 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
     try:
         font_xl = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 42)
         font_large = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 28)
-        font_medium = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 20)
+        font_medium = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 18)
         font_small = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 16)
         font_tiny = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 10)
     except:
@@ -754,32 +755,39 @@ def update_display_with_flights(epd, flights):
         return
     operator = flight_details.get('operator_name', '')
     flight_number = flight_details.get('flight_number', '')
+    if not flight_number:
+        flight_number = flight_details.get('registration', '')
     
     # Draw operator name
     if operator:
         operator_name = operator.get('name', '') if isinstance(operator, dict) else operator
         # Trim operator name if it's too long
-        if len(operator_name) > 25:
-            operator_name = operator_name[:22] + "..."
-        draw.text((MARGIN, MARGIN), operator_name, fill='black', font=font_small)
-    
+        operator_font_size = font_small
+        if len(operator_name) > 15:
+            operator_font_size = font_tiny
+            operator_name = operator_name[:18] + "..."
+        draw.text((MARGIN, MARGIN), operator_name, fill='black', font=operator_font_size)
+    else:
+        callsign = flight_details.get('callsign', " ")
+        operator_font_size = font_small
+        draw.text((MARGIN, MARGIN), callsign, fill='black', font=operator_font_size)
     # Draw flight number with plane emoji
     # Split emoji and text to use different fonts
-    draw.text((width - 75 - MARGIN, MARGIN), "✈️", fill='black', font=emoji_font)
+    draw.text((width - 85 - MARGIN, MARGIN), "✈️", fill='black', font=emoji_font)
     draw.text((width - 60 - MARGIN, MARGIN), flight_number, fill='black', font=font_small)
 
     # Draw horizontal line under header
     draw.line([(MARGIN, 22), (width - MARGIN, 22)], fill='black', width=1)
 
     # Main section: Origin -> Distance -> Destination
-    y_pos = 24  # Moved up even further
+    y_pos = 16  # Moved up even further
     
     # Draw distance at the top
     distance = f"{flight_details['last_distance']:.1f}km"
     distance_bbox = draw.textbbox((0, 0), distance, font=font_small)
     distance_width = distance_bbox[2] - distance_bbox[0]
     distance_x = (width - distance_width) // 2
-    draw.text((distance_x, y_pos), distance, fill='black', font=font_small)
+    draw.text((distance_x, MARGIN), distance, fill='black', font=font_small)
     
     # Origin and Destination (moved up)
     y_pos = y_pos + 10  # Reduced spacing further
@@ -788,14 +796,15 @@ def update_display_with_flights(epd, flights):
     origin_code = flight_details.get('origin_code', '')
     draw.text((MARGIN, y_pos), origin_code, fill='black', font=font_xl)
     # Draw origin city name below the code, but closer
-    draw.text((MARGIN, y_pos + font_xl.size - 10), flight_details.get('origin_city', ''), fill='black', font=font_tiny)
+    draw.text((MARGIN, y_pos + font_xl.size+3 ), flight_details.get('origin_city', ''), fill='black', font=font_tiny)
     
     # Draw arrow
-    arrow = "→"
-    arrow_bbox = draw.textbbox((0, 0), arrow, font=font_large)
-    arrow_width = arrow_bbox[2] - arrow_bbox[0]
-    arrow_x = (width - arrow_width) // 2
-    draw.text((arrow_x, y_pos + 8), arrow, fill='black', font=font_large)
+    if flight_details.get('origin_code', '') or flight_details.get('destination_code', ''): 
+        arrow = "→"
+        arrow_bbox = draw.textbbox((0, 0), arrow, font=font_large)
+        arrow_width = arrow_bbox[2] - arrow_bbox[0]
+        arrow_x = (width - arrow_width) // 2
+        draw.text((arrow_x, y_pos + 8), arrow, fill='black', font=font_large)
     
     # Destination
     dest_code = flight_details.get('destination_code', '')
@@ -810,7 +819,7 @@ def update_display_with_flights(epd, flights):
     dest_city_bbox = draw.textbbox((0, 0), dest_city, font=font_tiny)
     dest_city_width = dest_city_bbox[2] - dest_bbox[0]
     dest_city_x = width - dest_city_width - MARGIN
-    draw.text((dest_city_x, y_pos + font_xl.size - 10), dest_city, fill='black', font=font_tiny)
+    draw.text((dest_city_x, y_pos + font_xl.size+3), dest_city, fill='black', font=font_tiny)
 
     # Bottom section: Aircraft details
     bottom_y = height - 25  # Moved up slightly
@@ -819,17 +828,31 @@ def update_display_with_flights(epd, flights):
     draw.line([(MARGIN, bottom_y - 15), (width - MARGIN, bottom_y - 15)], fill='black', width=1)
     
     # Aircraft type with emoji
+    if flight_details.get('type', ''):
+        type_length = len(flight_details.get('manufacturer', '')) + len(flight_details.get('type', '')) + 1
+    else:
+        type_length = len(flight_details.get('description', ''))
+    if flight_details.get('type', ''):
+        type_text = f"{flight_details.get('manufacturer', '')} {flight_details.get('type', '')}"
+    else:
+        type_text = f"{flight_details.get('description', '')}"
+    
+    if type_length > 15:
+        type_text = type_text[:15] + "..."
     draw.text((MARGIN, bottom_y - 3), "🛩️", fill='black', font=emoji_font)
-    aircraft_text = f"{flight_details.get('manufacturer', '')} {flight_details.get('type', '')}"
-    draw.text((MARGIN + 20, bottom_y - 3), aircraft_text, fill='black', font=font_tiny)
+    draw.text((MARGIN + 20, bottom_y - 3), type_text, fill='black', font=font_small)
     
     # Altitude with emoji
     if flight_details.get('altitude') == "ground":
         draw.text((width - 20 - MARGIN, bottom_y - 3), "On the ground", fill='black', font=emoji_font)
     else:
+        if flight_altitude_convert_feet:
+            alt_text = f"{flight_details.get('altitude', '')} ft"
+        else:
+            altitude_in_meters = float(flight_details.get('altitude', '')) * 0.3048
+            alt_text = f"{altitude_in_meters:.0f} m"
         draw.text((width - 85 - MARGIN, bottom_y - 3), "⛰️", fill='black', font=emoji_font)
-        alt_text = f"{flight_details.get('altitude', '')} ft"
-        draw.text((width - 65 - MARGIN, bottom_y - 3), alt_text, fill='black', font=font_tiny)
+        draw.text((width - 60 - MARGIN, bottom_y - 3), alt_text, fill='black', font=font_small)
 
     # Rotate image for display
     Himage = Himage.rotate(DISPLAY_SCREEN_ROTATION, expand=True)
@@ -982,7 +1005,7 @@ def main():
                 else:
                     wait_time = DISPLAY_REFRESH_WEATHER_INTERVAL 
                     updates_until_refresh = FULL_REFRESH_INTERVAL - update_count - 1
-                    next_update = f"bus update in {wait_time} seconds ({updates_until_refresh} until full refresh)"
+                    next_update = f"public transport update in {wait_time} seconds ({updates_until_refresh} until full refresh)"
                 
                 logger.info(f"Waiting {wait_time} seconds until next update ({next_update})")
                 time.sleep(wait_time)

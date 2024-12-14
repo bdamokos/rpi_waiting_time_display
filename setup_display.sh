@@ -1,5 +1,12 @@
 #!/bin/bash
 
+echo "----------------------------------------"
+echo "Display Programme Setup Script"
+echo "Version: 0.0.19 (2024-12-14)"  # AUTO-INCREMENT
+echo "----------------------------------------"
+echo "MIT License - Copyright (c) 2024 Bence Damokos"
+echo "----------------------------------------"
+
 # Store backup information in a fixed location
 BACKUP_DIR="/opt/display_setup_backup"
 BACKUP_MANIFEST="$BACKUP_DIR/manifest.txt"
@@ -190,13 +197,6 @@ setup_service_files() {
 # Create backup directory
 mkdir -p "$BACKUP_DIR"
 touch "$BACKUP_MANIFEST"
-
-echo "----------------------------------------"
-echo "Display Programme Setup Script"
-echo "Version: 0.0.18 (2024-12-14)"  # AUTO-INCREMENT
-echo "----------------------------------------"
-echo "MIT License - Copyright (c) 2024 Bence Damokos"
-echo "----------------------------------------"
 
 # Function to check if command succeeded
 check_error() {

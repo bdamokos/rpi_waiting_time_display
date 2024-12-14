@@ -17,7 +17,13 @@ Features:
     ![No Wi-Fi - a hotspot has been set up](docs/images/no_wifi.png)
 - [Debugging interface](#debugging) to check the data being displayed
 
-- WIP, optional: Displays flights that are overhead (in a set circle - 3 km by default)
+- Optional: Displays flights that are overhead (in a set circle - 3 km by default)
+    - With [AeroAPI](https://www.flightaware.com/commercial/aeroapi) enabled (requires an API key), enhances flight data with additional information from AeroAPI:
+
+    ![Flights overhead - example with AeroAPI enabled and altitude in feet](docs/images/flight_display_with_aeroapi.png)
+    - With AeroAPI disabled:
+
+    ![Flights overhead - example with AeroAPI disabled and altitude in meters](docs/images/flight_display_without_aeroapi.png)
 
 # Requirements
 The server from [my other repository](https://github.com/bdamokos/brussels_transit) is set up and is providing data for the stop we are interested in. It can run directly on the Raspberry Pi, or on a remote server. (You can choose between the two modes in the setup script.)
@@ -48,6 +54,10 @@ Can be extended with:
 [^1]: The four colour version of the display does not support partial refresh, so it flickers with every refresh, making it less ideal for this application, despite the nice colours.
 [^2]: Good for our application, except it does not come with a case.
 [^3]: Best for our application so far, as it comes with a case (intended for laying face up on a table, with a cable sticking out the back). Different cases for a vertical orientation would be better.
+
+# Setting up the Raspberry Pi
+See [docs/setting up the Rpi.md](docs/setting%20up%20the%20Rpi.md)
+
 # Configuration
 
 You can configure the display by editing the .env file directly, or by using the web interface that starts when you run the setup script.
@@ -67,9 +77,6 @@ nano ~/display_programme/.env
 For the web interface (assuming default host name _raspberrypi.local_): http://raspberrypi.local:5002/debug/env
 
 
-
-# Setting up the Raspberry Pi
-See [docs/setting up the Rpi.md](docs/setting%20up%20the%20Rpi.md)
 
 ## Uninstalling the display
 Run [docs/service/uninstall_display.sh](docs/service/uninstall_display.sh) (which is copied to the home directory during setup or manually:

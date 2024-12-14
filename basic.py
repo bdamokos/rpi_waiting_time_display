@@ -556,13 +556,13 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
         font_xl = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 42)
         font_large = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 28)
         font_medium = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 18)
-        font_small = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 16)
+        font_small = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 14)
         font_tiny = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 10)
     except:
         font_xl = ImageFont.load_default()
         font_large = font_medium = font_small = font_tiny = font_xl 
 
-    MARGIN = 8
+    MARGIN = 5
     
     # Top row: Large temperature and weather icon
     temp_text = f"{weather_data['current']['temperature']}°C"
@@ -639,7 +639,7 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
             Himage.paste(icon, (block_start_x, icon_y))
             
             # Draw temperature
-            text_x = block_start_x + FORECAST_ICON_SIZE[0] + 5
+            text_x = block_start_x + FORECAST_ICON_SIZE[0] + 3
             draw.text((text_x, y_pos), forecast_text, font=font_medium, fill=epd.BLACK)
 
     # Generate and draw QR code (larger size)
@@ -667,8 +667,8 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
               current_time, font=font_tiny, fill=epd.BLACK, align="right")
 
     # Draw a border around the display
-    border_color = getattr(epd, 'RED', epd.BLACK)  # Fall back to BLACK if RED not available
-    draw.rectangle([(0, 0), (Himage.width-1, Himage.height-1)], outline=border_color)
+    # border_color = getattr(epd, 'RED', epd.BLACK)  # Fall back to BLACK if RED not available
+    # draw.rectangle([(0, 0), (Himage.width-1, Himage.height-1)], outline=border_color)
 
     # Rotate the image 90 degrees
     Himage = Himage.rotate(DISPLAY_SCREEN_ROTATION, expand=True)

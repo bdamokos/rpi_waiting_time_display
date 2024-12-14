@@ -67,6 +67,7 @@ COORDINATES_LNG = float(os.getenv('COORDINATES_LNG', 11.5755))
 flights_enabled = True if os.getenv('flights_enabled', 'false').lower() == 'true' else False
 aeroapi_enabled = True if os.getenv('aeroapi_enabled', 'false').lower() == 'true' else False
 flight_check_interval = int(os.getenv('flight_check_interval', 10))
+FLIGHT_MAX_RADIUS = int(os.getenv('flight_max_radius', 3))
 if not weather_enabled:
     logger.warning("Weather is not enabled, weather data will not be displayed. Please set OPENWEATHER_API_KEY in .env to enable it.")
 
@@ -667,7 +668,7 @@ def check_flights_and_update_display(epd, get_flights, flight_check_interval=10)
     while True:
         flights_within_3km = get_flights()
         if flights_within_3km:
-            logger.info(f"Flights within 3 km: {len(flights_within_3km)}")
+            logger.info(f"Flights within the set radius: {len(flights_within_3km)}")
             # Update the display with flight information
             # You can customize this part to display flight details as needed
             # Get the closest flight (first one in the list)
@@ -836,8 +837,9 @@ def main():
         
         # Initialize flight monitoring
         if flights_enabled:
-            get_flights = gather_flights_within_radius(COORDINATES_LAT, COORDINATES_LNG, 20, 20, aeroapi_enabled=aeroapi_enabled)
-            logger.debug(f"Flights within 10 km: {get_flights}")
+            search_radius = FLIGHT_MAX_RADIUS * 2
+            get_flights = gather_flights_within_radius(COORDINATES_LAT, COORDINATES_LNG, search_radius, FLIGHT_MAX_RADIUS, aeroapi_enabled=aeroapi_enabled)
+            logger.debug(f"Flights within the set radius: {get_flights}")
             # Start flight checking in a separate thread
             threading.Thread(target=check_flights_and_update_display, args=(epd, get_flights, flight_check_interval), daemon=True).start()
         

@@ -677,12 +677,19 @@ def check_flights_and_update_display(epd, get_flights, flight_check_interval=10)
             closest_flight = flights_within_3km[0]
             # If the closest flight is on the ground, don't show it and get the next one
             if closest_flight.get('altitude') == "ground":
-                logger.debug("Closest flight is on the ground. Getting next one.")
-                if len(flights_within_3km) > 1:
-                    closest_flight = flights_within_3km[1]
+                logger.debug("Closest flight is on the ground. Looking for next airborne flight.")
+                found_airborne = False
+                for flight in flights_within_3km[1:]:
+                    if flight.get('altitude') != "ground":
+                        closest_flight = flight
+                        found_airborne = True
+                        break
+                if not found_airborne:
+                    logger.debug("No airborne flights found in the list.")
+                    return
                 else:
                     logger.debug("No flights in the air within the max radius. Skipping update.")
-                    continue
+                    return
             
 
             # Enhance the flight data with additional details
@@ -736,9 +743,9 @@ def update_display_with_flights(epd, flights):
     try:
         font_tiny = ImageFont.truetype(font_paths['dejavu'], 10)
         font_small = ImageFont.truetype(font_paths['dejavu'], 12)
-        font_medium = ImageFont.truetype(font_paths['dejavu_bold'], 16)
+        font_medium = ImageFont.truetype(font_paths['dejavu_bold'], 15)
         font_large = ImageFont.truetype(font_paths['dejavu_bold'], 24)
-        font_xl = ImageFont.truetype(font_paths['dejavu_bold'], 36)  # Slightly smaller but still prominent
+        font_xl = ImageFont.truetype(font_paths['dejavu_bold'], 36) 
         emoji_font = ImageFont.truetype(font_paths['emoji'], 16)
         emoji_font_large = ImageFont.truetype(font_paths['emoji'], 20)
         logger.debug(f"Loaded fonts successfully from paths: {font_paths}")
@@ -755,6 +762,7 @@ def update_display_with_flights(epd, flights):
         return
     operator = flight_details.get('operator_name', '')
     flight_number = flight_details.get('flight_number', '')
+    flight_number_font_size = font_small if aeroapi_enabled else font_medium
     if not flight_number:
         flight_number = flight_details.get('registration', '')
     
@@ -769,25 +777,29 @@ def update_display_with_flights(epd, flights):
         draw.text((MARGIN, MARGIN), operator_name, fill='black', font=operator_font_size)
     else:
         callsign = flight_details.get('callsign', " ")
-        operator_font_size = font_small
+        operator_font_size = font_medium
         draw.text((MARGIN, MARGIN), callsign, fill='black', font=operator_font_size)
     # Draw flight number with plane emoji
     # Split emoji and text to use different fonts
     draw.text((width - 85 - MARGIN, MARGIN), "✈️", fill='black', font=emoji_font)
-    draw.text((width - 60 - MARGIN, MARGIN), flight_number, fill='black', font=font_small)
+    draw.text((width - 60 - MARGIN, MARGIN), flight_number, fill='black', font=flight_number_font_size)
 
     # Draw horizontal line under header
-    draw.line([(MARGIN, 22), (width - MARGIN, 22)], fill='black', width=1)
+    if aeroapi_enabled:
+        draw.line([(MARGIN, 22), (width - MARGIN, 22)], fill='black', width=1)
 
     # Main section: Origin -> Distance -> Destination
     y_pos = 16  # Moved up even further
-    
+    distance_font_size = font_small if aeroapi_enabled else font_medium
     # Draw distance at the top
     distance = f"{flight_details['last_distance']:.1f}km"
-    distance_bbox = draw.textbbox((0, 0), distance, font=font_small)
+    distance_bbox = draw.textbbox((0, 0), distance, font=distance_font_size)
     distance_width = distance_bbox[2] - distance_bbox[0]
     distance_x = (width - distance_width) // 2
-    draw.text((distance_x, MARGIN), distance, fill='black', font=font_small)
+    if aeroapi_enabled:
+        draw.text((distance_x, MARGIN), distance, fill='black', font=distance_font_size)
+    else:
+        draw.text((distance_x, height//2 - distance_font_size.size//2-5), distance, fill='black', font=distance_font_size)
     
     # Origin and Destination (moved up)
     y_pos = y_pos + 10  # Reduced spacing further
@@ -844,7 +856,7 @@ def update_display_with_flights(epd, flights):
     
     # Altitude with emoji
     if flight_details.get('altitude') == "ground":
-        draw.text((width - 20 - MARGIN, bottom_y - 3), "On the ground", fill='black', font=emoji_font)
+        draw.text((width - 50 - MARGIN, bottom_y - 3), "On the ground", fill='black', font=font_small)
     else:
         if not flight_altitude_convert_feet:
             alt_text = f"{flight_details.get('altitude', '')} ft"

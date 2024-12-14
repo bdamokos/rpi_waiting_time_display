@@ -20,23 +20,18 @@ import threading
 import math
 from flights import check_flights, gather_flights_within_radius
 from threading import Lock
+
 logger = logging.getLogger(__name__)
 # Set logging level for PIL.PngImagePlugin and urllib3.connectionpool to warning
 logging.getLogger('PIL.PngImagePlugin').setLevel(logging.WARNING)
 logging.getLogger('urllib3.connectionpool').setLevel(logging.WARNING)
 
-
-display_lock = return_display_lock() # Global lock for display operations
-
-# Add to top of file with other constants
-
-
-
+display_lock = return_display_lock()  # Global lock for display operations
 
 DISPLAY_REFRESH_INTERVAL = int(os.getenv("refresh_interval", 90))
 DISPLAY_REFRESH_MINIMAL_TIME = int(os.getenv("refresh_minimal_time", 30))
 DISPLAY_REFRESH_FULL_INTERVAL = int(os.getenv("refresh_full_interval", 3600))
-DISPLAY_REFRESH_WEATHER_INTERVAL = int(os.getenv("refresh_weather_interval", 600))
+WEATHER_UPDATE_INTERVAL = DISPLAY_REFRESH_WEATHER_INTERVAL = int(os.getenv("refresh_weather_interval", 600))
 
 weather_enabled = True if os.getenv("OPENWEATHER_API_KEY") else False
 
@@ -54,129 +49,132 @@ aeroapi_enabled = True if os.getenv('aeroapi_enabled', 'false').lower() == 'true
 flight_check_interval = int(os.getenv('flight_check_interval', 10))
 FLIGHT_MAX_RADIUS = int(os.getenv('flight_max_radius', 3))
 flight_altitude_convert_feet = True if os.getenv('flight_altitude_convert_feet', 'false').lower() == 'true' else False
+
 if not weather_enabled:
     logger.warning("Weather is not enabled, weather data will not be displayed. Please set OPENWEATHER_API_KEY in .env to enable it.")
 
+def handle_bus_mode(epd, weather_data, valid_bus_data, error_message, stop_name, current_time):
+    """Handle bus display mode updates"""
+    in_weather_mode = False
+    wait_time = DISPLAY_REFRESH_INTERVAL if not error_message else DISPLAY_REFRESH_MINIMAL_TIME
+    
+    if weather_enabled:
+        update_display(epd, weather_data['current'], valid_bus_data, error_message, stop_name)
+    else:
+        update_display(epd, None, valid_bus_data, error_message, stop_name)
+    
+    return in_weather_mode, wait_time
+
+def handle_weather_mode(epd, weather_data, last_weather_data, last_weather_update, current_time):
+    """Handle weather display mode updates"""
+    in_weather_mode = True
+    weather_changed = (
+        last_weather_data is None or
+        weather_data['current'] != last_weather_data['current'] or
+        weather_data['forecast'] != last_weather_data['forecast']
+    )
+    
+    time_since_update = (current_time - last_weather_update).total_seconds()
+    
+    if (last_weather_data is None or 
+        (weather_changed and time_since_update >= WEATHER_UPDATE_INTERVAL) or 
+        time_since_update >= 3600):
+        
+        draw_weather_display(epd, weather_data)
+        last_weather_data = weather_data
+        last_weather_update = current_time
+    
+    wait_time = WEATHER_UPDATE_INTERVAL
+    return in_weather_mode, wait_time, last_weather_data, last_weather_update
+
+class DisplayManager:
+    def __init__(self, epd):
+        self.epd = epd
+        self.update_count = 0
+        self.last_weather_data = None
+        self.last_weather_update = datetime.now()
+        self.in_weather_mode = False
+        self.weather_service = WeatherService() if weather_enabled else None
+        self.bus_service = BusService()
+        
+    def needs_full_refresh(self):
+        return self.update_count >= (DISPLAY_REFRESH_FULL_INTERVAL // DISPLAY_REFRESH_INTERVAL)
+        
+    def perform_full_refresh(self):
+        if self.needs_full_refresh():
+            logger.info("Performing hourly full refresh...")
+            display_full_refresh(self.epd)
+            self.update_count = 0
+            
+    def get_next_update_message(self, wait_time):
+        if self.in_weather_mode:
+            return f"weather update in {wait_time} seconds"
+        updates_until_refresh = (DISPLAY_REFRESH_FULL_INTERVAL // DISPLAY_REFRESH_INTERVAL) - self.update_count - 1
+        return f"public transport update in {wait_time} seconds ({updates_until_refresh} until full refresh)"
+
+def initialize_flight_monitoring(epd):
+    search_radius = FLIGHT_MAX_RADIUS * 2
+    get_flights = gather_flights_within_radius(
+        COORDINATES_LAT, 
+        COORDINATES_LNG, 
+        search_radius, 
+        FLIGHT_MAX_RADIUS, 
+        flight_check_interval=flight_check_interval,
+        aeroapi_enabled=aeroapi_enabled
+    )
+    flight_thread = threading.Thread(
+        target=check_flights,
+        args=(epd, get_flights, flight_check_interval),
+        daemon=True
+    )
+    flight_thread.start()
 
 def main():
     epd = None
     try:
         logger.info("E-ink Display Starting")
-        
-        # Start debug server if enabled
         start_debug_server()
-        
         epd = initialize_display()
         
-        # Check Wi-Fi connectivity
         if not is_connected():
             no_wifi_loop(epd)
-
-        # Initialize services
-        weather = WeatherService() if weather_enabled else None
-        bus = BusService()
-        
-        # Initialize flight monitoring
-        if flights_enabled:
-            search_radius = FLIGHT_MAX_RADIUS * 2
-            get_flights = gather_flights_within_radius(
-                COORDINATES_LAT, 
-                COORDINATES_LNG, 
-                search_radius, 
-                FLIGHT_MAX_RADIUS, 
-                flight_check_interval=flight_check_interval,
-                aeroapi_enabled=aeroapi_enabled
-            )
             
-            # Start flight checking in a separate thread
-            flight_thread = threading.Thread(
-                target=check_flights,
-                args=(epd, get_flights, flight_check_interval),
-                daemon=True
-            )
-            flight_thread.start()
+        display_manager = DisplayManager(epd)
         
-        # Counter for full refresh every hour
-        update_count = 0
-        FULL_REFRESH_INTERVAL = DISPLAY_REFRESH_FULL_INTERVAL // DISPLAY_REFRESH_INTERVAL  # Number of updates before doing a full refresh
+        if flights_enabled:
+            initialize_flight_monitoring(epd)
         
-        # Add variables for weather display
-        last_weather_data = None
-        last_weather_update = datetime.now()
-        WEATHER_UPDATE_INTERVAL = DISPLAY_REFRESH_WEATHER_INTERVAL  # 10 minutes in seconds
-        in_weather_mode = False  # Track which mode we're in
-        
-        # Main loop
         while True:
             try:
                 # Get data
-                if weather_enabled:
-                    weather_data = weather.get_detailed_weather()
-                else:
-                    weather_data = None
+                weather_data = display_manager.weather_service.get_detailed_weather() if weather_enabled else None
+                bus_data, error_message, stop_name = display_manager.bus_service.get_waiting_times()
                 
-                bus_data, error_message, stop_name = bus.get_waiting_times()
-                
-                # Filter out bus lines with no valid times
                 valid_bus_data = [
                     bus for bus in bus_data 
                     if any(time != "--" for time in bus["times"])
                 ]
                 
                 current_time = datetime.now()
+                display_manager.perform_full_refresh()
                 
-                # Determine if we need a full refresh
-                needs_full_refresh = update_count >= FULL_REFRESH_INTERVAL
-                
-                if needs_full_refresh:
-                    logger.info("Performing hourly full refresh...")
-                    display_full_refresh(epd)
-                    update_count = 0
-                
-                # Determine display mode
+                # Update display based on mode
                 if valid_bus_data:
-                    # Bus display mode
-                    in_weather_mode = False
-                    last_weather_data = None  # Reset weather tracking
-                    last_weather_update = current_time
-                    if weather_enabled:
-                        update_display(epd, weather_data['current'], valid_bus_data, error_message, stop_name)
-                    else:
-                        weather_data = None
-                        update_display(epd, weather_data, valid_bus_data, error_message, stop_name)
-                    wait_time = DISPLAY_REFRESH_INTERVAL if not error_message else DISPLAY_REFRESH_MINIMAL_TIME
-                    update_count += 1
-                elif weather_enabled:
-                    # Weather display mode
-                    in_weather_mode = True
-                    weather_changed = (
-                        last_weather_data is None or
-                        weather_data['current'] != last_weather_data['current'] or
-                        weather_data['forecast'] != last_weather_data['forecast']
+                    display_manager.in_weather_mode, wait_time = handle_bus_mode(
+                        epd, weather_data, valid_bus_data, error_message, stop_name, current_time
                     )
-                    
-                    time_since_update = (current_time - last_weather_update).total_seconds()
-                    
-                    # Always display on first run (when last_weather_data is None)
-                    if (last_weather_data is None or 
-                        (weather_changed and time_since_update >= WEATHER_UPDATE_INTERVAL) or 
-                        time_since_update >= 3600):
-                        with display_lock:
-                            draw_weather_display(epd, weather_data)
-                        last_weather_data = weather_data
-                        last_weather_update = current_time
-                    
-                    # In weather mode, we wait longer between checks
-                    wait_time = WEATHER_UPDATE_INTERVAL
+                    display_manager.update_count += 1
+                    display_manager.last_weather_data = None
+                    display_manager.last_weather_update = current_time
+                elif weather_enabled:
+                    (display_manager.in_weather_mode, wait_time, 
+                     display_manager.last_weather_data, 
+                     display_manager.last_weather_update) = handle_weather_mode(
+                        epd, weather_data, display_manager.last_weather_data,
+                        display_manager.last_weather_update, current_time
+                    )
                 
-                # Log next update info
-                if in_weather_mode:
-                    next_update = f"weather update in {wait_time} seconds"
-                else:
-                    wait_time = DISPLAY_REFRESH_WEATHER_INTERVAL 
-                    updates_until_refresh = FULL_REFRESH_INTERVAL - update_count - 1
-                    next_update = f"public transport update in {wait_time} seconds ({updates_until_refresh} until full refresh)"
-                
+                next_update = display_manager.get_next_update_message(wait_time)
                 logger.info(f"Waiting {wait_time} seconds until next update ({next_update})")
                 time.sleep(wait_time)
                 
@@ -184,13 +182,11 @@ def main():
                 logger.error(f"Error in main loop: {e}", exc_info=True)
                 time.sleep(10)
                 continue
-            
+                
     except KeyboardInterrupt:
         logger.info("Ctrl+C pressed - Cleaning up...")
-        
     except Exception as e:
         logger.error(f"Main error: {str(e)}\n{traceback.format_exc()}")
-        
     finally:
         logger.info("Cleaning up...")
         if epd is not None:

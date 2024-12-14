@@ -514,7 +514,7 @@ def update_display_with_flights(epd, flights):
     y_pos = 16  # Moved up even further
     distance_font_size = font_small if aeroapi_enabled else font_medium
     # Draw distance at the top
-    distance = f"{flight_details['last_distance']:.1f}km"
+    distance = f"{flight_details['last_distance']:.1f} km"
     distance_bbox = draw.textbbox((0, 0), distance, font=distance_font_size)
     distance_width = distance_bbox[2] - distance_bbox[0]
     distance_x = (width - distance_width) // 2

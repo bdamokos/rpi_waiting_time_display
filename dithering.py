@@ -1,5 +1,8 @@
 from typing import Tuple
 import logging
+
+from PIL import Image, ImageDraw
+from color_utils import find_optimal_colors
 import log_config
 logger = logging.getLogger(__name__)
 
@@ -15,51 +18,7 @@ def calculate_brightness(rgb_or_value):
         # For monochrome displays, value is already 0x00 (0) or 0xFF (255)
         return rgb_or_value / 255 if rgb_or_value > 0 else 0
 
-def draw_multicolor_dither(draw, epd, x, y, width, height, colors_with_ratios):
-    """
-    Draw a dithered pattern using multiple colors with specified ratios.
-    colors_with_ratios is a list of tuples (color_name, ratio)
-    """
-    # Get available colors from EPD
-    available_colors = _get_available_colors(epd)
-    
-    # Validate and replace unsupported colors
-    validated_colors = []
-    for color_name, ratio in colors_with_ratios:
-        if color_name not in available_colors:
-            logger.warning(f"Color {color_name} not supported by display, falling back to black")
-            validated_colors.append(('black', ratio))
-        else:
-            validated_colors.append((color_name, ratio))
-    
-    colors_with_ratios = validated_colors  # Use the validated colors
-    
-    # Create checkerboard pattern with offset rows
-    for i in range(width):
-        for j in range(height):
-            # Offset every other row by one pixel
-            offset = (j % 2) * 1
-            pos = ((i + offset + j) % 2) / 2 + (i + j) / (width + height)
-            
-            # Select color based on position and ratios
-            cumulative_ratio = 0
-            selected_color = epd.WHITE if epd.is_bw_display else available_colors['white'][0]  # Default to white
-            
-            for color_name, ratio in colors_with_ratios:
-                cumulative_ratio += ratio
-                if pos <= cumulative_ratio:
-                    if epd.is_bw_display:
-                        selected_color = epd.BLACK if color_name == 'black' else epd.WHITE
-                    else:
-                        selected_color = available_colors[color_name][0]
-                    break
-            
-            draw.point((x + i, y + j), fill=selected_color)
-    
-    # Draw border in primary color (first color in the list)
-    primary_color = colors_with_ratios[0][0]
-    draw.rectangle([x, y, x + width - 1, y + height - 1], 
-                  outline=available_colors[primary_color][0])
+
 
 def draw_dithered_box(draw, epd, x, y, width, height, text, primary_color, secondary_color, ratio, font):
     """
@@ -265,3 +224,95 @@ def draw_dots_dither(draw, epd, x, y, width, height, text, primary_color, second
     # Use white text for dark backgrounds
     text_color = colors['white'][0] if primary_color == 'black' and ratio > 0.5 else colors['black'][0]
     draw.text((text_x, text_y), text, font=font, fill=text_color) 
+
+
+def draw_multicolor_dither(draw, epd, x, y, width, height, colors_with_ratios):
+    """Draw a block using multiple colors with specified ratios"""
+    # Only include colors that the display supports
+    epd_colors = {
+        'white': ((255, 255, 255), epd.WHITE),
+        'black': ((0, 0, 0), epd.BLACK)
+    }
+
+    # Add RED if supported
+    if hasattr(epd, 'RED'):
+        epd_colors['red'] = ((255, 0, 0), epd.RED)
+
+    # Add YELLOW if supported
+    if hasattr(epd, 'YELLOW'):
+        epd_colors['yellow'] = ((255, 255, 0), epd.YELLOW)
+
+    total_pixels = width * height
+
+    # Filter out any colors that aren't supported by the display
+    valid_colors = [(color, ratio) for color, ratio in colors_with_ratios if color in epd_colors]
+
+    # If no valid colors remain, fallback to black and white
+    if not valid_colors:
+        valid_colors = [('black', 0.6), ('white', 0.4)]
+
+    # Normalize ratios if we filtered out any colors
+    total_ratio = sum(ratio for _, ratio in valid_colors)
+    if total_ratio != 1.0:
+        valid_colors = [(color, ratio/total_ratio) for color, ratio in valid_colors]
+
+    for i in range(width):
+        for j in range(height):
+            pos = (i + j * width) / total_pixels
+
+            # Simplified color selection - more deterministic
+            cumulative_ratio = 0
+            chosen_color = 'white'  # default
+
+            for color_name, ratio in valid_colors:
+                cumulative_ratio += ratio
+                if pos <= cumulative_ratio:
+                    chosen_color = color_name
+                    break
+
+            draw.point((x + i, y + j), fill=epd_colors[chosen_color][1])
+
+
+def process_icon_for_epd(icon, epd):
+    """Process icon using multi-color dithering"""
+    width, height = icon.size
+
+    # Create a new image with white background
+    if epd.is_bw_display:
+        processed = Image.new('1', icon.size, 1)  # 1 is white in 1-bit mode
+    else:
+        processed = Image.new('RGB', icon.size, epd.WHITE)
+    draw = ImageDraw.Draw(processed)
+
+    block_size = 4
+    for x in range(0, width, block_size):
+        for y in range(0, height, block_size):
+            block = icon.crop((x, y, min(x + block_size, width), min(y + block_size, height)))
+
+            # Calculate average color of non-transparent pixels
+            r, g, b, valid_pixels = 0, 0, 0, 0
+            for px in block.getdata():
+                if len(px) == 4 and px[3] > 128:
+                    r += px[0]
+                    g += px[1]
+                    b += px[2]
+                    valid_pixels += 1
+
+            if valid_pixels == 0:
+                continue
+
+            avg_color = (r//valid_pixels, g//valid_pixels, b//valid_pixels)
+
+            # Get optimal color combination
+            colors_with_ratios = find_optimal_colors(avg_color, epd)
+
+            # Apply multi-color dithering
+            draw_multicolor_dither(
+                draw, epd,
+                x, y,
+                min(block_size, width - x),
+                min(block_size, height - y),
+                colors_with_ratios
+            )
+
+    return processed

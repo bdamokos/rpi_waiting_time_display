@@ -11,6 +11,7 @@ import time
 import threading
 import requests_cache
 from functools import lru_cache
+from threading import Event, Lock
 logger = logging.getLogger(__name__)
 # Initialize requests_cache with specific URLs excluded from caching
 
@@ -53,63 +54,86 @@ def haversine(lat1, lon1, lat2, lon2):
     a = math.sin(dLat / 2) * math.sin(dLat / 2) + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dLon / 2) * math.sin(dLon / 2)
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c / 1000
-stop_event = threading.Event()  # Add a threading event to control the thread
-def gather_flights_within_radius(lat, lon, radius=radius*2, distance_threshold=radius,flight_check_interval=flight_check_interval, aeroapi_enabled=False):
+
+def gather_flights_within_radius(lat, lon, radius=radius*2, distance_threshold=radius, flight_check_interval=flight_check_interval, aeroapi_enabled=False):
+    """Gather flights within radius and return a function to get flights within threshold"""
     monitored_flights = []
-    lock = threading.Lock()
-    stop_event = threading.Event()  # Add a threading event to control the thread
+    lock = Lock()
+    stop_event = Event()  # Create stop_event here
     logger.debug(f"Monitoring flights within {radius}km of {lat}, {lon}, with threshold {distance_threshold} km")
     
     def gather_data():
-        while not stop_event.is_set():  # Check the event to stop the loop
-            response = requests.get(f"https://api.adsb.one/v2/point/{lat}/{lon}/{radius}")
-            data = json.loads(response.text) if response.status_code == 200 else {}
-            logger.debug(f"Found {len(data['ac']) if data else 0} flights.")
-            with lock:
-                for flight in data['ac'] if data else []:
-                    hex_id = flight.get('hex')
-                    current_distance = haversine(lat, lon, flight.get('lat'), flight.get('lon'))
+        last_check_time = 0  # Track last check time
+        
+        while not stop_event.is_set():
+            current_time = time.time()
+            
+            # Ensure minimum interval between checks
+            if current_time - last_check_time < flight_check_interval:
+                time.sleep(1)  # Short sleep to prevent CPU spinning
+                continue
+                
+            try:
+                response = requests.get(f"https://api.adsb.one/v2/point/{lat}/{lon}/{radius}")
+                if response.status_code == 200:
+                    data = response.json()
+                    logger.debug(f"Found {len(data['ac']) if data and 'ac' in data else 0} flights.")
                     
-                    if not any(monitored['hex'] == hex_id for monitored in monitored_flights):
-                        monitored_flights.append({
-                            'hex': hex_id,
-                            'last_distance': current_distance,
-                            'callsign': flight.get('flight', ''),
-                            'lat': flight.get('lat', ''),
-                            'lon': flight.get('lon', ''),
-                            'registration': flight.get('r', ''),
-                            'description': flight.get('desc', ''),
-                            'operator': flight.get('ownOp', ''),
-                            'squawk': flight.get('squawk', ''),
-                            'emergency': flight.get('emergency', ''),
-                            'altitude': flight.get('alt_baro', ''),
-                            'heading': flight.get('true_heading', ''),  
-                        })
-                    else:
-                        for monitored in monitored_flights:
-                            if monitored['hex'] == hex_id:
-                                monitored['last_distance'] = current_distance
-                                break
-
-            time.sleep(flight_check_interval)
+                    with lock:
+                        # Clear old flights that haven't been updated recently
+                        current_hex_ids = {flight['hex'] for flight in data.get('ac', [])}
+                        monitored_flights[:] = [f for f in monitored_flights if f['hex'] in current_hex_ids]
+                        
+                        # Update or add new flights
+                        for flight in data.get('ac', []):
+                            hex_id = flight.get('hex')
+                            current_distance = haversine(lat, lon, flight.get('lat'), flight.get('lon'))
+                            
+                            # Update existing flight or add new one
+                            existing_flight = next((f for f in monitored_flights if f['hex'] == hex_id), None)
+                            if existing_flight:
+                                existing_flight['last_distance'] = current_distance
+                            else:
+                                monitored_flights.append({
+                                    'hex': hex_id,
+                                    'last_distance': current_distance,
+                                    'callsign': flight.get('flight', '').strip(),
+                                    'lat': flight.get('lat', ''),
+                                    'lon': flight.get('lon', ''),
+                                    'registration': flight.get('r', ''),
+                                    'description': flight.get('desc', ''),
+                                    'operator': flight.get('ownOp', ''),
+                                    'squawk': flight.get('squawk', ''),
+                                    'emergency': flight.get('emergency', ''),
+                                    'altitude': flight.get('alt_baro', ''),
+                                    'heading': flight.get('true_heading', ''),
+                                    'last_update': current_time
+                                })
+                
+                last_check_time = current_time
+                
+            except Exception as e:
+                logger.error(f"Error gathering flight data: {e}")
+                time.sleep(flight_check_interval)  # Sleep on error
+            
+            # Sleep for the remaining interval time
+            time_to_sleep = max(0, flight_check_interval - (time.time() - current_time))
+            if time_to_sleep > 0:
+                time.sleep(time_to_sleep)
 
     def get_flights_within_distance():
         with lock:
-            if monitored_flights:
-                closest_flight = min(monitored_flights, key=lambda x: x['last_distance'])
-                logger.debug(f"Closest flight: {closest_flight['callsign']}  at {closest_flight['last_distance']:.1f}km")
-                # logger.debug(closest_flight)
-                
-                        # # Debug output
-                        # for key, value in closest_flight.items():
-                        #     print(f"{key}: {value}")
+            flights_in_range = [f for f in monitored_flights if f['last_distance'] <= distance_threshold]
+            if flights_in_range:
+                closest_flight = min(flights_in_range, key=lambda x: x['last_distance'])
+                logger.debug(f"Closest flight: {closest_flight.get('callsign', 'Unknown')} at {closest_flight['last_distance']:.1f}km")
+            return flights_in_range
 
-            # Return flights within distance threshold
-            return [flight for flight in monitored_flights if flight['last_distance'] <= distance_threshold]
+    # Start the data gathering thread
+    gather_thread = threading.Thread(target=gather_data, daemon=True)
+    gather_thread.start()
 
-    # Start the data gathering in a separate thread
-    threading.Thread(target=gather_data, daemon=True).start()
-
+    # Return both the getter function and the stop event
     return get_flights_within_distance
 
 def enhance_flight_data(flight_data):
@@ -411,5 +435,4 @@ if __name__ == "__main__":
                         existing_flight.update(flight)
             time.sleep(10)
     except KeyboardInterrupt:
-        stop_event.set()  # Set the event to stop the thread
         print("Stopping flight monitoring")

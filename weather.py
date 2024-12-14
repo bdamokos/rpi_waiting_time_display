@@ -1,3 +1,4 @@
+from PIL import Image
 import requests
 import os
 from datetime import datetime, timedelta
@@ -5,11 +6,15 @@ import dotenv
 import qrcode
 from io import BytesIO
 import logging
+from dithering import process_icon_for_epd
 import log_config
 import json
+import traceback
+from pathlib import Path
 logger = logging.getLogger(__name__)
 
-
+WEATHER_ICON_URL = "https://openweathermap.org/img/wn/{}@4x.png"
+CACHE_DIR = Path(os.path.dirname(os.path.realpath(__file__))) / "cache" / "weather_icons"
 
 dotenv.load_dotenv(override=True)
 weather_api_key = os.getenv('OPENWEATHER_API_KEY')
@@ -273,3 +278,41 @@ if __name__ == "__main__":
     # Test the module
     weather = WeatherService()
     print(weather.get_weather()) 
+
+
+def get_weather_icon(icon_code, size, epd):
+    """Fetch and process weather icon from OpenWeatherMap with caching"""
+    try:
+        # Create cache directory if it doesn't exist
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+        # Generate cache filename based on icon code and size
+        cache_file = CACHE_DIR / f"icon_{icon_code}_{size[0]}x{size[1]}.png"
+
+        # Check if cached version exists
+        if cache_file.exists():
+            # logger.debug(f"Loading cached icon: {cache_file}")
+            icon = Image.open(cache_file)
+
+            # Process the cached icon
+            processed_icon = process_icon_for_epd(icon, epd)
+            return processed_icon
+
+        # If not in cache, download and process
+        logger.debug(f"Downloading icon: {icon_code}")
+        response = requests.get(WEATHER_ICON_URL.format(icon_code))
+        if response.status_code == 200:
+            icon = Image.open(BytesIO(response.content))
+            icon = icon.resize(size, Image.Resampling.LANCZOS)
+
+            # Save to cache
+            icon.save(cache_file, "PNG")
+            # logger.debug(f"Saved icon to cache: {cache_file}")
+
+            # Process the icon
+            processed_icon = process_icon_for_epd(icon, epd)
+            return processed_icon
+
+    except Exception as e:
+        logger.error(f"Error processing weather icon: {e}\n{traceback.format_exc()}")
+    return None

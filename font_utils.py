@@ -8,6 +8,7 @@ python font_utils.py
 
 """
 
+from functools import lru_cache
 from PIL import ImageFont
 import unicodedata
 import logging
@@ -92,3 +93,25 @@ if __name__ == "__main__":
         for char in test_chars:
             supported = test_font_character(font_path, char)
             print(f"Character {char}: {'✓' if supported else '✗'}")
+
+
+@lru_cache(maxsize=32)
+def get_font_paths():
+    """Get the appropriate font paths based on the operating system."""
+    import platform
+    import os
+
+    system = platform.system()
+
+    if system == "Darwin":  # macOS
+        return {
+            'dejavu': '/System/Library/Fonts/Supplemental/DejaVuSans.ttf',
+            'dejavu_bold': '/System/Library/Fonts/Supplemental/DejaVuSans-Bold.ttf',
+            'emoji': os.path.expanduser('~/Library/Fonts/NotoEmoji[wght].ttf')  # Use user's Noto Emoji font
+        }
+    else:  # Assume Raspberry Pi/Linux
+        return {
+            'dejavu': '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+            'dejavu_bold': '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+            'emoji': '/usr/local/share/fonts/noto/NotoEmoji-Regular.ttf'
+        }

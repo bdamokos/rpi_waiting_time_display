@@ -384,7 +384,7 @@ def update_display(epd, weather_data=None, bus_data=None, error_message=None, st
         font_large = ImageFont.truetype(font_paths['dejavu_bold'], 32)
         font_medium = ImageFont.truetype(font_paths['dejavu'], 24)
         font_small = ImageFont.truetype(font_paths['dejavu'], 16)
-
+        font_tiny = ImageFont.truetype(font_paths['dejavu'], 12)
         # logger.info(f"Found DejaVu fonts: {font_large}, {font_medium}, {font_small}")
     except:
         font_large = ImageFont.load_default()
@@ -538,13 +538,19 @@ def update_display(epd, weather_data=None, bus_data=None, error_message=None, st
             message_width = 0
             if message:
                 if message == "Last":
-                    msg_text = "Last departure"
+                    msg_text = "Last"
+                    msg_text2 = "departure"
                 elif message == "theor.":
                     msg_text = "(theor.)"
                 elif message:
                     msg_text = message
                 msg_bbox = draw.textbbox((0, 0), msg_text, font=font_small)
-                message_width = msg_bbox[2] - msg_bbox[0] + 5  # 5px spacing
+                if msg_text2:
+                    msg_bbox2 = draw.textbbox((0, 0), msg_text2, font=font_small)
+                    msg_width2 = msg_bbox2[2] - msg_bbox2[0]
+                    message_width = max(msg_width2, msg_bbox[2] - msg_bbox[0]) + 5
+                else:
+                    message_width = msg_bbox[2] - msg_bbox[0] + 5  # 5px spacing
 
             # Check if we have space for this time + message + spacing
             if times_shown > 0 and (time_width + message_width + MARGIN + EXTRA_SPACING > max_width):
@@ -568,10 +574,15 @@ def update_display(epd, weather_data=None, bus_data=None, error_message=None, st
 
             # Draw message if present
             if message:
-                msg_x = x_pos + time_width + MARGIN
+                msg_x = x_pos + time_width + MARGIN + 2
                 if message == "Last":
-                    draw.text((msg_x, y_pos + MARGIN), "Last departure",
-                              font=font_small, fill=BLACK)
+                    draw.text((msg_x, y_pos), msg_text,
+                              font=font_tiny, fill=BLACK)
+                    if msg_text2:
+                        font_bbox = font_tiny.getbbox("Aj")  # Get bounding box of test string
+                        font_height = font_bbox[3] - font_bbox[1]  # Calculate height from bounding box
+                        draw.text((msg_x, y_pos + font_height), msg_text2,
+                              font=font_tiny, fill=BLACK)
                     break  # Don't show more times after "Last departure"
                 elif message == "theor.":
                     draw.text((msg_x, y_pos + MARGIN), "(theor.)",

@@ -686,18 +686,19 @@ def check_flights_and_update_display(epd, get_flights, flight_check_interval=10)
                         break
                 if not found_airborne:
                     logger.debug("No airborne flights found in the list.")
-                    return
+                    closest_flight = None
                 else:
                     logger.debug("No flights in the air within the max radius. Skipping update.")
-                    return
+                    closest_flight = None
             
 
             # Enhance the flight data with additional details
             logger.debug(f"Closest flight: {closest_flight}")
-            enhanced_flight = enhance_flight_data(closest_flight)
-            logger.debug(f"Enhanced flight: {enhanced_flight}")
-            # Update display with the enhanced flight data
-            update_display_with_flights(epd, [enhanced_flight])
+            if closest_flight:
+                enhanced_flight = enhance_flight_data(closest_flight)
+                logger.debug(f"Enhanced flight: {enhanced_flight}")
+                # Update display with the enhanced flight data
+                update_display_with_flights(epd, [enhanced_flight])
 
             # update_display_with_flights(epd, flights_within_3km)
         

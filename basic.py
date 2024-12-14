@@ -8,14 +8,13 @@ from display_adapter import DisplayAdapter
 import time
 from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
-from weather import WeatherService
+from font_utils import get_font_paths
+from weather import WeatherService, get_weather_icon
 from bus_service import BusService
 from dithering import draw_dithered_box
 import qrcode
-from io import BytesIO
 import importlib
 import log_config
-import requests
 import random
 import traceback
 from debug_server import start_debug_server
@@ -24,12 +23,14 @@ import subprocess
 import threading
 import math
 from flights import gather_flights_within_radius, enhance_flight_data
-from functools import lru_cache
+from threading import Lock
 logger = logging.getLogger(__name__)
 # Set logging level for PIL.PngImagePlugin and urllib3.connectionpool to warning
 logging.getLogger('PIL.PngImagePlugin').setLevel(logging.WARNING)
 logging.getLogger('urllib3.connectionpool').setLevel(logging.WARNING)
 
+
+display_lock = Lock()  # Global lock for display operations
 
 # Weather icon mapping
 WEATHER_ICONS = {
@@ -43,10 +44,10 @@ WEATHER_ICONS = {
 }
 
 # Add to top of file with other constants
-WEATHER_ICON_URL = "https://openweathermap.org/img/wn/{}@4x.png"
+
 CURRENT_ICON_SIZE = (46, 46)  # Size for current weather icon
 FORECAST_ICON_SIZE = (28, 28)  # Smaller size for forecast icons
-CACHE_DIR = Path(os.path.dirname(os.path.realpath(__file__))) / "cache" / "weather_icons"
+
 
 DISPLAY_REFRESH_INTERVAL = int(os.getenv("refresh_interval", 90))
 DISPLAY_REFRESH_MINIMAL_TIME = int(os.getenv("refresh_minimal_time", 30))
@@ -72,198 +73,8 @@ flight_altitude_convert_feet = True if os.getenv('flight_altitude_convert_feet',
 if not weather_enabled:
     logger.warning("Weather is not enabled, weather data will not be displayed. Please set OPENWEATHER_API_KEY in .env to enable it.")
 
-@lru_cache(maxsize=1024)
-def find_optimal_colors(pixel_rgb, epd):
-    """Find optimal combination of available colors to represent an RGB value"""
-    r, g, b = pixel_rgb[:3]
-    
-    # Get available colors, falling back to BLACK if colors aren't supported
-    has_red = hasattr(epd, 'RED')
-    has_yellow = hasattr(epd, 'YELLOW')
-    
-    # Calculate color characteristics
-    luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0
-    saturation = max(r, g, b) - min(r, g, b)
-    red_ratio = r / 255.0
-    yellow_ratio = min(r, g) / 255.0  # Yellow needs both red and green
-    
-    # For black and white only displays
-    if not (has_red or has_yellow):
-        if luminance > 0.7:
-            return [('white', 0.7), ('black', 0.3)]
-        elif luminance > 0.3:
-            return [('white', 0.5), ('black', 0.5)]
-        else:
-            return [('black', 0.7), ('white', 0.3)]
-    
-    # For displays with red support
-    if has_red and not has_yellow:
-        if r > 200 and g < 100:  # Strong red
-            return [('red', 0.7), ('black', 0.2), ('white', 0.1)]
-        elif saturation < 30:  # Grayscale
-            if luminance > 0.7:
-                return [('white', 0.7), ('black', 0.3)]
-            elif luminance > 0.3:
-                return [('white', 0.5), ('black', 0.5)]
-            else:
-                return [('black', 0.7), ('white', 0.3)]
-        elif r > g and r > b:  # Reddish
-            return [('red', 0.6), ('black', 0.2), ('white', 0.2)]
-        else:
-            return [('black', 0.6), ('white', 0.4)]
-    
-    # For displays with yellow support (and possibly red)
-    if has_yellow:
-        if r > 200 and g < 100:  # Strong red
-            return [('red', 0.7), ('black', 0.2), ('white', 0.1)] if has_red else [('black', 0.7), ('white', 0.3)]
-        elif r > 200 and g > 200:  # Strong yellow
-            return [('yellow', 0.7), ('black', 0.2), ('white', 0.1)]
-        elif saturation < 30:  # Grayscale
-            if luminance > 0.7:
-                return [('white', 0.7), ('black', 0.3)]
-            elif luminance > 0.3:
-                return [('white', 0.5), ('black', 0.5)]
-            else:
-                return [('black', 0.7), ('white', 0.3)]
-        elif r > g and r > b:  # Reddish
-            return [('red', 0.6), ('black', 0.2), ('white', 0.2)] if has_red else [('black', 0.6), ('white', 0.4)]
-        elif r > 100 and g > 100:  # Yellowish
-            return [('yellow', 0.6), ('black', 0.2), ('white', 0.2)]
-        else:
-            return [('black', 0.6), ('white', 0.4)]
-    
-    # Default fallback
-    return [('black', 0.6), ('white', 0.4)]
-
-def draw_multicolor_dither(draw, epd, x, y, width, height, colors_with_ratios):
-    """Draw a block using multiple colors with specified ratios"""
-    # Only include colors that the display supports
-    epd_colors = {
-        'white': ((255, 255, 255), epd.WHITE),
-        'black': ((0, 0, 0), epd.BLACK)
-    }
-    
-    # Add RED if supported
-    if hasattr(epd, 'RED'):
-        epd_colors['red'] = ((255, 0, 0), epd.RED)
-    
-    # Add YELLOW if supported
-    if hasattr(epd, 'YELLOW'):
-        epd_colors['yellow'] = ((255, 255, 0), epd.YELLOW)
-    
-    total_pixels = width * height
-    
-    # Filter out any colors that aren't supported by the display
-    valid_colors = [(color, ratio) for color, ratio in colors_with_ratios if color in epd_colors]
-    
-    # If no valid colors remain, fallback to black and white
-    if not valid_colors:
-        valid_colors = [('black', 0.6), ('white', 0.4)]
-    
-    # Normalize ratios if we filtered out any colors
-    total_ratio = sum(ratio for _, ratio in valid_colors)
-    if total_ratio != 1.0:
-        valid_colors = [(color, ratio/total_ratio) for color, ratio in valid_colors]
-    
-    for i in range(width):
-        for j in range(height):
-            pos = (i + j * width) / total_pixels
-            
-            # Simplified color selection - more deterministic
-            cumulative_ratio = 0
-            chosen_color = 'white'  # default
-            
-            for color_name, ratio in valid_colors:
-                cumulative_ratio += ratio
-                if pos <= cumulative_ratio:
-                    chosen_color = color_name
-                    break
-            
-            draw.point((x + i, y + j), fill=epd_colors[chosen_color][1])
-
-def process_icon_for_epd(icon, epd):
-    """Process icon using multi-color dithering"""
-    width, height = icon.size
-
-    # Create a new image with white background
-    if epd.is_bw_display:
-        processed = Image.new('1', icon.size, 1)  # 1 is white in 1-bit mode
-    else:
-        processed = Image.new('RGB', icon.size, epd.WHITE)
-    draw = ImageDraw.Draw(processed)
-    
-    block_size = 4
-    for x in range(0, width, block_size):
-        for y in range(0, height, block_size):
-            block = icon.crop((x, y, min(x + block_size, width), min(y + block_size, height)))
-            
-            # Calculate average color of non-transparent pixels
-            r, g, b, valid_pixels = 0, 0, 0, 0
-            for px in block.getdata():
-                if len(px) == 4 and px[3] > 128:
-                    r += px[0]
-                    g += px[1]
-                    b += px[2]
-                    valid_pixels += 1
-            
-            if valid_pixels == 0:
-                continue
-                
-            avg_color = (r//valid_pixels, g//valid_pixels, b//valid_pixels)
-            
-            # Get optimal color combination
-            colors_with_ratios = find_optimal_colors(avg_color, epd)
-            
-            # Apply multi-color dithering
-            draw_multicolor_dither(
-                draw, epd,
-                x, y,
-                min(block_size, width - x),
-                min(block_size, height - y),
-                colors_with_ratios
-            )
-    
-    return processed
-
-def get_weather_icon(icon_code, size, epd):
-    """Fetch and process weather icon from OpenWeatherMap with caching"""
-    try:
-        # Create cache directory if it doesn't exist
-        CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        
-        # Generate cache filename based on icon code and size
-        cache_file = CACHE_DIR / f"icon_{icon_code}_{size[0]}x{size[1]}.png"
-        
-        # Check if cached version exists
-        if cache_file.exists():
-            # logger.debug(f"Loading cached icon: {cache_file}")
-            icon = Image.open(cache_file)
-            
-            # Process the cached icon
-            processed_icon = process_icon_for_epd(icon, epd)
-            return processed_icon
-        
-        # If not in cache, download and process
-        logger.debug(f"Downloading icon: {icon_code}")
-        response = requests.get(WEATHER_ICON_URL.format(icon_code))
-        if response.status_code == 200:
-            icon = Image.open(BytesIO(response.content))
-            icon = icon.resize(size, Image.Resampling.LANCZOS)
-            
-            # Save to cache
-            icon.save(cache_file, "PNG")
-            # logger.debug(f"Saved icon to cache: {cache_file}")
-            
-            # Process the icon
-            processed_icon = process_icon_for_epd(icon, epd)
-            return processed_icon
-            
-    except Exception as e:
-        logger.error(f"Error processing weather icon: {e}\n{traceback.format_exc()}")
-    return None
-
 def update_display(epd, weather_data=None, bus_data=None, error_message=None, stop_name=None, first_run=False):
-    """Update the display with new weather data"""
+    """Update the display with new weather and waiting timesdata"""
     MARGIN = 8
 
     # Handle different color definitions
@@ -515,13 +326,13 @@ def update_display(epd, weather_data=None, bus_data=None, error_message=None, st
 
     # Rotate the image 90 degrees
     Himage = Himage.rotate(DISPLAY_SCREEN_ROTATION, expand=True)
-    
-    # Convert image to buffer
-    buffer = epd.getbuffer(Himage)
-    
-    # Add debug log before display command
-    logger.debug("About to call epd.display() with new buffer")
-    epd.display(buffer)
+    with display_lock:
+        # Convert image to buffer
+        buffer = epd.getbuffer(Himage)
+        
+        # Add debug log before display command
+        logger.debug("About to call epd.display() with new buffer")
+        epd.display(buffer)
 
 def draw_weather_display(epd, weather_data, last_weather_data=None):
     """Draw a weather-focused display when no bus times are available"""
@@ -539,13 +350,13 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
 
  # 250x120 width x height
     draw = ImageDraw.Draw(Himage)
-    
+    font_paths = get_font_paths()
     try:
-        font_xl = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 42)
-        font_large = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 28)
-        font_medium = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 18)
-        font_small = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 14)
-        font_tiny = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 10)
+        font_xl = ImageFont.truetype(font_paths['dejavu_bold'], 42)
+        font_large = ImageFont.truetype(font_paths['dejavu_bold'], 28)
+        font_medium = ImageFont.truetype(font_paths['dejavu'], 18)
+        font_small = ImageFont.truetype(font_paths['dejavu'], 14)
+        font_tiny = ImageFont.truetype(font_paths['dejavu'], 10)
     except:
         font_xl = ImageFont.load_default()
         font_large = font_medium = font_small = font_tiny = font_xl 
@@ -661,72 +472,51 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
     # Rotate the image 90 degrees
     Himage = Himage.rotate(DISPLAY_SCREEN_ROTATION, expand=True)
     
-    # Display the image
-    buffer = epd.getbuffer(Himage)
-    epd.display(buffer)
+    with display_lock:  
+        # Display the image
+        buffer = epd.getbuffer(Himage)
+        epd.display(buffer)
 
 def check_flights_and_update_display(epd, get_flights, flight_check_interval=10):
     """Check for flights within 3 km and update the display if any are found."""
     while True:
-        flights_within_3km = get_flights()
-        if flights_within_3km:
-            logger.info(f"Flights within the set radius: {len(flights_within_3km)}")
-            # Update the display with flight information
-            # You can customize this part to display flight details as needed
-            # Get the closest flight (first one in the list)
-          
-            closest_flight = flights_within_3km[0]
-            # If the closest flight is on the ground, don't show it and get the next one
-            if closest_flight.get('altitude') == "ground":
-                logger.debug("Closest flight is on the ground. Looking for next airborne flight.")
-                found_airborne = False
-                for flight in flights_within_3km[1:]:
-                    if flight.get('altitude') != "ground":
-                        closest_flight = flight
-                        found_airborne = True
-                        break
-                if not found_airborne:
-                    logger.debug("No airborne flights found in the list.")
-                    closest_flight = None
-                else:
-                    logger.debug("No flights in the air within the max radius. Skipping update.")
-                    closest_flight = None
+        try:
+            flights_within_3km = get_flights()
+            if flights_within_3km:
+                logger.info(f"Flights within the set radius: {len(flights_within_3km)}")
+                
+                closest_flight = flights_within_3km[0]
+                # If the closest flight is on the ground, don't show it and get the next one
+                if closest_flight.get('altitude') == "ground":
+                    logger.debug("Closest flight is on the ground. Looking for next airborne flight.")
+                    found_airborne = False
+                    for flight in flights_within_3km[1:]:
+                        if flight.get('altitude') != "ground":
+                            closest_flight = flight
+                            found_airborne = True
+                            break
+                    if not found_airborne:
+                        logger.debug("No airborne flights found in the list.")
+                        closest_flight = None
+                
+                # Enhance the flight data with additional details
+                if closest_flight:
+                    logger.debug(f"Closest flight: {closest_flight}")
+                    enhanced_flight = enhance_flight_data(closest_flight)
+                    logger.debug(f"Enhanced flight: {enhanced_flight}")
+                    # Update display with the enhanced flight data
+                    update_display_with_flights(epd, [enhanced_flight])
+            else:
+                logger.debug("No flights found within the radius")
             
+            # Always sleep before next check, regardless of whether flights were found
+            time.sleep(flight_check_interval)
 
-            # Enhance the flight data with additional details
-            logger.debug(f"Closest flight: {closest_flight}")
-            if closest_flight:
-                enhanced_flight = enhance_flight_data(closest_flight)
-                logger.debug(f"Enhanced flight: {enhanced_flight}")
-                # Update display with the enhanced flight data
-                update_display_with_flights(epd, [enhanced_flight])
+        except Exception as e:
+            logger.error(f"Error in flight check loop: {e}", exc_info=True)
+            # Sleep on error to prevent rapid error loops
+            time.sleep(flight_check_interval)
 
-            # update_display_with_flights(epd, flights_within_3km)
-        
-        time.sleep(flight_check_interval)  # Check every 10 seconds
-
-@lru_cache(maxsize=32)
-def get_font_paths():
-    """Get the appropriate font paths based on the operating system."""
-    import platform
-    import os
-    
-    system = platform.system()
-    
-    if system == "Darwin":  # macOS
-        return {
-            'dejavu': '/System/Library/Fonts/Supplemental/DejaVuSans.ttf',
-            'dejavu_bold': '/System/Library/Fonts/Supplemental/DejaVuSans-Bold.ttf',
-            'emoji': os.path.expanduser('~/Library/Fonts/NotoEmoji[wght].ttf')  # Use user's Noto Emoji font
-        }
-    else:  # Assume Raspberry Pi/Linux
-        return {
-            'dejavu': '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-            'dejavu_bold': '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
-            'emoji': '/usr/local/share/fonts/noto/NotoEmoji-Regular.ttf'
-        }
-
-font_paths = get_font_paths()
 def update_display_with_flights(epd, flights):
     """Update the display with flight information."""
     # Create a new image with mode 'RGB'
@@ -740,7 +530,7 @@ def update_display_with_flights(epd, flights):
 
     # Get font paths based on the operating system
     
-    
+    font_paths = get_font_paths()
     # Try to load fonts
     try:
         font_tiny = ImageFont.truetype(font_paths['dejavu'], 10)
@@ -872,8 +662,9 @@ def update_display_with_flights(epd, flights):
     Himage = Himage.rotate(DISPLAY_SCREEN_ROTATION, expand=True)
     
     # Display the image
-    buffer = epd.getbuffer(Himage)
-    epd.display(buffer)
+    with display_lock:
+        buffer = epd.getbuffer(Himage)
+        epd.display(buffer)
 
 def main():
     epd = None
@@ -890,28 +681,32 @@ def main():
         # Add debug logs before EPD commands
         logger.debug("About to call epd.init()")
         try:
-            epd.init()
+            with display_lock:
+                epd.init()
         except Exception as e:
             logger.error(f"Error initializing display: {str(e)}\n{traceback.format_exc()}")
             raise
         
         logger.debug("About to call epd.Clear()")
         try:
-            epd.Clear()
+            with display_lock:
+                epd.Clear()
         except Exception as e:
             logger.error(f"Error clearing display: {str(e)}\n{traceback.format_exc()}")
             raise
         logger.info("Display initialized")
         
         logger.debug("About to call epd.init_Fast()")
-        epd.init_Fast()
+        with display_lock:
+            epd.init_Fast()
         logger.info("Fast mode initialized")
         
         # Check Wi-Fi connectivity
         if not is_connected():
             logger.info("Not connected to Wi-Fi. Starting Wi-Fi manager...")
             subprocess.Popen(['python3', 'wifi_manager.py'])
-            show_no_wifi_display(epd)
+            with display_lock:
+                show_no_wifi_display(epd)
             
             # Wait and check for WiFi connection
             while not is_connected():
@@ -920,9 +715,10 @@ def main():
             
             logger.info("WiFi connected. Continuing with main loop...")
             # Reinitialize display after WiFi setup
-            epd.init()
-            epd.Clear()
-            epd.init_Fast()
+            with display_lock:
+                epd.init()
+                epd.Clear()
+                epd.init_Fast()
 
         # Initialize services
         weather = WeatherService() if weather_enabled else None
@@ -931,10 +727,22 @@ def main():
         # Initialize flight monitoring
         if flights_enabled:
             search_radius = FLIGHT_MAX_RADIUS * 2
-            get_flights = gather_flights_within_radius(COORDINATES_LAT, COORDINATES_LNG, search_radius, FLIGHT_MAX_RADIUS, aeroapi_enabled=aeroapi_enabled)
-            logger.debug(f"Flights within the set radius: {get_flights}")
+            get_flights = gather_flights_within_radius(
+                COORDINATES_LAT, 
+                COORDINATES_LNG, 
+                search_radius, 
+                FLIGHT_MAX_RADIUS, 
+                flight_check_interval=flight_check_interval,
+                aeroapi_enabled=aeroapi_enabled
+            )
+            
             # Start flight checking in a separate thread
-            threading.Thread(target=check_flights_and_update_display, args=(epd, get_flights, flight_check_interval), daemon=True).start()
+            flight_thread = threading.Thread(
+                target=check_flights_and_update_display,
+                args=(epd, get_flights, flight_check_interval),
+                daemon=True
+            )
+            flight_thread.start()
         
         # Counter for full refresh every hour
         update_count = 0
@@ -971,11 +779,14 @@ def main():
                 if needs_full_refresh:
                     logger.info("Performing hourly full refresh...")
                     logger.debug("About to call epd.init()")
-                    epd.init()
+                    with display_lock:
+                        epd.init()
                     logger.debug("About to call epd.Clear()")
-                    epd.Clear()
+                    with display_lock:
+                        epd.Clear()
                     logger.debug("About to call epd.init_Fast()")
-                    epd.init_Fast()
+                    with display_lock:
+                        epd.init_Fast()
                     update_count = 0
                 
                 # Determine display mode
@@ -1006,7 +817,8 @@ def main():
                     if (last_weather_data is None or 
                         (weather_changed and time_since_update >= WEATHER_UPDATE_INTERVAL) or 
                         time_since_update >= 3600):
-                        draw_weather_display(epd, weather_data)
+                        with display_lock:
+                            draw_weather_display(epd, weather_data)
                         last_weather_data = weather_data
                         last_weather_update = current_time
                     
@@ -1040,13 +852,17 @@ def main():
         if epd is not None:
             try:
                 logger.debug("About to call final epd.init()")
-                epd.init()
+                with display_lock:
+                    epd.init()
                 logger.debug("About to call final epd.Clear()")
-                epd.Clear()
+                with display_lock:
+                    epd.Clear()
                 logger.debug("About to call epd.sleep()")
-                epd.sleep()
+                with display_lock:
+                    epd.sleep()
                 logger.debug("About to call module_exit")
-                epd.epdconfig.module_exit(cleanup=True)
+                with display_lock:
+                    epd.epdconfig.module_exit(cleanup=True)
                 logger.info("Display cleanup completed")
             except Exception as e:
                 logger.error(f"Error during cleanup: {str(e)}\n{traceback.format_exc()}")

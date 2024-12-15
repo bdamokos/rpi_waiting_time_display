@@ -30,6 +30,8 @@ The server from [my other repository](https://github.com/bdamokos/brussels_trans
 
 An [API key for OpenWeatherMap](https://openweathermap.org/appid) is required to get the weather data. (Optional, without an API key, the weather will not be displayed.)
 
+For enhanced flight data an [AeroAPI](https://www.flightaware.com/commercial/aeroapi) key is needed. By default, they provide a $5 monthly free quota and the application does not go beyond that (checking usage before calling the API), unless specifically authorised.
+
 ## Hardware
 This project has been tested with the hardware listed below. It should work with more powerful Raspberry Pi models. Different displays may require changes to the display code
 

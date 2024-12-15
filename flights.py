@@ -325,6 +325,7 @@ def aeroapi_get_operator(operator_code_iata):
     if operator_data:
         operator_code = operator_data.get('iata', '')
         operator_name = operator_data.get('name', '')
+        operator_shortname = operator_data.get('shortname', '')
 
         
         # Check if operators.json exists and read its content
@@ -359,6 +360,8 @@ def aeroapi_get_operator(operator_code_iata):
         with open('operators.json', 'w') as file:
             json.dump(cached_operators, file)
         logger.debug(f"Operator name set for {operator_code}: {operator_name}")
+        if len(operator_name) > 15:
+            return operator_shortname
         return operator_name
     return None
 

@@ -7,3 +7,5 @@ logs/*
 debug_output.png
 cache/*
 .display_requirements_version;
+types.json
+operators.json

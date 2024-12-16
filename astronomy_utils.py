@@ -109,9 +109,10 @@ def get_daily_moon_change():
         return None
 
 if __name__ == "__main__":
-    # Test the function
+    # Test the function by getting the moon phase and the change over 24 hours
     result = get_daily_moon_change()
     if result:
         print(f"Current moon illumination: {result['current']:.1f}%")
         print(f"Tomorrow's illumination: {result['tomorrow']:.1f}%")
         print(f"Change over 24 hours: {result['change']:+.1f}%")
+    print(f"Current moon phase: {get_moon_phase()['name']}, {get_moon_phase()['emoji']}, illumination: {get_moon_phase()['percent_illuminated']:.1f}%")

@@ -7,6 +7,7 @@ ISS next pass prediction inspired by https://github.com/open-notify/Open-Notify-
 '''
 
 from skyfield.api import load, wgs84
+from skyfield.framelib import ecliptic_frame
 from datetime import datetime, timedelta, timezone
 from time import time
 import json
@@ -61,8 +62,21 @@ class ISSTracker:
             if self.next_passes:
                 logger.info("Next ISS passes predicted:")
                 for pass_info in self.next_passes:
+                    # Determine visibility condition
+                    moon_emoji = pass_info['darkness']['moon_phase_emoji']
+                    if pass_info['darkness']['fully_dark']:
+                        visibility = f"in darkness {moon_emoji}"
+                    elif not pass_info['darkness']['rise'] and not pass_info['darkness']['set']:
+                        visibility = "in daylight ☀️"
+                    else:
+                        if pass_info['darkness']['rise']:
+                            visibility = f"starting in darkness {moon_emoji}, ending in daylight ☀️"
+                        else:
+                            visibility = f"starting in daylight ☀️, ending in darkness {moon_emoji}"
+                            
                     logger.info(f"Pass at {pass_info['human_risetime']}, "
-                              f"duration: {humanize.precisedelta(timedelta(seconds=pass_info['duration']))}")
+                              f"duration: {humanize.precisedelta(timedelta(seconds=pass_info['duration']))}, "
+                              f"{visibility}")
             else:
                 logger.info("No visible passes predicted in the next period")
                 
@@ -184,8 +198,12 @@ def get_tle_data():
         raise
 
 def predict_passes(lat, lon, alt=0, n=5):
-    # Load the ISS TLE data
+    # Load the ISS TLE data and ephemeris
     iss = get_tle_data()
+    eph = load('de421.bsp')
+    sun = eph['sun']
+    earth = eph['earth']
+    moon = eph['moon']  
     
     # Create location object
     location = wgs84.latlon(lat, lon, elevation_m=alt)
@@ -193,9 +211,6 @@ def predict_passes(lat, lon, alt=0, n=5):
     # Get current time
     ts = load.timescale()
     t0 = ts.from_datetime(datetime.now(tz=timezone.utc))
-    
-    # Load ephemeris for Sun position
-    eph = load('de421.bsp')
     
     # Predict passes
     passes = []
@@ -230,6 +245,50 @@ def predict_passes(lat, lon, alt=0, n=5):
                 set_az = az_deg.degrees
                 duration = int((set_time - rise_time).total_seconds())
                 
+                # Calculate sun elevation at rise and set
+                rise_time_ts = ts.from_datetime(rise_time)
+                set_time_ts = ts.from_datetime(set_time)
+                
+                # Get sun position at rise
+                sun_rise = (earth + location).at(rise_time_ts).observe(sun).apparent()
+                sun_rise_alt, _, _ = sun_rise.altaz()
+                
+                # Get sun position at set
+                sun_set = (earth + location).at(set_time_ts).observe(sun).apparent()
+                sun_set_alt, _, _ = sun_set.altaz()
+                
+                # Consider it dark if sun is below -6 degrees (civil twilight)
+                is_dark_rise = sun_rise_alt.degrees < -6
+                is_dark_set = sun_set_alt.degrees < -6
+                
+                # Calculate moon phase at rise time
+                e = earth.at(rise_time_ts)
+                s = e.observe(sun).apparent()
+                m = e.observe(moon).apparent()
+                
+                # Calculate moon phase using ecliptic coordinates
+                _, slon, _ = s.frame_latlon(ecliptic_frame)
+                _, mlon, _ = m.frame_latlon(ecliptic_frame)
+                phase = (mlon.degrees - slon.degrees) % 360.0
+                
+                # Determine moon phase emoji
+                if 0 <= phase < 45:
+                    moon_emoji = "🌑"  # New moon
+                elif 45 <= phase < 90:
+                    moon_emoji = "🌒"  # Waxing crescent
+                elif 90 <= phase < 135:
+                    moon_emoji = "🌓"  # First quarter
+                elif 135 <= phase < 180:
+                    moon_emoji = "🌔"  # Waxing gibbous
+                elif 180 <= phase < 225:
+                    moon_emoji = "🌕"  # Full moon
+                elif 225 <= phase < 270:
+                    moon_emoji = "🌖"  # Waning gibbous
+                elif 270 <= phase < 315:
+                    moon_emoji = "🌗"  # Last quarter
+                else:
+                    moon_emoji = "🌘"  # Waning crescent
+                
                 if duration > 0:  # Only include passes longer than 60 seconds
                     passes.append({
                         "risetime": int(rise_time.timestamp()),
@@ -239,6 +298,12 @@ def predict_passes(lat, lon, alt=0, n=5):
                             "rise": int(rise_sunlit),
                             "max": int(max_sunlit),
                             "set": int(set_sunlit)
+                        },
+                        "darkness": {
+                            "rise": is_dark_rise,
+                            "set": is_dark_set,
+                            "fully_dark": is_dark_rise and is_dark_set,
+                            "moon_phase_emoji": moon_emoji
                         },
                         "position": {
                             "rise": {

@@ -87,34 +87,31 @@ class ISSTracker:
         
         logger.info(f"Completed pass monitoring at {datetime.now()}")
 
-    def run(self, epd):
-        """Main running loop"""
-        last_prediction_time = 0
-        
+    def run(self, epd, on_pass_start=None, on_pass_end=None):
+        """Main running loop with callbacks"""
         while not self.stop_event.is_set():
             current_time = time()
             
-            # Calculate new predictions if needed
-            if current_time - last_prediction_time >= self.prediction_interval:
+            if current_time - self.last_prediction_time >= self.prediction_interval:
                 self.calculate_next_passes()
-                last_prediction_time = current_time
+                self.last_prediction_time = current_time
             
-            # Find next pass
-            current_pass = None
-            for pass_info in self.next_passes:
-                if current_time < pass_info['risetime'] + pass_info['duration']:
-                    current_pass = pass_info
-                    break
+            current_pass = next((pass_info for pass_info in self.next_passes 
+                               if current_time < pass_info['risetime'] + pass_info['duration']), None)
             
             if current_pass:
                 # If we're in a pass window
                 if current_time >= current_pass['risetime']:
+                    if on_pass_start:
+                        on_pass_start()
                     self.monitor_pass(current_pass, epd)
+                    if on_pass_end:
+                        on_pass_end()
                 else:
                     # Sleep until next pass
                     sleep_time = current_pass['risetime'] - current_time
                     logger.info(f"Sleeping for {humanize.precisedelta(timedelta(seconds=sleep_time))}")
-                    self.stop_event.wait(min(sleep_time, 300))  # Wake up at least every 5 minutes
+                    self.stop_event.wait(min(sleep_time, 300))
             else:
                 # No passes coming up, sleep for a while
                 logger.debug("No immediate passes, sleeping for 5 minutes")

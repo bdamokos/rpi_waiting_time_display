@@ -22,6 +22,7 @@ import logging
 from PIL import Image, ImageDraw, ImageFont
 from threading import Event
 import humanize
+from astronomy_utils import get_moon_phase 
 logger = logging.getLogger(__name__)
 # Set urllib3 and urllib3.connectionpool log levels to warning
 logging.getLogger('urllib3').setLevel(logging.WARNING)
@@ -262,32 +263,8 @@ def predict_passes(lat, lon, alt=0, n=5):
                 is_dark_set = sun_set_alt.degrees < -6
                 
                 # Calculate moon phase at rise time
-                e = earth.at(rise_time_ts)
-                s = e.observe(sun).apparent()
-                m = e.observe(moon).apparent()
-                
-                # Calculate moon phase using ecliptic coordinates
-                _, slon, _ = s.frame_latlon(ecliptic_frame)
-                _, mlon, _ = m.frame_latlon(ecliptic_frame)
-                phase = (mlon.degrees - slon.degrees) % 360.0
-                
-                # Determine moon phase emoji
-                if 0 <= phase < 45:
-                    moon_emoji = "🌑"  # New moon
-                elif 45 <= phase < 90:
-                    moon_emoji = "🌒"  # Waxing crescent
-                elif 90 <= phase < 135:
-                    moon_emoji = "🌓"  # First quarter
-                elif 135 <= phase < 180:
-                    moon_emoji = "🌔"  # Waxing gibbous
-                elif 180 <= phase < 225:
-                    moon_emoji = "🌕"  # Full moon
-                elif 225 <= phase < 270:
-                    moon_emoji = "🌖"  # Waning gibbous
-                elif 270 <= phase < 315:
-                    moon_emoji = "🌗"  # Last quarter
-                else:
-                    moon_emoji = "🌘"  # Waning crescent
+                moon_phase = get_moon_phase(rise_time)
+                moon_emoji = moon_phase['emoji']
                 
                 if duration > 0:  # Only include passes longer than 60 seconds
                     passes.append({

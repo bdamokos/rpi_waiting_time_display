@@ -22,7 +22,7 @@ import logging
 from PIL import Image, ImageDraw, ImageFont
 from threading import Event
 import humanize
-from astronomy_utils import get_moon_phase 
+from astronomy_utils import get_moon_phase, get_appropriate_ephemeris
 logger = logging.getLogger(__name__)
 # Set urllib3 and urllib3.connectionpool log levels to warning
 logging.getLogger('urllib3').setLevel(logging.WARNING)
@@ -201,7 +201,7 @@ def get_tle_data():
 def predict_passes(lat, lon, alt=0, n=5):
     # Load the ISS TLE data and ephemeris
     iss = get_tle_data()
-    eph = load('de421.bsp')
+    eph = load(get_appropriate_ephemeris())
     sun = eph['sun']
     earth = eph['earth']
     moon = eph['moon']  

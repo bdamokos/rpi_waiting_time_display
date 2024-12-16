@@ -28,7 +28,7 @@ def get_moon_phase(timestamp=None):
     """
     # Load required ephemeris data
     ts = load.timescale()
-    eph = load('de421.bsp')
+    eph = load(get_appropriate_ephemeris())
     
     # Get time
     if timestamp is None:
@@ -107,6 +107,35 @@ def get_daily_moon_change():
     except Exception as e:
         logger.error(f"Error calculating moon phase change: {e}")
         return None
+
+def get_appropriate_ephemeris():
+    """
+    Select the appropriate JPL ephemeris based on the current year.
+    
+    Returns:
+        str: Ephemeris filename to load
+        
+    Notes:
+        - DE421 (1900-2050): Smaller file (~14MB), adequate for basic Earth/Moon/Sun calculations
+        - DE440 (1550-2650): Improved accuracy, larger file (~120MB)
+        - DE441 (-13000-17000): Extended timespan, very large file (~3GB)
+        
+        Auto-switching logic:
+        - Before 2050: Use DE421 for efficiency (sufficient accuracy, smaller size)
+        - 2050-2650: Use DE440 for improved accuracy
+        - After 2650: Use DE441 for extended coverage
+        
+        This ensures the application continues to work accurately far into the future,
+        while being efficient with storage space in the present.
+    """
+    current_year = datetime.now().year
+    
+    if current_year < 2050:
+        return 'de421.bsp'
+    elif current_year < 2650:
+        return 'de440.bsp'
+    else:
+        return 'de441.bsp'
 
 if __name__ == "__main__":
     # Test the function by getting the moon phase and the change over 24 hours

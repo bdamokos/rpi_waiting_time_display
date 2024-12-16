@@ -284,7 +284,7 @@ def get_direction(azimuth):
 
 
 
-def display_iss_info(epd, iss_info):
+def display_iss_info(epd, iss_info, satellite_name="ISS (ZARYA)"):
     # Display the ISS info on the screen:
     # Big satellite emoji on the left, some info on the right
     #   ----------------------------------------
@@ -319,7 +319,7 @@ def display_iss_info(epd, iss_info):
     line_height = 18    # Space between lines
     
     # Line 1: ISS Name
-    draw.text((text_start_x, 5), "ISS (ZARYA)", font=font_large, fill="black")
+    draw.text((text_start_x, 5), satellite_name, font=font_large, fill="black")
     
     # Line 2: Position
     position_text = f"Position: {iss_info['latitude']:.1f}°, {iss_info['longitude']:.1f}°"

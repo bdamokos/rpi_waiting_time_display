@@ -230,7 +230,7 @@ def predict_passes(lat, lon, alt=0, n=5):
                 set_az = az_deg.degrees
                 duration = int((set_time - rise_time).total_seconds())
                 
-                if duration > 60:  # Only include passes longer than 60 seconds
+                if duration > 0:  # Only include passes longer than 60 seconds
                     passes.append({
                         "risetime": int(rise_time.timestamp()),
                         "human_risetime": rise_time.astimezone().strftime('%Y-%m-%d %H:%M:%S %Z'),

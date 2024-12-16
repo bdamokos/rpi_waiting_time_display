@@ -9,6 +9,7 @@ import logging
 from dithering import process_icon_for_epd
 from font_utils import get_font_paths
 from display_adapter import return_display_lock
+from astronomy_utils import get_moon_phase
 import log_config
 import json
 import traceback
@@ -356,7 +357,8 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
     try:
         font_xl = ImageFont.truetype(font_paths['dejavu_bold'], 42)
         font_large = ImageFont.truetype(font_paths['dejavu_bold'], 28)
-        font_medium = ImageFont.truetype(font_paths['dejavu'], 18)
+        font_medium = ImageFont.truetype(font_paths['dejavu'], 16)
+        font_emoji = ImageFont.truetype(font_paths['emoji'], 16)
         font_small = ImageFont.truetype(font_paths['dejavu'], 14)
         font_tiny = ImageFont.truetype(font_paths['dejavu'], 10)
     except:
@@ -398,15 +400,24 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
 
     # Show either sunrise or sunset based on time of day
     if weather_data['is_daytime']:
-        sun_text = f"{weather_data['sunset']}"
+        sun_text = f" {weather_data['sunset']} "
         sun_icon = "☀"
     else:
-        sun_text = f"{weather_data['sunrise']}"
+        sun_text = f" {weather_data['sunrise']} "
         sun_icon = "☀"
-
+    moon_phase = get_moon_phase()
+    moon_phase_emoji = moon_phase['emoji']
+    moon_phase_name = f" {moon_phase['name'].lower()}"
+    sun_icon_width = font_emoji.getbbox(f"{sun_icon}")[2] - font_emoji.getbbox(f"{sun_icon}")[0]
+    moon_phase_width = font_emoji.getbbox(f"{moon_phase_emoji}")[2] - font_emoji.getbbox(f"{moon_phase_emoji}")[0]
+    sun_text_width = font_medium.getbbox(f"{sun_text}")[2] - font_medium.getbbox(f"{sun_text}")[0]
+    moon_phase_text_width = font_medium.getbbox(f"{moon_phase_name}")[2] - font_medium.getbbox(f"{moon_phase_name}")[0]
     # Draw sun info on left side with smaller font
-    sun_full = f"{sun_icon} {sun_text}"
-    draw.text((MARGIN , y_pos), sun_full, font=font_medium, fill=epd.BLACK)
+    sun_full = f"{sun_icon} {sun_text} {moon_phase_emoji} {moon_phase_name}"
+    draw.text((MARGIN , y_pos), sun_icon, font=font_emoji, fill=epd.BLACK)
+    draw.text((MARGIN + sun_icon_width, y_pos), sun_text, font=font_medium, fill=epd.BLACK)
+    draw.text((MARGIN + sun_icon_width + sun_text_width, y_pos), moon_phase_emoji, font=font_emoji, fill=epd.BLACK)
+    draw.text((MARGIN + sun_icon_width + sun_text_width + moon_phase_width, y_pos), moon_phase_name, font=font_medium, fill=epd.BLACK)
 
     # Bottom row: Three day forecast (today + next 2 days)
     y_pos = 85
@@ -452,7 +463,7 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
     qr_img = qr_img.convert('RGB')
 
     # Scale QR code to larger size
-    qr_size = 60
+    qr_size = 58
     qr_img = qr_img.resize((qr_size, qr_size))
     qr_x = Himage.width - qr_size - MARGIN
     qr_y = MARGIN

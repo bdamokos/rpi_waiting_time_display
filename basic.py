@@ -51,6 +51,8 @@ flight_check_interval = int(os.getenv('flight_check_interval', 10))
 FLIGHT_MAX_RADIUS = int(os.getenv('flight_max_radius', 3))
 flight_altitude_convert_feet = True if os.getenv('flight_altitude_convert_feet', 'false').lower() == 'true' else False
 
+iss_enabled = True if os.getenv('iss_enabled', 'true').lower() == 'true' else False
+
 if not weather_enabled:
     logger.warning("Weather is not enabled, weather data will not be displayed. Please set OPENWEATHER_API_KEY in .env to enable it.")
 
@@ -288,6 +290,11 @@ class DisplayManager:
         self.last_flight_mode_end = None
         self.flight_monitoring_paused = False
         self._flight_lock = threading.Lock()
+        self.iss_enabled = os.getenv("iss_enabled", "true").lower() == "true"
+        self.iss_priority = os.getenv("iss_priority", "false").lower() == "true"
+        self.iss_tracker = None
+        self._iss_thread = None
+        self.in_iss_mode = False
         logger.info(f"DisplayManager initialized with min refresh interval: {self.min_refresh_interval}s")
         logger.info(f"DisplayManager initialized with coordinates: {self.coordinates_lat}, {self.coordinates_lng}")
         logger.info(f"DisplayManager initialized with flight mode duration: {self.flight_mode_duration}s")
@@ -302,6 +309,9 @@ class DisplayManager:
         if self.flights_enabled:
             self.initialize_flight_monitoring()
             logger.info("Flight monitoring initialized")
+        
+        # Initialize ISS tracking if enabled
+        self.initialize_iss_tracking()
         
         # Wait briefly for initial data
         time.sleep(2)
@@ -330,6 +340,44 @@ class DisplayManager:
             daemon=True
         )
         self.flight_thread.start()
+
+    def initialize_iss_tracking(self):
+        if not self.iss_enabled:
+            return
+            
+        try:
+            from iss import ISSTracker
+            self.iss_tracker = ISSTracker()
+            self._iss_thread = threading.Thread(
+                target=self._run_iss_tracker,
+                name="ISS_Tracker",
+                daemon=True
+            )
+            self._iss_thread.start()
+            logger.info("ISS tracking initialized")
+        except Exception as e:
+            logger.error(f"Failed to initialize ISS tracking: {e}")
+            self.iss_enabled = False
+
+    def _run_iss_tracker(self):
+        """Run ISS tracker with display mode management"""
+        def on_pass_start():
+            if self.iss_priority:
+                # Force exit from flight mode if needed
+                if self.in_flight_mode:
+                    logger.info("ISS pass starting - forcing exit from flight mode")
+                    self.in_flight_mode = False
+                    self.flight_mode_start = None
+            self.in_iss_mode = True
+            
+        def on_pass_end():
+            self.in_iss_mode = False
+            self._force_display_update()
+
+        try:
+            self.iss_tracker.run(self.epd, on_pass_start, on_pass_end)
+        except Exception as e:
+            logger.error(f"Error in ISS tracker: {e}")
 
     def _can_enter_flight_mode(self, current_time):
         """Check if we can enter flight mode based on cooldown"""
@@ -443,6 +491,11 @@ class DisplayManager:
         last_flight_log = 0
         while not self._stop_event.is_set():
             try:
+                if self.in_iss_mode:
+                    # Skip normal updates during ISS passes
+                    time.sleep(1)
+                    continue
+                
                 current_time = datetime.now()
                 
                 # Check if we need to exit flight mode
@@ -528,7 +581,10 @@ class DisplayManager:
         logger.info("Starting display manager cleanup...")
         self._stop_event.set()
         
-        for thread in [self._check_data_thread, self._flight_thread]:
+        if self.iss_tracker:
+            self.iss_tracker.stop()
+            
+        for thread in [self._check_data_thread, self._flight_thread, self._iss_thread]:
             if thread:
                 try:
                     thread.join(timeout=1.0)

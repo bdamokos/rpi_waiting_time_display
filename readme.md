@@ -25,7 +25,7 @@ Features:
 
     ![Flights overhead - example with AeroAPI disabled and altitude in meters](docs/images/flight_display_without_aeroapi.png)
 
-- Optional: 🛰️ Displays the ISS position and next pass over the observer's location
+- Optional: 🛰️ Displays the ISS position when it is visible from the set coordinates
 
     ![ISS display - example with ISS position and next pass](docs/images/iss_tracking.png)
 

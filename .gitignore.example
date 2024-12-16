@@ -9,3 +9,5 @@ cache/*
 .display_requirements_version;
 types.json
 operators.json
+stations.txt
+de421.bsp

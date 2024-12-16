@@ -16,3 +16,4 @@ qrcode==7.4.2
 flask>=3.1.0
 requests-cache >= 1.2.1
 skyfield>=1.49
+humanize>=4.11.0

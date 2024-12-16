@@ -19,7 +19,8 @@ from font_utils import get_font_paths
 import log_config
 import logging
 from PIL import Image, ImageDraw, ImageFont
-
+from threading import Event
+import humanize
 logger = logging.getLogger(__name__)
 # Set urllib3 and urllib3.connectionpool log levels to warning
 logging.getLogger('urllib3').setLevel(logging.WARNING)
@@ -32,7 +33,97 @@ Coordinates_LAT = os.getenv('Coordinates_LAT')
 Coordinates_LNG = os.getenv('Coordinates_LNG')
 ISS_ENABLED = os.getenv('ISS_ENABLED', "true") == "true"
 ISS_CHECK_INTERVAL = os.getenv('ISS_CHECK_INTERVAL', "600")
-display_rotation = int(os.getenv('screen_rotation', 90))
+display_rotation = int(os.getenv('screen_rotation', 30))
+
+
+class ISSTracker:
+    def __init__(self):
+        self.next_passes = []
+        self.stop_event = Event()
+        self.iss_check_interval = int(os.getenv('ISS_CHECK_INTERVAL', '30'))
+        self.prediction_interval = 12 * 3600  # 12 hours in seconds
+        self.last_prediction_time = 0
+    def calculate_next_passes(self):
+        """Calculate next ISS passes and store them"""
+        try:
+            lat = float(Coordinates_LAT)
+            lon = float(Coordinates_LNG)
+            
+            passes = predict_passes(lat, lon, n=5)
+            current_time = time()
+            
+            # Filter only future passes
+            self.next_passes = [
+                pass_info for pass_info in passes['response']
+                if pass_info['risetime'] > current_time
+            ]
+            
+            if self.next_passes:
+                logger.info("Next ISS passes predicted:")
+                for pass_info in self.next_passes:
+                    logger.info(f"Pass at {pass_info['human_risetime']}, "
+                              f"duration: {humanize.precisedelta(timedelta(seconds=pass_info['duration']))}")
+            else:
+                logger.info("No visible passes predicted in the next period")
+                
+        except Exception as e:
+            logger.error(f"Error calculating passes: {e}")
+            self.next_passes = []
+
+    def monitor_pass(self, pass_info, epd):
+        """Monitor ISS during a pass window"""
+        start_time = pass_info['risetime']
+        end_time = start_time + pass_info['duration']
+        
+        logger.info(f"Starting pass monitoring from {datetime.fromtimestamp(start_time)}")
+        
+        while time() < end_time and not self.stop_event.is_set():
+            is_visible, position = is_iss_near(Coordinates_LAT, Coordinates_LNG, debug=True)
+            if position:
+                display_iss_info(epd, position)
+                logger.debug(f"Updated display with position: {position}")
+            
+            self.stop_event.wait(self.iss_check_interval)
+        
+        logger.info(f"Completed pass monitoring at {datetime.now()}")
+
+    def run(self, epd):
+        """Main running loop"""
+        last_prediction_time = 0
+        
+        while not self.stop_event.is_set():
+            current_time = time()
+            
+            # Calculate new predictions if needed
+            if current_time - last_prediction_time >= self.prediction_interval:
+                self.calculate_next_passes()
+                last_prediction_time = current_time
+            
+            # Find next pass
+            current_pass = None
+            for pass_info in self.next_passes:
+                if current_time < pass_info['risetime'] + pass_info['duration']:
+                    current_pass = pass_info
+                    break
+            
+            if current_pass:
+                # If we're in a pass window
+                if current_time >= current_pass['risetime']:
+                    self.monitor_pass(current_pass, epd)
+                else:
+                    # Sleep until next pass
+                    sleep_time = current_pass['risetime'] - current_time
+                    logger.info(f"Sleeping for {humanize.precisedelta(timedelta(seconds=sleep_time))}")
+                    self.stop_event.wait(min(sleep_time, 300))  # Wake up at least every 5 minutes
+            else:
+                # No passes coming up, sleep for a while
+                logger.debug("No immediate passes, sleeping for 5 minutes")
+                self.stop_event.wait(300)
+
+    def stop(self):
+        """Stop the tracker"""
+        self.stop_event.set()
+
 
 def get_iss_position():
     response = requests.get('https://api.wheretheiss.at/v1/satellites/25544')
@@ -267,17 +358,29 @@ def display_iss_info(epd, iss_info):
 
 # Example usage
 if __name__ == "__main__":
-    # Use your environment variables
-    lat = float(Coordinates_LAT)
-    lon = float(Coordinates_LNG)
+    # # Use your environment variables
+    # lat = float(Coordinates_LAT)
+    # lon = float(Coordinates_LNG)
     
-    print("Current ISS Position:")
-    print(json.dumps(get_iss_position(), indent=2))
+    # print("Current ISS Position:")
+    # print(json.dumps(get_iss_position(), indent=2))
     
-    print("\nISS Position relative to observer:")
-    is_visible, position = is_iss_near(lat, lon, debug=True)
-    print(json.dumps(position, indent=2))
-    print(f"ISS is {'visible' if is_visible else 'not visible'} from your location")
-    epd = initialize_display()
+    # print("\nISS Position relative to observer:")
+    # is_visible, position = is_iss_near(lat, lon, debug=True)
+    # print(json.dumps(position, indent=2))
+    # print(f"ISS is {'visible' if is_visible else 'not visible'} from your location")
+    # epd = initialize_display()
 
-    display_iss_info(epd, position)
+    # display_iss_info(epd, position)
+
+    epd = initialize_display()
+    tracker = ISSTracker()
+    
+    try:
+        tracker.run(epd)
+    except KeyboardInterrupt:
+        logger.info("Stopping ISS tracker")
+        tracker.stop()
+    except Exception as e:
+        logger.error(f"Error in ISS tracker: {e}")
+        tracker.stop()

@@ -4,10 +4,10 @@ A Raspberry Pi project that displays bus waiting times using an e-Paper display 
 ![Display Example](docs/images/display_example.jpg)
 
 Features:
-- Weather conditions and temperature (including a weather mode when no bus is coming soon)
+- ☀️ Weather conditions and temperature (including a weather mode when no bus is coming soon)
 
     ![Weather Mode example, showing the current temperature, the time of the next sunset or sunrise, and forecast for the next 3 days (including today if we are before 10 pm), as well as weather condition icons and a QR code that leads to the debugging page of the display](docs/images/weather%20mode%20with%20dithered%20weather%20icons.png)
-- Next bus arrival times for configured lines (up to 2 lines at 1 stop)
+- 🚌 Next bus arrival times for configured lines (up to 2 lines at 1 stop)
 
     ![Next bus arrival times - example with 1 monitored line (line 44 at Trois Couleurs, arriving in 1 and 21 minutes)](docs/images/stop_display_1line.png)
 
@@ -17,13 +17,17 @@ Features:
     ![No Wi-Fi - a hotspot has been set up](docs/images/no_wifi.png)
 - [Debugging interface](#debugging) to check the data being displayed
 
-- Optional: Displays flights that are overhead (in a set circle - 3 km by default)
+- Optional: ✈️ Displays flights that are overhead (in a set circle - 3 km by default)
     - With [AeroAPI](https://www.flightaware.com/commercial/aeroapi) enabled (requires an API key), enhances flight data with additional information from AeroAPI:
 
     ![Flights overhead - example with AeroAPI enabled and altitude in feet](docs/images/flight_display_with_aeroapi.png)
     - With AeroAPI disabled:
 
     ![Flights overhead - example with AeroAPI disabled and altitude in meters](docs/images/flight_display_without_aeroapi.png)
+
+- Optional: 🛰️ Displays the ISS position and next pass over the observer's location
+
+    ![ISS display - example with ISS position and next pass](docs/images/iss_tracking.png)
 
 # Requirements
 The server from [my other repository](https://github.com/bdamokos/brussels_transit) is set up and is providing data for the stop we are interested in. It can run directly on the Raspberry Pi, or on a remote server. (You can choose between the two modes in the setup script.)

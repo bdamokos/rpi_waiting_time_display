@@ -33,7 +33,7 @@ Coordinates_LAT = os.getenv('Coordinates_LAT')
 Coordinates_LNG = os.getenv('Coordinates_LNG')
 ISS_ENABLED = os.getenv('ISS_ENABLED', "true") == "true"
 ISS_CHECK_INTERVAL = os.getenv('ISS_CHECK_INTERVAL', "600")
-display_rotation = int(os.getenv('screen_rotation', 30))
+display_rotation = int(os.getenv('screen_rotation', 90))
 
 
 class ISSTracker:
@@ -282,19 +282,19 @@ def get_direction(azimuth):
     return directions[index]
 
 
-# 🛰️
+
 
 def display_iss_info(epd, iss_info):
     # Display the ISS info on the screen:
     # Big satellite emoji on the left, some info on the right
-    #   ------------------------------
-    #   |   🛰️🛰️🛰️           ISS (ZARYA)        |
-    #   |   🛰️🛰️🛰️   current lat  lon       |
-    #   |   🛰️🛰️🛰️   current altitude       |
-    #   |   🛰️🛰️🛰️   current distance       |
-    #   |   🛰️🛰️🛰️   current angle, and azimuth  |
+    #   ----------------------------------------
+    #   |   🛰️🛰️🛰️      ISS (ZARYA)             |
+    #   |   🛰️🛰️🛰️   current lat  lon           |
+    #   |   🛰️🛰️🛰️   current altitude           |
+    #   |   🛰️🛰️🛰️   current distance           |
+    #   |   🛰️🛰️🛰️   current angle, and azimuth |
     #   |   🛰️🛰️🛰️   visible until              |
-    #   ------------------------------
+    #   ----------------------------------------
     width = epd.height  # Account for rotation
     height = epd.width
     display_lock = return_display_lock()
@@ -305,14 +305,14 @@ def display_iss_info(epd, iss_info):
     draw = ImageDraw.Draw(Himage)
 
     font_paths = get_font_paths()
-    font_tiny = ImageFont.truetype(font_paths['dejavu'], 10)
-    font_small = ImageFont.truetype(font_paths['dejavu'], 12)
     font_medium = ImageFont.truetype(font_paths['dejavu_bold'], 12)
     font_large = ImageFont.truetype(font_paths['dejavu_bold'], 16)
     emoji_font = ImageFont.truetype(font_paths['emoji'], 50)
 
+    emoji_bbox = emoji_font.getbbox("🛰️")
+    emoji_height = emoji_bbox[3] - emoji_bbox[1]
     # Draw satellite emoji on the left
-    draw.text((10, 10), "🛰️", font=emoji_font, fill= "black")
+    draw.text((5, height//2 - emoji_height//2-10), "🛰️", font=emoji_font, fill= "black")
 
     # Draw ISS information on the right
     text_start_x = 70  # Position text to right of emoji
@@ -355,20 +355,20 @@ def display_iss_info(epd, iss_info):
 
 # Example usage
 if __name__ == "__main__":
-    # # Use your environment variables
-    # lat = float(Coordinates_LAT)
-    # lon = float(Coordinates_LNG)
+    # Use your environment variables
+    lat = float(Coordinates_LAT)
+    lon = float(Coordinates_LNG)
     
-    # print("Current ISS Position:")
-    # print(json.dumps(get_iss_position(), indent=2))
+    print("Current ISS Position:")
+    print(json.dumps(get_iss_position(), indent=2))
     
-    # print("\nISS Position relative to observer:")
-    # is_visible, position = is_iss_near(lat, lon, debug=True)
-    # print(json.dumps(position, indent=2))
-    # print(f"ISS is {'visible' if is_visible else 'not visible'} from your location")
-    # epd = initialize_display()
+    print("\nISS Position relative to observer:")
+    is_visible, position = is_iss_near(lat, lon, debug=True)
+    print(json.dumps(position, indent=2))
+    print(f"ISS is {'visible' if is_visible else 'not visible'} from your location")
+    epd = initialize_display()
 
-    # display_iss_info(epd, position)
+    display_iss_info(epd, position)
 
     epd = initialize_display()
     tracker = ISSTracker()

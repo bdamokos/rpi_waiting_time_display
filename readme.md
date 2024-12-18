@@ -62,7 +62,7 @@ Can be extended with:
 [^3]: Best for our application so far, as it comes with a case (intended for laying face up on a table, with a cable sticking out the back). Different cases for a vertical orientation would be better.
 
 # Setting up the Raspberry Pi
-See [docs/setting up the Rpi.md](docs/setting%20up%20the%20Rpi.md)
+See [docs/setting-up-the-rpi.md](docs/setting-up-the-rpi.md)
 
 # Configuration
 

@@ -28,8 +28,7 @@ description: A Raspberry Pi project that displays public transport waiting times
         </a>
 
         <div class="content">
-            {% capture my_include %}{% include_relative setting\ up\ the\ Rpi.md %}{% endcapture %}
-            {{ my_include | markdownify }}
+            {% include_relative "setting up the Rpi.md" %}
         </div>
     </div>
 

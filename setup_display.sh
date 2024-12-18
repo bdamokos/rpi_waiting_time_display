@@ -2,7 +2,7 @@
 
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.19 (2024-12-14)"  # AUTO-INCREMENT
+echo "Version: 0.0.20 (2024-12-18)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -599,6 +599,41 @@ check_error "Failed to start display.service"
 systemctl enable watchdog
 systemctl start watchdog
 check_error "Failed to start watchdog service"
+
+
+# Function to setup WebUSB support
+setup_webusb() {
+    echo "Setting up WebUSB support..."
+    
+    # Install the USB gadget script
+    bash "$ACTUAL_HOME/display_programme/docs/service/usb_gadget_setup.sh"
+    check_error "Failed to setup USB gadget"
+    
+    # Copy and configure WebUSB service
+    SERVICE_FILE="/etc/systemd/system/webusb.service"
+    if [ -f "$SERVICE_FILE" ]; then
+        backup_file "$SERVICE_FILE"
+    fi
+    
+    # Copy and modify service file
+    sed -e "s|User=pi|User=$ACTUAL_USER|g" \
+        -e "s|/home/pi|$ACTUAL_HOME|g" \
+        "$ACTUAL_HOME/display_programme/docs/service/webusb.service" > "$SERVICE_FILE"
+    check_error "Failed to setup WebUSB service"
+    
+    # Enable and start the service
+    systemctl daemon-reload
+    systemctl enable webusb.service
+    systemctl start webusb.service
+    check_error "Failed to start WebUSB service"
+    
+    echo "WebUSB support installed successfully"
+}
+
+# After mode selection, ask about WebUSB support
+if confirm "Would you like to enable WebUSB support for easy configuration via USB?"; then
+    setup_webusb
+fi
 
 # Offer to restart now or later
 if confirm "Would you like to restart your Raspberry Pi now?"; then

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>E-Paper Display Setup</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+        <div id="connect-prompt">
+            <h1>Connect Your Display</h1>
+            <p id="webusb-support">Checking WebUSB support...</p>
+            <button onclick="connectDevice()" class="button">Connect Device</button>
+        </div>
+
+        <div id="setup-interface" style="display: none;">
+            <h1>E-Paper Display Setup Wizard</h1>
+
+            <div class="step">
+                <h2>Step 1: Basic Configuration</h2>
+                <p>Let's start by setting up your basic display configuration.</p>
+                <button onclick="startBasicSetup()" class="button">Start Basic Setup</button>
+            </div>
+
+            <div class="step">
+                <h2>Step 2: Transit Configuration</h2>
+                <p>Configure your transit stops and preferences.</p>
+                <button onclick="startTransitSetup()" class="button">Configure Transit</button>
+            </div>
+
+            <div class="step">
+                <h2>Step 3: Weather Configuration</h2>
+                <p>Set up your weather display preferences.</p>
+                <button onclick="startWeatherSetup()" class="button">Configure Weather</button>
+            </div>
+
+            <div class="step">
+                <h2>Step 4: Review & Finish</h2>
+                <p>Review your configuration and start the display service.</p>
+                <button onclick="reviewSetup()" class="button">Review & Finish</button>
+            </div>
+        </div>
+    </div>
+    <script src="js/webusb.js"></script>
+    <script src="js/setup.js"></script>
+</body>
+</html> 

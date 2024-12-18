@@ -1,0 +1,15 @@
+[Unit]
+Description=WebUSB Configuration Interface
+After=network.target usb_gadget.service
+Wants=usb_gadget.service
+
+[Service]
+Type=simple
+User=pi
+ExecStart=/home/pi/display_env/bin/python3 /home/pi/display_programme/webusb_server.py
+Environment=FLASK_ENV=production
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target 

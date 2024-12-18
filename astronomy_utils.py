@@ -52,29 +52,29 @@ def get_moon_phase(timestamp=None):
     # Calculate illumination percentage
     percent = m.fraction_illuminated(sun) * 100
     
-    # Determine phase name and emoji
-    if 0 <= phase_angle < 45:
+    # Determine phase name and emoji with corrected boundaries
+    if phase_angle < 22.5:
         name = "New Moon"
         emoji = "🌑"
-    elif 45 <= phase_angle < 90:
+    elif phase_angle < 67.5:
         name = "Waxing Crescent"
         emoji = "🌒"
-    elif 90 <= phase_angle < 135:
+    elif phase_angle < 112.5:
         name = "First Quarter"
         emoji = "🌓"
-    elif 135 <= phase_angle < 180:
+    elif phase_angle < 157.5:
         name = "Waxing Gibbous"
         emoji = "🌔"
-    elif 180 <= phase_angle < 225:
+    elif phase_angle < 202.5:
         name = "Full Moon"
         emoji = "🌕"
-    elif 225 <= phase_angle < 270:
+    elif phase_angle < 247.5:
         name = "Waning Gibbous"
         emoji = "🌖"
-    elif 270 <= phase_angle < 315:
+    elif phase_angle < 292.5:
         name = "Last Quarter"
         emoji = "🌗"
-    else:
+    else: 
         name = "Waning Crescent"
         emoji = "🌘"
     

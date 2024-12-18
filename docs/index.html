@@ -4,29 +4,33 @@ title: Waiting Times Pi Display
 description: A Raspberry Pi project that displays public transport waiting times, weather and overhead flights (and space stations) using an e-Paper display
 ---
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>{{ page.title }}</title>
+    <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ page.title }}</title>
     <meta name="description" content="{{ page.description }}">
     <link rel="stylesheet" href="setup/css/style.css">
 </head>
 <body>
-    <div class="header">
-        <h1>{{ page.title }}</h1>
-        <p>A Raspberry Pi project that displays bus waiting times using an e-Paper display</p>
-        <div>
-            <a href="setup/" class="button">USB Setup Interface</a>
-            <a href="https://github.com/bdamokos/rpi_waiting_time_display" class="button">View on GitHub</a>
+    <div class="container">
+        <div class="header">
+            <h1>{{ page.title }}</h1>
+            <p>A Raspberry Pi project that displays bus waiting times using an e-Paper display</p>
+            <div>
+                <a href="setup/" class="button">USB Setup Interface</a>
+                <a href="https://github.com/bdamokos/rpi_waiting_time_display" class="button">View on GitHub</a>
+            </div>
         </div>
-    </div>
 
-    <a href="https://github.com/bdamokos/rpi_waiting_time_display#readme" class="repo-link">
-        View full project documentation on GitHub →
-    </a>
+        <a href="https://github.com/bdamokos/rpi_waiting_time_display#readme" class="repo-link">
+            View full project documentation on GitHub →
+        </a>
 
-    <div class="content">
-        {% include_relative setting up the Rpi.md %}
+        <div class="content">
+            {% capture my_include %}{% include_relative setting\ up\ the\ Rpi.md %}{% endcapture %}
+            {{ my_include | markdownify }}
+        </div>
     </div>
 
     <script>

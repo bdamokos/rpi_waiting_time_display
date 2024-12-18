@@ -1,6 +1,10 @@
 #!/bin/bash
-
-# Version: 0.0.0 (2024-12-18) #Auto-increment
+echo "----------------------------------------"
+echo "USB Gadget Setup Script"
+echo "Version: 0.0.0 (2024-12-18)"  # AUTO-INCREMENT
+echo "----------------------------------------"
+echo "MIT License - Copyright (c) 2024 Bence Damokos"
+echo "----------------------------------------"
 
 # Check if running as root
 if [ "$EUID" -ne 0 ]; then 

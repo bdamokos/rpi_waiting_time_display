@@ -1,7 +1,7 @@
 #!/bin/bash
 echo "----------------------------------------"
 echo "USB Gadget Setup Script"
-echo "Version: 0.0.0 (2024-12-18)"  # AUTO-INCREMENT
+echo "Version: 0.0.1 (2024-12-19)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -12,9 +12,12 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# Enable dwc2 driver
-if ! grep -q "dtoverlay=dwc2" /boot/config.txt; then
-    echo "dtoverlay=dwc2" >> /boot/config.txt
+# Enable dwc2 driver in peripheral mode
+if ! grep -q "dtoverlay=dwc2,dr_mode=peripheral" /boot/firmware/config.txt; then
+    # Remove any existing dwc2 overlay
+    sed -i '/dtoverlay=dwc2/d' /boot/firmware/config.txt
+    # Add the new overlay with peripheral mode
+    echo "dtoverlay=dwc2,dr_mode=peripheral" >> /boot/firmware/config.txt
 fi
 
 if ! grep -q "modules-load=dwc2" /boot/firmware/cmdline.txt; then
@@ -25,7 +28,24 @@ fi
 cat > /usr/local/sbin/usb_gadget_setup.sh << 'EOL'
 #!/bin/bash
 
+# Load required modules
 modprobe libcomposite
+modprobe dwc2
+
+# Wait for UDC to be available (up to 10 seconds)
+for i in {1..10}; do
+    if [ -d "/sys/class/udc" ] && [ "$(ls /sys/class/udc)" != "" ]; then
+        break
+    fi
+    echo "Waiting for UDC to be available... ($i/10)"
+    sleep 1
+done
+
+if [ ! -d "/sys/class/udc" ] || [ "$(ls /sys/class/udc)" == "" ]; then
+    echo "Error: No UDC available. Make sure dwc2 is in peripheral mode."
+    exit 1
+fi
+
 cd /sys/kernel/config/usb_gadget/
 mkdir -p pi4
 cd pi4
@@ -53,8 +73,13 @@ echo 1 > os_desc/use
 echo 0xcd > os_desc/b_vendor_code
 echo MSFT100 > os_desc/qw_sign
 
+# Create WebUSB function
+mkdir -p functions/webusb.0
+ln -s functions/webusb.0 configs/c.1/
+
 # Link everything up and bind the USB device
-ls /sys/class/udc > UDC
+UDC=$(ls /sys/class/udc)
+echo $UDC > UDC
 EOL
 
 chmod +x /usr/local/sbin/usb_gadget_setup.sh
@@ -69,11 +94,14 @@ After=network.target
 Type=oneshot
 ExecStart=/usr/local/sbin/usb_gadget_setup.sh
 RemainAfterExit=yes
+Restart=on-failure
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
 EOL
 
 # Enable and start the service
+systemctl daemon-reload
 systemctl enable usb_gadget.service
-systemctl start usb_gadget.service 
+systemctl restart usb_gadget.service 

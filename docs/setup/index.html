@@ -17,31 +17,40 @@
             <h1>E-Paper Display Setup Wizard</h1>
 
             <div class="step">
-                <h2>Step 1: Basic Configuration</h2>
-                <p>Let's start by setting up your basic display configuration.</p>
+                <h2>Step 1: WiFi Configuration</h2>
+                <p>Configure your WiFi networks.</p>
+                <div id="wifi-setup">
+                    <button onclick="startWiFiSetup()" class="button">Configure WiFi</button>
+                </div>
+            </div>
+
+            <div class="step">
+                <h2>Step 2: Basic Configuration</h2>
+                <p>Set up your basic display configuration.</p>
                 <button onclick="startBasicSetup()" class="button">Start Basic Setup</button>
             </div>
 
             <div class="step">
-                <h2>Step 2: Transit Configuration</h2>
+                <h2>Step 3: Transit Configuration</h2>
                 <p>Configure your transit stops and preferences.</p>
                 <button onclick="startTransitSetup()" class="button">Configure Transit</button>
             </div>
 
             <div class="step">
-                <h2>Step 3: Weather Configuration</h2>
+                <h2>Step 4: Weather Configuration</h2>
                 <p>Set up your weather display preferences.</p>
                 <button onclick="startWeatherSetup()" class="button">Configure Weather</button>
             </div>
 
             <div class="step">
-                <h2>Step 4: Review & Finish</h2>
+                <h2>Step 5: Review & Finish</h2>
                 <p>Review your configuration and start the display service.</p>
                 <button onclick="reviewSetup()" class="button">Review & Finish</button>
             </div>
         </div>
     </div>
     <script src="js/webusb.js"></script>
+    <script src="js/wifi_setup.js"></script>
     <script src="js/setup.js"></script>
 </body>
 </html> 

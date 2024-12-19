@@ -1,7 +1,7 @@
 #!/bin/bash
 echo "----------------------------------------"
 echo "USB Gadget Setup Script"
-echo "Version: 0.0.1 (2024-12-19)"  # AUTO-INCREMENT
+echo "Version: 0.0.3 (2024-12-19)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -46,6 +46,27 @@ if [ ! -d "/sys/class/udc" ] || [ "$(ls /sys/class/udc)" == "" ]; then
     exit 1
 fi
 
+# Clean up any existing configuration
+if [ -d "/sys/kernel/config/usb_gadget/pi4" ]; then
+    cd /sys/kernel/config/usb_gadget/pi4
+    if [ -f "UDC" ]; then
+        echo "" > UDC
+    fi
+    rm -f configs/c.1/webusb.0
+    rm -f configs/c.1/strings/0x409/configuration
+    rmdir configs/c.1/strings/0x409 2>/dev/null || true
+    rmdir configs/c.1 2>/dev/null || true
+    rm -f strings/0x409/serialnumber
+    rm -f strings/0x409/manufacturer
+    rm -f strings/0x409/product
+    rmdir strings/0x409 2>/dev/null || true
+    rm -f functions/webusb.0/* 2>/dev/null || true
+    rmdir functions/webusb.0 2>/dev/null || true
+    rmdir functions 2>/dev/null || true
+    cd ..
+    rmdir pi4 2>/dev/null || true
+fi
+
 cd /sys/kernel/config/usb_gadget/
 mkdir -p pi4
 cd pi4
@@ -79,7 +100,23 @@ ln -s functions/webusb.0 configs/c.1/
 
 # Link everything up and bind the USB device
 UDC=$(ls /sys/class/udc)
-echo $UDC > UDC
+if [ -z "$UDC" ]; then
+    echo "Error: No UDC available"
+    exit 1
+fi
+
+# Try to bind the device
+for i in {1..5}; do
+    if echo "$UDC" > UDC 2>/dev/null; then
+        echo "Successfully bound to $UDC"
+        exit 0
+    fi
+    echo "Attempt $i: Device busy, waiting..."
+    sleep 1
+done
+
+echo "Failed to bind to UDC after 5 attempts"
+exit 1
 EOL
 
 chmod +x /usr/local/sbin/usb_gadget_setup.sh

@@ -17,8 +17,8 @@ if ! grep -q "dtoverlay=dwc2" /boot/config.txt; then
     echo "dtoverlay=dwc2" >> /boot/config.txt
 fi
 
-if ! grep -q "modules-load=dwc2" /boot/cmdline.txt; then
-    sed -i '1s/$/ modules-load=dwc2/' /boot/cmdline.txt
+if ! grep -q "modules-load=dwc2" /boot/firmware/cmdline.txt; then
+    sed -i '1s/$/ modules-load=dwc2/' /boot/firmware/cmdline.txt
 fi
 
 # Create the USB gadget configuration script

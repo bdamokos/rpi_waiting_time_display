@@ -1,8 +1,6 @@
----
-layout: default
----
+@import "{{ site.theme }}";
 
-<style>
+/* Custom styles */
 .container {
     max-width: 1012px;
     margin: 0 auto;
@@ -24,7 +22,6 @@ layout: default
     white-space: nowrap;
     vertical-align: middle;
     cursor: pointer;
-    -webkit-user-select: none;
     user-select: none;
     border: 1px solid transparent;
     border-radius: 6px;
@@ -56,34 +53,4 @@ layout: default
 
 .content {
     margin-top: 2rem;
-}
-</style>
-
-<div class="container">
-    <div class="header">
-        <h1>{{ page.title }}</h1>
-        <p>{{ page.description }}</p>
-        <div>
-            <a href="setup/" class="button">USB Setup Interface</a>
-        </div>
-    </div>
-
-    <a href="https://github.com/bdamokos/rpi_waiting_time_display#readme" class="repo-link">
-        View full project documentation on GitHub →
-    </a>
-
-    <div class="content">
-        {% capture md_content %}{% include_relative setting-up-the-rpi.md %}{% endcapture %}
-        {{ md_content | markdownify }}
-    </div>
-</div>
-
-<script>
-    // Convert relative image paths to absolute paths within the docs folder
-    document.querySelectorAll('img').forEach(img => {
-        const src = img.getAttribute('src');
-        if (src && src.startsWith('images/')) {
-            img.src = src;
-        }
-    });
-</script>
+} 

@@ -4,6 +4,7 @@ import json
 import logging
 from pathlib import Path
 import dotenv
+from wifi_config import handle_wifi_command
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -61,7 +62,12 @@ class WebUSBServer:
     def handle_command(self, command, data=None):
         """Handle incoming USB commands"""
         try:
-            if command == 0x01:  # GET_CONFIG
+            # WiFi configuration commands (0x10-0x1F)
+            if 0x10 <= command <= 0x1F:
+                return handle_wifi_command(command, data)
+            
+            # General configuration commands
+            elif command == 0x01:  # GET_CONFIG
                 return json.dumps(self.get_config())
                 
             elif command == 0x02:  # SAVE_CONFIG

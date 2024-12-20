@@ -8,6 +8,7 @@ from datetime import datetime, timezone, timedelta
 import logging
 import log_config
 from functools import lru_cache
+from skyfield import almanac
 logger = logging.getLogger(__name__)
 
 @lru_cache(maxsize=256)
@@ -137,11 +138,52 @@ def get_appropriate_ephemeris():
     else:
         return 'de441.bsp'
 
+
+
+def get_upcoming_moon_phases(days_ahead=30):
+    """
+    Find the upcoming major moon phases within the specified number of days
+    
+    Args:
+        days_ahead (int): Number of days to look ahead (default: 30)
+        
+    Returns:
+        list: List of dictionaries containing upcoming phase times and names
+    """
+    ts = load.timescale()
+    eph = load(get_appropriate_ephemeris())
+    
+    # Set time range
+    t0 = ts.now()
+    t1 = ts.from_datetime((datetime.now(timezone.utc) + timedelta(days=days_ahead)))
+    
+    # Find the major phase changes
+    t, y = almanac.find_discrete(t0, t1, almanac.moon_phases(eph))
+    
+    # Convert to list of dictionaries with phase info
+    upcoming_phases = []
+    for time, phase_index in zip(t, y):
+        upcoming_phases.append({
+            'time': time.utc_datetime(),
+            'phase_name': almanac.MOON_PHASES[phase_index]
+        })
+    
+    return upcoming_phases
+
 if __name__ == "__main__":
     # Test the function by getting the moon phase and the change over 24 hours
     result = get_daily_moon_change()
+    current_phase = get_moon_phase()
+
     if result:
         print(f"Current moon illumination: {result['current']:.1f}%")
         print(f"Tomorrow's illumination: {result['tomorrow']:.1f}%")
         print(f"Change over 24 hours: {result['change']:+.1f}%")
-    print(f"Current moon phase: {get_moon_phase()['name']}, {get_moon_phase()['emoji']}, illumination: {get_moon_phase()['percent_illuminated']:.1f}%")
+    print(f"Current moon phase: {current_phase['name']}, {current_phase['emoji']}, illumination: {current_phase['percent_illuminated']:.1f}%. Phase angle: {current_phase['phase_angle']:.1f}°")
+
+    
+    # Test upcoming phases
+    print("\nUpcoming Moon Phases:")
+    upcoming = get_upcoming_moon_phases()
+    for phase in upcoming:
+        print(f"{phase['phase_name']}: {phase['time'].strftime('%Y-%m-%d')}")

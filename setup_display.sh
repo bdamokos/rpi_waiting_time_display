@@ -2,7 +2,7 @@
 
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.21 (2024-12-20)"  # AUTO-INCREMENT
+echo "Version: 0.0.22 (2024-12-20)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -309,8 +309,7 @@ echo "Installing requirements..."
 su - $ACTUAL_USER -c "source $ACTUAL_HOME/display_env/bin/activate && cd $ACTUAL_HOME/display_programme && pip install -r requirements.txt"
 check_error "Failed to install display programme requirements"
 
-su - $ACTUAL_USER -c "source $ACTUAL_HOME/display_env/bin/activate && cd $ACTUAL_HOME/brussels_transit && pip install -r requirements.txt"
-check_error "Failed to install brussels transit requirements"
+
 
 # Install Waveshare drivers
 echo "Installing Waveshare e-Paper drivers..."
@@ -347,6 +346,8 @@ case $mode_choice in
         echo "Setting up normal mode..."
         clone_repository "brussels_transit" ""
         setup_service_files "normal"
+        su - $ACTUAL_USER -c "source $ACTUAL_HOME/display_env/bin/activate && cd $ACTUAL_HOME/brussels_transit && pip install -r requirements.txt"
+        check_error "Failed to install brussels transit requirements"
         ;;
     2)
         echo "Setting up Docker mode..."

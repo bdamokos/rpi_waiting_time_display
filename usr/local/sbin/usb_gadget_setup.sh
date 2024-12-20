@@ -1,32 +1,4 @@
 #!/bin/bash
-echo "----------------------------------------"
-echo "USB Gadget Setup Script"
-echo "Version: 0.0.3 (2024-12-19)"  # AUTO-INCREMENT
-echo "----------------------------------------"
-echo "MIT License - Copyright (c) 2024 Bence Damokos"
-echo "----------------------------------------"
-
-# Check if running as root
-if [ "$EUID" -ne 0 ]; then 
-    echo "Please run as root"
-    exit 1
-fi
-
-# Enable dwc2 driver in peripheral mode
-if ! grep -q "dtoverlay=dwc2,dr_mode=peripheral" /boot/firmware/config.txt; then
-    # Remove any existing dwc2 overlay
-    sed -i '/dtoverlay=dwc2/d' /boot/firmware/config.txt
-    # Add the new overlay with peripheral mode
-    echo "dtoverlay=dwc2,dr_mode=peripheral" >> /boot/firmware/config.txt
-fi
-
-if ! grep -q "modules-load=dwc2" /boot/firmware/cmdline.txt; then
-    sed -i '1s/$/ modules-load=dwc2/' /boot/firmware/cmdline.txt
-fi
-
-# Create the USB gadget configuration script
-cat > /usr/local/sbin/usb_gadget_setup.sh << 'EOL'
-#!/bin/bash
 
 # Load required modules
 modprobe libcomposite
@@ -116,29 +88,4 @@ for i in {1..5}; do
 done
 
 echo "Failed to bind to UDC after 5 attempts"
-exit 1
-EOL
-
-chmod +x /usr/local/sbin/usb_gadget_setup.sh
-
-# Create systemd service
-cat > /etc/systemd/system/usb_gadget.service << 'EOL'
-[Unit]
-Description=WebUSB Gadget Setup
-After=network.target
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/sbin/usb_gadget_setup.sh
-RemainAfterExit=yes
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOL
-
-# Enable and start the service
-systemctl daemon-reload
-systemctl enable usb_gadget.service
-systemctl restart usb_gadget.service 
+exit 1 

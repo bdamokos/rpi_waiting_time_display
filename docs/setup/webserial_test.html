@@ -1,0 +1,235 @@
+---
+layout: default
+title: WebSerial Test Page
+---
+<style>
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+#status {
+    margin: 20px 0;
+    padding: 10px;
+    border-radius: 4px;
+}
+
+#status.connected {
+    background: #e8f5e9;
+    color: #2e7d32;
+}
+
+#status.disconnected {
+    background: #ffebee;
+    color: #c62828;
+}
+
+#communication {
+    margin-top: 20px;
+    padding: 20px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+#received {
+    margin-top: 20px;
+    padding: 10px;
+    background: #f5f5f5;
+    border-radius: 4px;
+    min-height: 100px;
+}
+</style>
+
+<div class="container">
+    <h1>WebSerial Test Interface</h1>
+    <div id="status">Status: Disconnected</div>
+    <button id="connect" class="button">Connect Device</button>
+    <div id="communication" style="display:none">
+        <input type="text" id="message" placeholder="Enter message">
+        <button id="send" class="button">Send</button>
+        <div id="received"></div>
+    </div>
+</div>
+
+<script>
+class WebSerialDevice {
+    constructor() {
+        this.port = null;
+        this.reader = null;
+        this.writer = null;
+        this.connected = false;
+        this.readLoopPromise = null;
+    }
+
+    async connect() {
+        try {
+            // If already connected or port exists, disconnect first
+            if (this.connected || this.port) {
+                await this.disconnect();
+                // Wait a moment for the port to fully close
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+
+            // Request port access
+            this.port = await navigator.serial.requestPort({
+                filters: []
+            });
+
+            // Open the port with standard serial settings
+            await this.port.open({
+                baudRate: 115200,
+                dataBits: 8,
+                stopBits: 1,
+                parity: 'none',
+                flowControl: 'none'
+            });
+
+            this.connected = true;
+            this.updateStatus('Connected');
+            document.getElementById('communication').style.display = 'block';
+            document.getElementById('connect').textContent = 'Disconnect';
+            
+            // Start reading
+            this.startReading();
+
+        } catch (error) {
+            console.error('Connection failed:', error);
+            this.updateStatus('Connection failed: ' + error.message);
+            await this.disconnect();
+        }
+    }
+
+    async startReading() {
+        while (this.port.readable && this.connected) {
+            try {
+                const reader = this.port.readable.getReader();
+                
+                try {
+                    while (true) {
+                        const { value, done } = await reader.read();
+                        if (done || !this.connected) {
+                            break;
+                        }
+                        const text = new TextDecoder().decode(value);
+                        this.appendMessage('Received: ' + text);
+                    }
+                } finally {
+                    reader.releaseLock();
+                }
+            } catch (error) {
+                console.error('Read error:', error);
+                if (this.connected) {
+                    this.appendMessage('Read error: ' + error.message);
+                }
+            }
+        }
+    }
+
+    async send(data) {
+        if (!this.connected) {
+            throw new Error('Device not connected');
+        }
+
+        try {
+            const writer = this.port.writable.getWriter();
+            try {
+                const encoder = new TextEncoder();
+                const dataArray = encoder.encode(data + '\n');
+                await writer.write(dataArray);
+                this.appendMessage('Sent: ' + data);
+            } finally {
+                writer.releaseLock();
+            }
+        } catch (error) {
+            console.error('Send failed:', error);
+            this.appendMessage('Send failed: ' + error.message);
+            await this.disconnect();
+        }
+    }
+
+    async disconnect() {
+        this.connected = false;
+        
+        try {
+            // Close the port if it exists
+            if (this.port) {
+                // Ensure all readers are released
+                if (this.port.readable) {
+                    const reader = this.port.readable.getReader();
+                    reader.releaseLock();
+                }
+                
+                // Ensure all writers are released
+                if (this.port.writable) {
+                    const writer = this.port.writable.getWriter();
+                    writer.releaseLock();
+                }
+                
+                await this.port.close();
+                this.port = null;
+            }
+        } catch (error) {
+            console.error('Error during disconnect:', error);
+        } finally {
+            this.updateStatus('Disconnected');
+            document.getElementById('communication').style.display = 'none';
+            document.getElementById('connect').textContent = 'Connect';
+        }
+    }
+
+    updateStatus(message) {
+        const status = document.getElementById('status');
+        status.textContent = 'Status: ' + message;
+        status.className = this.connected ? 'connected' : 'disconnected';
+    }
+
+    appendMessage(message) {
+        const received = document.getElementById('received');
+        const div = document.createElement('div');
+        div.textContent = message;
+        received.appendChild(div);
+        received.scrollTop = received.scrollHeight;
+    }
+}
+
+// Add error boundary around event listeners
+window.addEventListener('load', () => {
+    // Create device instance
+    const device = new WebSerialDevice();
+
+    // Set up event listeners with error handling
+    document.getElementById('connect').addEventListener('click', async () => {
+        try {
+            if (!device.connected) {
+                await device.connect();
+            } else {
+                await device.disconnect();
+            }
+        } catch (error) {
+            console.error('Connection toggle error:', error);
+            await device.disconnect();  // Force disconnect on error
+        }
+    });
+
+    document.getElementById('send').addEventListener('click', async () => {
+        try {
+            const message = document.getElementById('message').value;
+            if (message) {
+                await device.send(message);
+                document.getElementById('message').value = '';
+            }
+        } catch (error) {
+            console.error('Send error:', error);
+            await device.disconnect();  // Force disconnect on error
+        }
+    });
+
+    // Handle page unload
+    window.addEventListener('unload', async () => {
+        if (device.connected) {
+            await device.disconnect();
+        }
+    });
+});
+</script> 

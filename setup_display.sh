@@ -2,7 +2,7 @@
 
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.22 (2024-12-20)"  # AUTO-INCREMENT
+echo "Version: 0.0.23 (2024-12-20)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -553,41 +553,7 @@ fi
 echo "Verifying Noto font installation..."
 fc-list | grep -i noto
 
-# Start the debug server if .env doesn't exist
-if [ ! -f "$ACTUAL_HOME/display_programme/.env" ]; then
-    echo "Starting the debug server..."
-    su - $ACTUAL_USER -c "source $ACTUAL_HOME/display_env/bin/activate && python3 $ACTUAL_HOME/display_programme/debug_server.py &"
-    DEBUG_SERVER_PID=$!
-    wait $DEBUG_SERVER_PID
 
-    echo "----------------------------------------"
-    echo "Setup completed!"
-    echo ""
-    echo "Next steps:"
-    echo "1. Edit your .env file by visiting: http://hostname:5002/debug/env or manually by:"
-    echo "   nano $ACTUAL_HOME/display_programme/.env"
-    echo "2. Once you are happy with your settings, press the 'I am happy with my initial settings, restart my Pi' button."
-    echo ""
-    echo "The Raspberry Pi will restart automatically in 10 seconds with the new settings."
-    echo ""
-    echo "To uninstall in the future, run: sudo ~/uninstall_display.sh"
-    echo "You will find this readme at: https://github.com/bdamokos/rpi_waiting_time_display"
-    echo "----------------------------------------"
-else
-    echo "----------------------------------------"
-    echo "Setup completed!"
-    echo ""
-    echo "Your .env file already exists. You can edit it manually if needed:"
-    echo "   nano $ACTUAL_HOME/display_programme/.env"
-    echo ""
-    echo "After your Pi restarts, you will also be able to edit your settings at http://hostname:5002/debug/env."
-    echo ""
-    echo "The application is now starting with your existing settings."
-    echo ""
-    echo "To uninstall in the future, run: sudo ~/uninstall_display.sh"
-    echo "You will find this readme at: https://github.com/bdamokos/rpi_waiting_time_display"
-    echo "----------------------------------------"
-fi
 
 # Enable and start services with error checking
 systemctl daemon-reload
@@ -635,6 +601,26 @@ setup_webserial() {
 if confirm "Would you like to enable WebSerial support for easy configuration via USB?"; then
     setup_webserial
 fi
+
+
+
+
+echo "----------------------------------------"
+echo "Setup completed!"
+echo ""
+echo "Your .env file contains your settings. "
+echo "You can edit it manually if needed:"
+echo "   nano $ACTUAL_HOME/display_programme/.env"
+echo ""
+echo "You can also edit your settings at http://$(hostname -I | cut -d' ' -f1).local:5002/debug/env or http://$(hostname).local:5002/debug/env once your Pi restarts." 
+echo ""
+echo "The application is now starting with empty settings."
+echo ""
+echo "To uninstall in the future, run: sudo ~/uninstall_display.sh"
+echo "You will find this readme at: https://github.com/bdamokos/rpi_waiting_time_display"
+echo "----------------------------------------"
+
+
 
 # Offer to restart now or later
 if confirm "Would you like to restart your Raspberry Pi now?"; then

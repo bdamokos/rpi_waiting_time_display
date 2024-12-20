@@ -290,6 +290,8 @@ class BusService:
                             elif "End of service" in msg:
                                 time = ""
                                 message = "End of service"
+                            else:
+                                message = msg
                         logger.debug(f"Time: {time}, Message: {message}, Minutes: {bus.get(minutes_source, None)}, Destination: {destination}")
                         all_times.append({
                             'time': time,
@@ -478,7 +480,10 @@ def update_display(epd, weather_data=None, bus_data=None, error_message=None, st
 
 
 
-
+    logger.debug(f"Bus data: {bus_data}")
+    # Filter out bus data with no times or messages
+    bus_data = [bus for bus in bus_data if bus.get("times") or bus.get("messages")]
+    logger.debug(f"Filtered bus data: {bus_data}")
 
     # Draw bus information
     for idx, bus in enumerate(bus_data):

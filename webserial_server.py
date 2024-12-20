@@ -5,6 +5,7 @@ import json
 import logging
 import select
 from logging.handlers import RotatingFileHandler
+from wifi_config import WiFiConfig
 
 # Set up logging
 logging.basicConfig(
@@ -18,6 +19,7 @@ class WebSerialServer:
     def __init__(self):
         self.ser = None
         self.running = True
+        self.wifi = WiFiConfig()
         self.setup_serial()
         self.poll = select.poll()
         self.poll.register(self.ser.fileno(), select.POLLIN)
@@ -48,8 +50,17 @@ class WebSerialServer:
             data = json.loads(message)
             command = data.get('command')
             
-            if command == 'wifi_setup':
-                response = self.handle_wifi_setup(data)
+            if command == 'wifi_scan':
+                response = self.wifi.get_available_networks()
+            elif command == 'wifi_saved':
+                response = self.wifi.get_saved_networks()
+            elif command == 'wifi_connect':
+                response = self.wifi.connect_to_network(
+                    data.get('ssid'),
+                    data.get('password')
+                )
+            elif command == 'wifi_forget':
+                response = self.wifi.forget_network(data.get('uuid'))
             elif command == 'basic_setup':
                 response = self.handle_basic_setup(data)
             elif command == 'transit_setup':
@@ -68,12 +79,6 @@ class WebSerialServer:
         except Exception as e:
             logger.error(f"Error handling message: {e}")
             self.send_response({'status': 'error', 'message': str(e)})
-
-    def handle_wifi_setup(self, data):
-        """Handle WiFi setup commands"""
-        logger.info("Processing WiFi setup")
-        # TODO: Implement WiFi setup
-        return {'status': 'success', 'message': 'WiFi setup processed'}
 
     def handle_basic_setup(self, data):
         """Handle basic setup commands"""

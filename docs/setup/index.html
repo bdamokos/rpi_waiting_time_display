@@ -7,6 +7,7 @@
 </head>
 <body>
     <div class="container">
+        <div id="error-message" style="display: none; color: red; padding: 10px;"></div>
         <div id="connect-prompt">
             <h1>Connect Your Display</h1>
             <p id="serial-support">Checking WebSerial support...</p>
@@ -21,6 +22,24 @@
                 <p>Configure your WiFi networks.</p>
                 <div id="wifi-setup">
                     <button onclick="startWiFiSetup()" class="button">Configure WiFi</button>
+                    
+                    <div id="wifi-networks" style="display: none;">
+                        <h3>Available Networks</h3>
+                        <div id="wifi-networks-list" class="network-list">
+                            <!-- Networks will be populated here -->
+                        </div>
+
+                        <h3>Saved Networks</h3>
+                        <div id="saved-networks-list" class="network-list">
+                            <!-- Saved networks will be populated here -->
+                        </div>
+
+                        <div class="network-controls">
+                            <button onclick="startWiFiSetup()" class="refresh-button">
+                                Refresh Networks
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -50,86 +69,8 @@
         </div>
     </div>
 
-    <script>
-    class SetupDevice {
-        constructor() {
-            this.port = null;
-            this.connected = false;
-            this.checkSupport();
-            this.setupEventListeners();
-        }
-
-        checkSupport() {
-            const supportText = document.getElementById('serial-support');
-            if ('serial' in navigator) {
-                supportText.textContent = 'WebSerial is supported. Click Connect to begin.';
-                supportText.style.color = '#2e7d32';
-            } else {
-                supportText.textContent = 'WebSerial is not supported in this browser. Please use Chrome or Edge.';
-                supportText.style.color = '#c62828';
-            }
-        }
-
-        async connect() {
-            try {
-                this.port = await navigator.serial.requestPort();
-                await this.port.open({ baudRate: 115200 });
-                this.connected = true;
-                document.getElementById('connect-prompt').style.display = 'none';
-                document.getElementById('setup-interface').style.display = 'block';
-                this.startReading();
-            } catch (error) {
-                console.error('Connection failed:', error);
-            }
-        }
-
-        async startReading() {
-            while (this.port.readable && this.connected) {
-                const reader = this.port.readable.getReader();
-                try {
-                    while (true) {
-                        const { value, done } = await reader.read();
-                        if (done) break;
-                        this.handleMessage(new TextDecoder().decode(value));
-                    }
-                } catch (error) {
-                    console.error('Read error:', error);
-                } finally {
-                    reader.releaseLock();
-                }
-            }
-        }
-
-        async send(message) {
-            if (!this.connected) return;
-            const writer = this.port.writable.getWriter();
-            try {
-                await writer.write(new TextEncoder().encode(message + '\n'));
-            } catch (error) {
-                console.error('Send error:', error);
-            } finally {
-                writer.releaseLock();
-            }
-        }
-
-        handleMessage(message) {
-            // Handle incoming messages from the device
-            console.log('Received:', message);
-        }
-
-        setupEventListeners() {
-            document.getElementById('connect-button').addEventListener('click', () => {
-                this.connect();
-            });
-        }
-    }
-
-    // Initialize device when page loads
-    window.addEventListener('load', () => {
-        window.setupDevice = new SetupDevice();
-    });
-    </script>
-    <script src="js/wifi_setup.js"></script>
-    <script src="js/setup.js"></script>
+    <script src="js/setup.js" type="module"></script>
+    <script src="js/wifi_setup.js" type="module"></script>
+    <script src="js/setup_device.js" type="module"></script>
 </body>
 </html> 

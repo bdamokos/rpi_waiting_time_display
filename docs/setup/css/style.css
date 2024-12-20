@@ -111,3 +111,59 @@ img {
     border-radius: 6px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
+
+/* Add these styles for WiFi setup */
+.network-list {
+    margin: 1em 0;
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.network-item {
+    display: flex;
+    align-items: center;
+    padding: 0.8em;
+    border-bottom: 1px solid #eee;
+}
+
+.network-item:last-child {
+    border-bottom: none;
+}
+
+.network-item span {
+    flex-grow: 1;
+    margin-right: 1em;
+}
+
+.network-item button {
+    padding: 0.5em 1em;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.network-item button:hover {
+    background-color: #45a049;
+}
+
+.network-controls {
+    margin-top: 1em;
+    text-align: center;
+}
+
+.refresh-button {
+    background-color: #2196F3;
+    color: white;
+    padding: 0.8em 1.5em;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.refresh-button:hover {
+    background-color: #1976D2;
+}

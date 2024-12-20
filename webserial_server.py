@@ -6,6 +6,8 @@ import logging
 import select
 from logging.handlers import RotatingFileHandler
 from wifi_config import WiFiConfig
+import logging
+import log_config
 
 # Set up logging
 logging.basicConfig(
@@ -13,6 +15,13 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
+# Add console handler
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+console_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+logging.getLogger().addHandler(console_handler)
+
+
 logger = logging.getLogger(__name__)
 
 class WebSerialServer:

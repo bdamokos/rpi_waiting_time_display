@@ -3,6 +3,7 @@ import subprocess
 import logging
 import json
 import os
+import log_config
 
 logger = logging.getLogger(__name__)
 

@@ -11,7 +11,7 @@ import log_config
 
 # Set up logging
 logging.basicConfig(
-    handlers=[RotatingFileHandler('/var/log/webserial.log', maxBytes=100000, backupCount=3)],
+    handlers=[RotatingFileHandler('/home/bence/display_programme/logs/webserial.log', maxBytes=100000, backupCount=3)],
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )

@@ -13,6 +13,9 @@ class SetupDevice {
     constructor() {
         this.port = null;
         this.connected = false;
+        this.messageBuffer = '';
+        this.checkSupport();
+        this.setupEventListeners();
     }
 
     checkSupport() {
@@ -84,23 +87,64 @@ class SetupDevice {
 
     handleMessage(message) {
         try {
-            const data = JSON.parse(message);
+            console.log('Received message chunk:', message);
+            this.messageBuffer += message;
             
-            // Handle WiFi scan results
-            if (data.networks) {
-                this.updateNetworkList(data.networks);
+            let startIndex = 0;
+            let braceCount = 0;
+            let inString = false;
+            let escapeNext = false;
+            
+            for (let i = 0; i < this.messageBuffer.length; i++) {
+                const char = this.messageBuffer[i];
+                
+                if (escapeNext) {
+                    escapeNext = false;
+                    continue;
+                }
+                
+                if (char === '\\') {
+                    escapeNext = true;
+                    continue;
+                }
+                
+                if (char === '"' && !escapeNext) {
+                    inString = !inString;
+                    continue;
+                }
+                
+                if (!inString) {
+                    if (char === '{') braceCount++;
+                    if (char === '}') {
+                        braceCount--;
+                        if (braceCount === 0) {
+                            const jsonStr = this.messageBuffer.substring(startIndex, i + 1);
+                            try {
+                                const data = JSON.parse(jsonStr);
+                                console.log('Parsed complete JSON:', data);
+                                
+                                if (data.networks) {
+                                    console.log('Updating network list with:', data.networks);
+                                    this.updateNetworkList(data.networks);
+                                } else if (data.saved_networks) {
+                                    console.log('Updating saved networks with:', data.saved_networks);
+                                    this.updateSavedNetworks(data.saved_networks);
+                                } else if (data.error) {
+                                    showError(data.error);
+                                } else {
+                                    console.log('Received:', data);
+                                }
+                            } catch (e) {
+                                console.error('Error parsing JSON:', e);
+                            }
+                            startIndex = i + 1;
+                        }
+                    }
+                }
             }
-            // Handle saved networks
-            else if (data.saved_networks) {
-                this.updateSavedNetworks(data.saved_networks);
-            }
-            // Handle errors
-            else if (data.error) {
-                showError(data.error);
-            }
-            // Log other messages
-            else {
-                console.log('Received:', data);
+            
+            if (startIndex > 0) {
+                this.messageBuffer = this.messageBuffer.substring(startIndex);
             }
         } catch (error) {
             console.error('Error handling message:', error);
@@ -110,6 +154,7 @@ class SetupDevice {
 
     updateNetworkList(networks) {
         const list = document.getElementById('wifi-networks-list');
+        console.log('Updating network list element:', list);  // Debug log
         if (list) {
             list.innerHTML = networks.map(network => `
                 <div class="network-item">
@@ -120,6 +165,9 @@ class SetupDevice {
                     </button>
                 </div>
             `).join('');
+            console.log('Network list HTML updated');  // Debug log
+        } else {
+            console.error('Network list element not found');  // Debug log
         }
     }
 
@@ -179,9 +227,6 @@ class SetupDevice {
 document.addEventListener('DOMContentLoaded', () => {
     // Create global instance
     window.setupDevice = new SetupDevice();
-    // Initialize after DOM is ready
-    window.setupDevice.checkSupport();
-    window.setupDevice.setupEventListeners();
 });
 
 // Export to global scope

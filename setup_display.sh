@@ -2,7 +2,7 @@
 
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.20 (2024-12-18)"  # AUTO-INCREMENT
+echo "Version: 0.0.21 (2024-12-20)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -601,16 +601,16 @@ systemctl start watchdog
 check_error "Failed to start watchdog service"
 
 
-# Function to setup WebUSB support
-setup_webusb() {
-    echo "Setting up WebUSB support..."
+# Function to setup WebSerial support
+setup_webserial() {
+    echo "Setting up WebSerial support..."
     
     # Install the USB gadget script
-    bash "$ACTUAL_HOME/display_programme/docs/service/usb_gadget_setup.sh"
+    bash "$ACTUAL_HOME/display_programme/docs/service/setup_webserial.sh"
     check_error "Failed to setup USB gadget"
     
     # Copy and configure WebUSB service
-    SERVICE_FILE="/etc/systemd/system/webusb.service"
+    SERVICE_FILE="/etc/systemd/system/webserial.service"
     if [ -f "$SERVICE_FILE" ]; then
         backup_file "$SERVICE_FILE"
     fi
@@ -618,21 +618,21 @@ setup_webusb() {
     # Copy and modify service file
     sed -e "s|User=pi|User=$ACTUAL_USER|g" \
         -e "s|/home/pi|$ACTUAL_HOME|g" \
-        "$ACTUAL_HOME/display_programme/docs/service/webusb.service" > "$SERVICE_FILE"
-    check_error "Failed to setup WebUSB service"
+        "$ACTUAL_HOME/display_programme/docs/service/webserial.service" > "$SERVICE_FILE"
+    check_error "Failed to setup WebSerial service"
     
     # Enable and start the service
-    systemctl daemon-reload
-    systemctl enable webusb.service
-    systemctl start webusb.service
-    check_error "Failed to start WebUSB service"
+    systemctl daemon-reload 
+    systemctl enable webserial.service
+    systemctl start webserial.service
+    check_error "Failed to start WebSerial service"
     
-    echo "WebUSB support installed successfully"
+    echo "WebSerial support installed successfully"
 }
 
 # After mode selection, ask about WebUSB support
-if confirm "Would you like to enable WebUSB support for easy configuration via USB?"; then
-    setup_webusb
+if confirm "Would you like to enable WebSerial support for easy configuration via USB?"; then
+    setup_webserial
 fi
 
 # Offer to restart now or later

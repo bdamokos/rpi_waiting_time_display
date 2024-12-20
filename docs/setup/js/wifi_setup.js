@@ -1,134 +1,62 @@
 // WiFi configuration functionality
-async function startWiFiSetup() {
+window.startWiFiSetup = async function() {
     try {
-        // Get available networks
-        const response = await displayDevice.sendCommand(0x10);
-        const networks = JSON.parse(new TextDecoder().decode(response.data));
-        
+        // Use the global setupDevice instance
+        if (!window.setupDevice || !window.setupDevice.connected) {
+            throw new Error("Device not connected");
+        }
+
+        const wifiNetworks = document.getElementById('wifi-networks');
+        if (!wifiNetworks) {
+            throw new Error("WiFi networks element not found");
+        }
+
+        // Show WiFi setup UI first
+        wifiNetworks.style.display = 'block';
+
+        // Scan for networks
+        await window.setupDevice.send(JSON.stringify({
+            command: 'wifi_scan'
+        }));
+
         // Get saved networks
-        const savedResponse = await displayDevice.sendCommand(0x11);
-        const savedNetworks = JSON.parse(new TextDecoder().decode(savedResponse.data));
-        
-        // Show WiFi setup form
-        showWiFiSetupForm(networks, savedNetworks);
+        await window.setupDevice.send(JSON.stringify({
+            command: 'wifi_saved'
+        }));
+
     } catch (error) {
         console.error('Failed to start WiFi setup:', error);
-        alert('Failed to get WiFi networks. Please try reconnecting the device.');
+        window.showError('WiFi Setup Error: ' + error.message);
     }
 }
 
-function showWiFiSetupForm(networks, savedNetworks) {
-    const setupDiv = document.getElementById('wifi-setup');
-    if (!setupDiv) return;
-    
-    // Create HTML for available networks
-    let html = `
-        <h2>Available Networks</h2>
-        <div class="network-list">
-    `;
-    
-    if (networks.error) {
-        html += `<p class="error">${networks.error}</p>`;
-    } else if (networks.networks && networks.networks.length > 0) {
-        networks.networks.forEach(network => {
-            html += `
-                <div class="network-item">
-                    <span class="network-name">${network.ssid}</span>
-                    <span class="network-signal">${network.signal}%</span>
-                    <button onclick="connectToNetwork('${network.ssid}', ${network.security})">
-                        Connect
-                    </button>
-                </div>
-            `;
-        });
-    } else {
-        html += '<p>No networks found</p>';
-    }
-    
-    html += '</div>';
-    
-    // Add saved networks section
-    html += `
-        <h2>Saved Networks</h2>
-        <div class="saved-network-list">
-    `;
-    
-    if (savedNetworks.error) {
-        html += `<p class="error">${savedNetworks.error}</p>`;
-    } else if (savedNetworks.saved_networks && savedNetworks.saved_networks.length > 0) {
-        savedNetworks.saved_networks.forEach(network => {
-            html += `
-                <div class="network-item">
-                    <span class="network-name">${network.ssid}</span>
-                    <button onclick="forgetNetwork('${network.uuid}')">
-                        Forget
-                    </button>
-                </div>
-            `;
-        });
-    } else {
-        html += '<p>No saved networks</p>';
-    }
-    
-    html += '</div>';
-    
-    // Add refresh button
-    html += `
-        <div class="network-controls">
-            <button onclick="startWiFiSetup()" class="refresh-button">
-                Refresh Networks
-            </button>
-        </div>
-    `;
-    
-    setupDiv.innerHTML = html;
-}
-
-async function connectToNetwork(ssid, requiresPassword) {
-    let password = '';
-    if (requiresPassword) {
-        password = prompt(`Enter password for ${ssid}:`);
-        if (!password) return;  // User cancelled
-    }
-    
+window.connectToNetwork = async function(ssid) {
     try {
-        const response = await displayDevice.sendCommand(0x12, JSON.stringify({
+        const password = prompt(`Enter password for ${ssid}:`);
+        if (password === null) return; // User cancelled
+
+        await window.setupDevice.send(JSON.stringify({
+            command: 'wifi_connect',
             ssid: ssid,
             password: password
         }));
-        
-        const result = JSON.parse(new TextDecoder().decode(response.data));
-        if (result.error) {
-            alert(`Failed to connect: ${result.error}`);
-        } else {
-            alert(`Successfully connected to ${ssid}`);
-            // Refresh the network list
-            startWiFiSetup();
-        }
     } catch (error) {
         console.error('Failed to connect:', error);
-        alert('Failed to connect to network. Please try again.');
+        window.showError('Connection Error: ' + error.message);
     }
 }
 
-async function forgetNetwork(uuid) {
-    if (!confirm('Are you sure you want to remove this network?')) return;
-    
+window.forgetNetwork = async function(uuid) {
     try {
-        const response = await displayDevice.sendCommand(0x13, JSON.stringify({
-            uuid: uuid
-        }));
-        
-        const result = JSON.parse(new TextDecoder().decode(response.data));
-        if (result.error) {
-            alert(`Failed to remove network: ${result.error}`);
-        } else {
-            // Refresh the network list
-            startWiFiSetup();
+        if (confirm('Are you sure you want to forget this network?')) {
+            await window.setupDevice.send(JSON.stringify({
+                command: 'wifi_forget',
+                uuid: uuid
+            }));
         }
     } catch (error) {
         console.error('Failed to forget network:', error);
-        alert('Failed to remove network. Please try again.');
+        window.showError('Error: ' + error.message);
     }
 }
 

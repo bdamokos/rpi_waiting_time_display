@@ -3,10 +3,8 @@ import logging
 from logging.handlers import RotatingFileHandler
 
 # Create logs directory if it doesn't exist
-logs_dir = 'logs'
-if not os.path.exists(logs_dir):
-    os.makedirs(logs_dir)
-    print(f"Created logs directory: {logs_dir}. Absolute path: {os.path.abspath(logs_dir)}")
+logs_dir = os.path.join(os.path.expanduser('~'), 'display_programme/logs')
+os.makedirs(logs_dir, exist_ok=True)
 
 # Set up root logger
 logger = logging.getLogger()

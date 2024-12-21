@@ -5,9 +5,15 @@ Requires=bluetooth.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/rfcomm listen /dev/rfcomm0 1
+ExecStartPre=/bin/sh -c '/usr/bin/rfcomm release all || true'
+ExecStart=/bin/sh -c '\
+    /usr/bin/rfcomm bind 0 00:00:00:00:00:00 1 && \
+    while true; do \
+        sleep 1; \
+    done'
 Restart=always
 RestartSec=5
+ExecStopPost=/bin/sh -c '/usr/bin/rfcomm release all || true'
 
 [Install]
 WantedBy=multi-user.target 

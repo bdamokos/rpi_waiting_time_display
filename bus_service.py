@@ -542,6 +542,8 @@ def update_display(epd, weather_data=None, bus_data=None, error_message=None, st
 
             message_width = 0
             if message:
+                msg_text = message
+                msg_text2 = None
                 if message == "Last":
                     msg_text = "Last"
                     msg_text2 = "departure"

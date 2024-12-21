@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "Version: 0.0.3 (2024-12-21)"  # AUTO-INCREMENT
+echo "Version: 0.0.4 (2024-12-21)"  # AUTO-INCREMENT
 
 # Check if Bluetooth is disabled in config.txt or dtoverlay
 if grep -q "^dtoverlay=disable-bt\|^dtoverlay=pi3-disable-bt" /boot/config.txt; then
@@ -68,9 +68,16 @@ sudo apt-get install -y bluetooth bluez bluez-tools
 cat > /etc/bluetooth/main.conf << EOL
 [General]
 Name = EPaperDisplay
-Class = 0x000100
+# Class = 0x000100 (Computer) + 0x000400 (Capturing) + 0x040000 (Telephony)
+Class = 0x040500
 DiscoverableTimeout = 0
 PairableTimeout = 0
+# Always stay visible and pairable
+Discoverable = true
+Pairable = true
+# Enable Serial Port Profile
+[Policy]
+AutoEnable=true
 EOL
 
 # Restart bluetooth to apply settings
@@ -100,24 +107,11 @@ echo 'KERNEL=="rfcomm[0-9]*", GROUP="dialout", MODE="0660"' | sudo tee /etc/udev
 sudo udevadm control --reload-rules
 sudo udevadm trigger
 
-# Start listening for connections
-# Create a PID file directory
-mkdir -p /var/run/bluetooth
-
-# Start rfcomm listen and save PID
-rfcomm listen /dev/rfcomm0 1 > /var/run/bluetooth/rfcomm.log 2>&1 &
-echo $! > /var/run/bluetooth/rfcomm.pid
-
-# Wait a moment to ensure the process started
-sleep 1
-
-# Check if the process is running
-if kill -0 $(cat /var/run/bluetooth/rfcomm.pid) 2>/dev/null; then
-    echo "rfcomm listening service started successfully"
-else
-    echo "Failed to start rfcomm listening service"
-    exit 1
-fi
+# Install and start rfcomm service
+cp "$ACTUAL_HOME/display_programme/docs/service/bluetooth-serial.service" /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable bluetooth-serial.service
+systemctl start bluetooth-serial.service
 
 # Add current user to dialout group if not already added
 if ! groups $USER | grep -q "\bdialout\b"; then

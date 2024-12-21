@@ -2,7 +2,7 @@
 
 echo "----------------------------------------"
 echo "Display Programme Update Script"
-echo "Version: 0.0.2 (2024-12-21)"  # AUTO-INCREMENT
+echo "Version: 0.0.3 (2024-12-21)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -175,15 +175,38 @@ fi
 
 # Check Bluetooth configuration
 if confirm "Would you like to check and configure Bluetooth?"; then
+    # Check config.txt settings first
+    if grep -q "^dtoverlay=disable-bt\|^dtoverlay=pi3-disable-bt" /boot/config.txt; then
+        echo "Bluetooth is disabled in /boot/config.txt"
+        if confirm "Would you like to enable Bluetooth?"; then
+            sed -i '/^dtoverlay=.*disable-bt.*/d' /boot/config.txt
+            echo "Bluetooth enabled in config.txt - reboot required"
+        fi
+    fi
+    
+    if ! grep -q "^enable_uart=1" /boot/config.txt; then
+        echo "UART not enabled for Bluetooth"
+        if confirm "Would you like to enable UART for Bluetooth?"; then
+            echo "enable_uart=1" >> /boot/config.txt
+            echo "UART enabled in config.txt - reboot required"
+        fi
+    fi
+    
     if [ -f "/etc/bluetooth/main.conf" ]; then
         if ! grep -q "^Name = EPaperDisplay" "/etc/bluetooth/main.conf"; then
             echo "Updating Bluetooth configuration..."
+            # Backup existing config
+            cp /etc/bluetooth/main.conf /etc/bluetooth/main.conf.backup
             cat > /etc/bluetooth/main.conf << EOL
 [General]
 Name = EPaperDisplay
-Class = 0x000100
+Class = 0x040500
 DiscoverableTimeout = 0
 PairableTimeout = 0
+Discoverable = true
+Pairable = true
+[Policy]
+AutoEnable=true
 EOL
             systemctl restart bluetooth
         else
@@ -194,6 +217,28 @@ EOL
         if confirm "Would you like to install Bluetooth support?"; then
             bash "$ACTUAL_HOME/display_programme/docs/service/setup_bluetooth_serial.sh"
         fi
+    fi
+    
+    # Check rfcomm service
+    if [ ! -f "/etc/systemd/system/bluetooth-serial.service" ]; then
+        echo "Bluetooth serial service not installed"
+        if confirm "Would you like to install Bluetooth serial service?"; then
+            cp "$ACTUAL_HOME/display_programme/docs/service/bluetooth-serial.service" /etc/systemd/system/
+            systemctl daemon-reload
+            systemctl enable bluetooth-serial.service
+            systemctl start bluetooth-serial.service
+        fi
+    else
+        echo "Checking Bluetooth serial service..."
+        systemctl is-active bluetooth-serial.service > /dev/null || systemctl start bluetooth-serial.service
+    fi
+    
+    # Check udev rules
+    if [ ! -f "/etc/udev/rules.d/45-rfcomm.rules" ]; then
+        echo "Creating rfcomm udev rules..."
+        echo 'KERNEL=="rfcomm[0-9]*", GROUP="dialout", MODE="0660"' | sudo tee /etc/udev/rules.d/45-rfcomm.rules
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger
     fi
 fi
 

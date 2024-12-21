@@ -2,7 +2,7 @@
 
 echo "----------------------------------------"
 echo "Display Programme Uninstall Script"
-echo "Version: 0.0.1 (2024-12-05)"  # AUTO-INCREMENT
+echo "Version: 0.0.2 (2024-12-21)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -65,7 +65,11 @@ cleanup() {
     systemctl disable display.service
     systemctl stop watchdog
     systemctl disable watchdog
+    systemctl stop bluetooth-serial.service
+    systemctl disable bluetooth-serial.service
     rm -f /etc/systemd/system/display.service
+    rm -f /etc/systemd/system/webserial.service
+    rm -f /etc/systemd/system/bluetooth-serial.service
     systemctl daemon-reload
     
     # Remove watchdog configuration

@@ -1,0 +1,13 @@
+[Unit]
+Description=Bluetooth Serial Port Service
+After=bluetooth.target
+Requires=bluetooth.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/rfcomm listen /dev/rfcomm0 1
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target 

@@ -1,11 +1,41 @@
 #!/bin/bash
 
-echo "Version: 0.0.2 (2024-12-21)"  # AUTO-INCREMENT
+echo "Version: 0.0.3 (2024-12-21)"  # AUTO-INCREMENT
+
+# Check if Bluetooth is disabled in config.txt or dtoverlay
+if grep -q "^dtoverlay=disable-bt\|^dtoverlay=pi3-disable-bt" /boot/config.txt; then
+    echo "Bluetooth is currently disabled in /boot/config.txt"
+    echo "Removing disable-bt overlay..."
+    sed -i '/^dtoverlay=.*disable-bt.*/d' /boot/config.txt
+    echo "Bluetooth enabled in config.txt"
+    echo "You'll need to reboot for this change to take effect"
+    echo "Please run this script again after rebooting"
+    exit 0
+fi
+
+# Check if UART is configured correctly for Bluetooth
+if ! grep -q "^enable_uart=1" /boot/config.txt; then
+    echo "Enabling UART for Bluetooth..."
+    echo "enable_uart=1" >> /boot/config.txt
+    echo "UART enabled in config.txt"
+    echo "You'll need to reboot for this change to take effect"
+    echo "Please run this script again after rebooting"
+    exit 0
+fi
 
 # Get Bluetooth adapter address
 BT_ADDR=$(hcitool dev | grep -o "[[:xdigit:]:]\{17\}")
 if [ -z "$BT_ADDR" ]; then
     echo "No Bluetooth adapter found!"
+    echo "This could be because:"
+    echo "1. Bluetooth is disabled in hardware"
+    echo "2. The system needs a reboot after enabling Bluetooth"
+    echo "3. The Bluetooth adapter is not working"
+    echo ""
+    echo "Please try rebooting first. If the issue persists, check:"
+    echo "- /boot/config.txt for Bluetooth configuration"
+    echo "- 'sudo systemctl status bluetooth' for service status"
+    echo "- 'hciconfig -a' for adapter status"
     exit 1
 fi
 echo "Bluetooth adapter address: $BT_ADDR"

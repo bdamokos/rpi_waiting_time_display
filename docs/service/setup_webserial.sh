@@ -11,6 +11,14 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
+# Get actual username
+if [ -n "$SUDO_USER" ]; then
+    ACTUAL_USER="$SUDO_USER"
+else
+    ACTUAL_USER=$(logname)
+fi
+ACTUAL_HOME=$(eval echo "~$ACTUAL_USER")
+
 # Load required modules
 modprobe libcomposite
 modprobe usb_f_acm
@@ -50,27 +58,30 @@ ln -s functions/acm.usb0 configs/c.1/
 UDC=$(ls /sys/class/udc)
 echo $UDC > UDC
 
-# Create systemd service
-cat > /etc/systemd/system/webserial.service << EOL
-[Unit]
-Description=WebSerial Configuration Interface
-After=network.target
-Wants=network.target
+# Copy and configure WebSerial service with correct username
+echo "Setting up WebSerial service..."
+SERVICE_FILE="/etc/systemd/system/webserial.service"
+EXAMPLE_FILE="$ACTUAL_HOME/display_programme/docs/service/webserial.service.example"
 
-[Service]
-Type=simple
-User=pi
-ExecStart=/usr/bin/python3 /home/pi/display_programme/webserial_server.py
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOL
-
-# Enable and start service
-systemctl daemon-reload
-systemctl enable webserial.service
-systemctl start webserial.service
+if [ -f "$EXAMPLE_FILE" ]; then
+    # Create a temporary file with username replaced
+    TEMP_FILE=$(mktemp)
+    sed "s|/home/pi|$ACTUAL_HOME|g" "$EXAMPLE_FILE" > "$TEMP_FILE"
+    sed -i "s|User=pi|User=$ACTUAL_USER|g" "$TEMP_FILE"
+    
+    # Copy the modified file to systemd
+    cp "$TEMP_FILE" "$SERVICE_FILE"
+    rm "$TEMP_FILE"
+    
+    # Enable and start service
+    systemctl daemon-reload
+    systemctl enable webserial.service
+    systemctl start webserial.service
+    
+    echo "WebSerial service installed and started"
+else
+    echo "Error: WebSerial service example file not found at $EXAMPLE_FILE"
+    exit 1
+fi
 
 echo "WebSerial setup complete" 

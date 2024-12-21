@@ -1,0 +1,39 @@
+[Unit]
+# Version: 0.0.2 (2024-12-21) # AUTO-INCREMENT
+Description=WebSerial Configuration Interface
+After=network.target bluetooth.target
+Wants=network.target bluetooth.target
+
+[Service]
+Type=simple
+User=pi
+ExecStart=/usr/bin/python3 /home/pi/display_programme/webserial_server.py
+Environment=PYTHONUNBUFFERED=1
+StandardOutput=append:/var/log/webserial.out
+StandardError=append:/var/log/webserial.err
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+
+# Installation instructions:
+# 1. Make sure to change "pi" to the username of the account you are using, e.g. /home/pi --> /home/your_username
+#
+# 2. Copy this file to /etc/systemd/system/webserial.service:
+#    sudo cp webserial.service.example /etc/systemd/system/webserial.service
+#
+# 3. Reload systemd:
+#    sudo systemctl daemon-reload
+#
+# 4. Enable the service to start on boot:
+#    sudo systemctl enable webserial.service
+#
+# 5. Start the service:
+#    sudo systemctl start webserial.service
+#
+# 6. Check status:
+#    sudo systemctl status webserial.service
+#
+# 7. View logs:
+#    journalctl -u webserial.service -f

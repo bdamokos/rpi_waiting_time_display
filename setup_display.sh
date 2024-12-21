@@ -2,7 +2,7 @@
 
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.24 (2024-12-21)"  # AUTO-INCREMENT
+echo "Version: 0.0.25 (2024-12-21)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -576,25 +576,35 @@ setup_webserial() {
     bash "$ACTUAL_HOME/display_programme/docs/service/setup_webserial.sh"
     check_error "Failed to setup USB gadget"
     
-    # Copy and configure WebUSB service
+    # Copy and configure WebSerial service
     SERVICE_FILE="/etc/systemd/system/webserial.service"
+    EXAMPLE_FILE="$ACTUAL_HOME/display_programme/docs/service/webserial.service.example"
+    
     if [ -f "$SERVICE_FILE" ]; then
         backup_file "$SERVICE_FILE"
     fi
     
-    # Copy and modify service file
-    sed -e "s|User=pi|User=$ACTUAL_USER|g" \
-        -e "s|/home/pi|$ACTUAL_HOME|g" \
-        "$ACTUAL_HOME/display_programme/docs/service/webserial.service" > "$SERVICE_FILE"
-    check_error "Failed to setup WebSerial service"
-    
-    # Enable and start the service
-    systemctl daemon-reload 
-    systemctl enable webserial.service
-    systemctl start webserial.service
-    check_error "Failed to start WebSerial service"
-    
-    echo "WebSerial support installed successfully"
+    if [ -f "$EXAMPLE_FILE" ]; then
+        # Create a temporary file with username replaced
+        TEMP_FILE=$(mktemp)
+        sed "s|/home/pi|$ACTUAL_HOME|g" "$EXAMPLE_FILE" > "$TEMP_FILE"
+        sed -i "s|User=pi|User=$ACTUAL_USER|g" "$TEMP_FILE"
+        
+        # Copy the modified file to systemd
+        cp "$TEMP_FILE" "$SERVICE_FILE"
+        rm "$TEMP_FILE"
+        
+        # Enable and start the service
+        systemctl daemon-reload 
+        systemctl enable webserial.service
+        systemctl start webserial.service
+        check_error "Failed to start WebSerial service"
+        
+        echo "WebSerial support installed successfully"
+    else
+        echo "Error: WebSerial service example file not found at $EXAMPLE_FILE"
+        check_error "Failed to setup WebSerial service"
+    fi
 }
 
 # After mode selection, ask about WebUSB support

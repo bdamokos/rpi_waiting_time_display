@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "Version: 0.0.1 (2024-12-21)"  # AUTO-INCREMENT
+echo "Version: 0.0.2 (2024-12-21)"  # AUTO-INCREMENT
 
 # Get Bluetooth adapter address
 BT_ADDR=$(hcitool dev | grep -o "[[:xdigit:]:]\{17\}")
@@ -32,7 +32,7 @@ fi
 
 # Install required packages
 sudo apt-get update
-sudo apt-get install -y bluetooth bluez rfcomm
+sudo apt-get install -y bluetooth bluez bluez-tools
 
 # Configure Bluetooth settings
 cat > /etc/bluetooth/main.conf << EOL
@@ -71,7 +71,23 @@ sudo udevadm control --reload-rules
 sudo udevadm trigger
 
 # Start listening for connections
-rfcomm listen /dev/rfcomm0 1 &
+# Create a PID file directory
+mkdir -p /var/run/bluetooth
+
+# Start rfcomm listen and save PID
+rfcomm listen /dev/rfcomm0 1 > /var/run/bluetooth/rfcomm.log 2>&1 &
+echo $! > /var/run/bluetooth/rfcomm.pid
+
+# Wait a moment to ensure the process started
+sleep 1
+
+# Check if the process is running
+if kill -0 $(cat /var/run/bluetooth/rfcomm.pid) 2>/dev/null; then
+    echo "rfcomm listening service started successfully"
+else
+    echo "Failed to start rfcomm listening service"
+    exit 1
+fi
 
 # Add current user to dialout group if not already added
 if ! groups $USER | grep -q "\bdialout\b"; then

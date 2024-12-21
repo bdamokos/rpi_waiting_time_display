@@ -2,7 +2,7 @@
 
 echo "----------------------------------------"
 echo "Display Programme Update Script"
-echo "Version: 0.0.1 (2024-12-21)"  # AUTO-INCREMENT
+echo "Version: 0.0.2 (2024-12-21)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -83,7 +83,7 @@ if confirm "Would you like to check and install required packages?"; then
         "network-manager"
         "bluetooth"
         "bluez"
-        "rfcomm"
+        "bluez-tools"
         "dnsmasq"
     )
     

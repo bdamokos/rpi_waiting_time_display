@@ -1,12 +1,16 @@
 [Unit]
-# Version: 0.0.6 (2024-12-21) # AUTO-INCREMENT
+# Version: 0.0.2 (2024-12-21) # AUTO-INCREMENT
 Description=Bluetooth Serial Port Service
 After=bluetooth.target
 Requires=bluetooth.target
 
 [Service]
 Type=simple
-ExecStartPre=/bin/sh -c '/usr/bin/rfcomm release all || true'
+ExecStartPre=/bin/sh -c '\
+    /usr/bin/rfcomm release all || true; \
+    /usr/bin/rfcomm release 0 || true; \
+    /usr/bin/rfcomm release rfcomm0 || true; \
+    /bin/rm -f /dev/rfcomm0 || true'
 ExecStartPre=/bin/sh -c '/usr/bin/hciconfig hci0 name "EPaperDisplay" && /usr/bin/hciconfig hci0 class 0x000100'
 ExecStartPre=/bin/sh -c '/usr/bin/sdptool add --channel=1 SP || true'
 ExecStart=/bin/sh -c '\
@@ -16,7 +20,11 @@ ExecStart=/bin/sh -c '\
     done'
 Restart=always
 RestartSec=5
-ExecStopPost=/bin/sh -c '/usr/bin/rfcomm release all || true'
+ExecStopPost=/bin/sh -c '\
+    /usr/bin/rfcomm release all || true; \
+    /usr/bin/rfcomm release 0 || true; \
+    /usr/bin/rfcomm release rfcomm0 || true; \
+    /bin/rm -f /dev/rfcomm0 || true'
 
 [Install]
 WantedBy=multi-user.target 

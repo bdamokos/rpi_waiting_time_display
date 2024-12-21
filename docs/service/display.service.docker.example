@@ -1,4 +1,5 @@
 [Unit]
+# Version: 0.0.1 (2024-12-21) # AUTO-INCREMENT
 Description=E-Paper Display Service (Docker Version)
 After=network.target docker.service
 Requires=docker.service

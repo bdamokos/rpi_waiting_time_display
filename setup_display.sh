@@ -2,7 +2,7 @@
 
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.23 (2024-12-20)"  # AUTO-INCREMENT
+echo "Version: 0.0.24 (2024-12-21)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -602,8 +602,34 @@ if confirm "Would you like to enable WebSerial support for easy configuration vi
     setup_webserial
 fi
 
-
-
+# Ask about Bluetooth WebSerial support
+if confirm "Would you like to enable Bluetooth WebSerial support for wireless configuration?"; then
+    echo "Setting up Bluetooth WebSerial support..."
+    
+    # Install the Bluetooth serial script
+    bash "$ACTUAL_HOME/display_programme/docs/service/setup_bluetooth_serial.sh"
+    check_error "Failed to setup Bluetooth serial"
+    
+    # Update webserial service to depend on bluetooth
+    SERVICE_FILE="/etc/systemd/system/webserial.service"
+    if [ -f "$SERVICE_FILE" ]; then
+        # Add bluetooth.target to After and Wants if not already present
+        if ! grep -q "After=.*bluetooth.target" "$SERVICE_FILE"; then
+            sed -i '/^After=/ s/$/ bluetooth.target/' "$SERVICE_FILE"
+        fi
+        if ! grep -q "Wants=.*bluetooth.target" "$SERVICE_FILE"; then
+            sed -i '/^Wants=/ s/$/ bluetooth.target/' "$SERVICE_FILE"
+        fi
+        
+        # Reload systemd and restart webserial service
+        systemctl daemon-reload
+        systemctl restart webserial.service
+        check_error "Failed to restart WebSerial service with Bluetooth support"
+    fi
+    
+    echo "Bluetooth WebSerial support installed successfully"
+    echo "Your device will be discoverable as 'EPaperDisplay' for WebSerial connections"
+fi
 
 echo "----------------------------------------"
 echo "Setup completed!"

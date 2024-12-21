@@ -32,17 +32,7 @@ class SetupDevice {
     async connect() {
         try {
             console.log('Requesting serial port...');
-            this.port = await navigator.serial.requestPort({
-                filters: [
-                    { 
-                        name: 'EPaperDisplay'
-                    },
-                    { 
-                        usbVendorId: 0x1209,
-                        usbProductId: 0x0001
-                    }
-                ]
-            });
+            this.port = await navigator.serial.requestPort();
             
             console.log('Opening port...');
             await this.port.open({ baudRate: 115200 });
@@ -52,10 +42,6 @@ class SetupDevice {
             document.getElementById('connect-button').textContent = 'Disconnect';
             document.getElementById('connect-prompt').style.display = 'none';
             document.getElementById('setup-interface').style.display = 'block';
-            
-            const info = await this.port.getInfo();
-            const connectionType = info.usbVendorId ? 'USB' : 'Bluetooth';
-            console.log(`Connected via ${connectionType}`);
             
             console.log('Starting read loop...');
             this.startReading();

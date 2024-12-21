@@ -1,4 +1,4 @@
-from flask import Flask, send_file, Response, request, redirect, url_for, abort
+from flask import Flask, send_file, Response, request, redirect, url_for, abort, render_template
 import os
 import dotenv
 import logging
@@ -9,6 +9,7 @@ import sys
 from werkzeug.utils import secure_filename
 import shutil
 from datetime import datetime, timedelta
+from config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,7 @@ DEBUG_ENABLED = os.getenv("debug_port_enabled", "false").lower() == "true"
 FIRST_RUN = os.getenv("first_run", "false").lower() == "true"
 
 app = Flask(__name__)
+config_manager = ConfigManager()
 
 def is_local_request():
     """Check if the request is from a local network"""
@@ -248,246 +250,43 @@ def edit_env():
     """Endpoint to view and edit the .env file"""
     if not is_local_request():
         logger.warning(f"Unauthorized access attempt from {request.remote_addr}")
-        abort(403)  # Forbidden
+        abort(403)
 
     try:
-        # Safely resolve paths
-        base_dir = Path().resolve()
-        env_path = safe_path(base_dir, '.env')
-        example_path = safe_path(base_dir, '.env.example')
-        backup_dir = safe_path(base_dir, 'env_backups')
-        backup_dir.mkdir(exist_ok=True)
-
-        def parse_env_file(file_path):
-            """Parse an env file into a dictionary of variables"""
-            if not file_path.exists():
-                return {}
-            
-            env_vars = {}
-            try:
-                with open(file_path, 'r') as f:
-                    for line in f:
-                        line = line.strip()
-                        if line and not line.startswith('#'):
-                            if '=' in line:
-                                key, value = line.split('=', 1)
-                                env_vars[key.strip()] = value.strip()
-            except Exception as e:
-                logger.error(f"Error parsing {file_path}: {e}")
-            return env_vars
-
-        # Get available backup files
-        backup_files = sorted(backup_dir.glob('.env.backup.*'), 
-                            key=os.path.getmtime, reverse=True)
-        valid_restore_paths = {str(f) for f in backup_files}
-        # Add .env.example if it exists
-        if example_path.exists():
-            valid_restore_paths.add(str(example_path))
-            logger.info(f"Added .env.example to valid restore paths: {valid_restore_paths}")
-
         # Handle POST requests for saving/restoring
         if request.method == 'POST':
             if 'restore' in request.form:
+                config_type = request.form.get('config_type')
                 restore_file = request.form.get('restore_file')
-                # If it's just the filename, construct the full path
-                if restore_file == '.env.example':
-                    restore_file = str(example_path)
-                
-                if restore_file and restore_file in valid_restore_paths:
-                    try:
-                        restore_path = Path(restore_file)
-                        shutil.copy(restore_path, env_path)
-                        logger.info(f".env file restored from {restore_path}")
-                        return redirect(url_for('edit_env'))
-                    except Exception as e:
-                        logger.error(f"Error restoring .env file: {e}", exc_info=True)
-                        return "Error restoring file", 500
-                else:
-                    logger.warning(f"Invalid restore file attempted: {restore_file}")
-                    return "Invalid restore file", 400
-
-            elif 'confirm_settings' in request.form:
-                current_vars = parse_env_file(env_path)
-                if current_vars.get('first_run', 'false').lower() == 'true':
-                    current_vars['first_run'] = 'false'
-                    try:
-                        with open(env_path, 'w') as f:
-                            for key, value in current_vars.items():
-                                f.write(f"{key}={value}\n")
-                        logger.info("first_run set to false, restarting Raspberry Pi")
-                        os._exit(1)
-                    except Exception as e:
-                        logger.error(f"Error updating .env file: {e}")
-                        return "Error updating settings", 500
-                else:
-                    return restart_service()
-
-            else:
-                # Save the updated .env content
-                new_content = request.form.get('env_content', '')
-                if not new_content.strip():
-                    return "Empty content not allowed", 400
-
-                try:
-                    # Create backup
-                    timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
-                    backup_path = safe_path(backup_dir, f'.env.backup.{timestamp}')
-                    shutil.copy(env_path, backup_path)
-                    logger.info(f".env file backed up to {backup_path}")
-
-                    # Rotate backups
-                    backups = sorted(backup_dir.glob('.env.backup.*'), 
-                                  key=os.path.getmtime, reverse=True)
-                    for old_backup in backups[5:]:
-                        old_backup.unlink()
-
-                    # Write new content
-                    with open(env_path, 'w') as f:
-                        f.write(new_content)
-                    logger.info(".env file updated successfully")
+                if config_manager.restore_backup(config_type, restore_file):
                     return redirect(url_for('edit_env'))
-                except Exception as e:
-                    logger.error(f"Error updating .env file: {e}")
-                    return "Error updating file", 500
+                return "Error restoring file", 500
 
-        # Read both .env and .env.example
-        current_vars = parse_env_file(env_path)
-        example_vars = parse_env_file(example_path)
+            elif 'save' in request.form:
+                config_type = request.form.get('config_type')
+                new_content = request.form.get('content')
+                if config_manager.update_config(config_type, new_content):
+                    return redirect(url_for('edit_env'))
+                return "Error updating file", 500
 
-        # Create a combined set of all variables
-        all_vars = sorted(set(list(current_vars.keys()) + list(example_vars.keys())))
+        # Read configurations
+        configs = {}
+        for config_type in ['display_env', 'transit_env', 'transit_local']:
+            content, variables = config_manager.read_config(config_type, verbose=True)
+            backups = config_manager.get_backup_files(config_type)
+            configs[config_type] = {
+                'content': content,
+                'variables': variables,
+                'backups': backups
+            }
 
-        # Generate comparison HTML
-        vars_comparison = ""
-        for var in all_vars:
-            in_current = var in current_vars
-            in_example = var in example_vars
-            current_value = current_vars.get(var, '')
-            example_value = example_vars.get(var, '')
-            
-            status_class = ''
-            status_text = ''
-            
-            if in_current and in_example:
-                if current_value != example_value:
-                    status_class = 'modified'
-                    status_text = '(Modified)'
-            elif in_current and not in_example:
-                status_class = 'extra'
-                status_text = '(Not in example)'
-            elif not in_current and in_example:
-                status_class = 'missing'
-                status_text = '(Missing)'
-            
-            vars_comparison += f'<div class="var-row {status_class}">'
-            vars_comparison += f'<span class="var-name">{var}</span>'
-            vars_comparison += f'<span class="var-status">{status_text}</span>'
-            if in_example:
-                vars_comparison += f'<div class="var-example">Example: {example_value}</div>'
-            vars_comparison += '</div>'
-
-        # Read the current .env content for the textarea
-        try:
-            with open(env_path, 'r') as f:
-                env_content = f.read()
-        except Exception as e:
-            logger.error(f"Error reading .env file: {e}")
-            env_content = "Error reading .env file"
-        
-        # Generate shell commands for restoring backups
-        backup_files = sorted(backup_dir.glob('.env.backup.*'), key=os.path.getmtime, reverse=True)
-        restore_options = [(str(backup_file), backup_file.name) for backup_file in backup_files]
-        example_file = Path('.env.example')
-        if example_file.exists():
-            restore_options.append((str(example_file), '.env.example'))
-        
-        restore_commands = "\n".join(
-            f"cp {backup_file} .env" for backup_file, _ in restore_options
-        )
-        
-        restore_options_html = "\n".join(
-            f'<option value="{file_path}">{file_name}</option>' for file_path, file_name in restore_options
-        )
-
-        # Determine if the "Confirm Settings" button should be shown
-        show_confirm_button = current_vars.get('first_run', 'false').lower() == 'true'
-        
-        return f'''
-        <html>
-            <head>
-                <title>Edit .env File</title>
-                <style>
-                    body {{ font-family: Arial, sans-serif; margin: 20px; }}
-                    .env-container {{ display: flex; gap: 20px; }}
-                    .editor-section {{ flex: 1; }}
-                    .vars-section {{ flex: 1; }}
-                    textarea {{ width: 100%; height: 400px; font-family: monospace; }}
-                    button {{ margin-top: 10px; }}
-                    pre {{ background: #f5f5f5; padding: 10px; border: 1px solid #ccc; }}
-                    .var-row {{ padding: 5px; margin: 5px 0; border-left: 3px solid transparent; }}
-                    .var-name {{ font-weight: bold; }}
-                    .var-status {{ color: #666; margin-left: 10px; font-size: 0.9em; }}
-                    .var-example {{ color: #666; font-size: 0.9em; margin-left: 20px; }}
-                    .modified {{ border-left-color: #ffa500; background: #fff3e0; }}
-                    .extra {{ border-left-color: #2196f3; background: #e3f2fd; }}
-                    .missing {{ border-left-color: #f44336; background: #ffebee; }}
-                    .back-button {{ 
-                        background-color: #4CAF50;
-                        color: white;
-                        padding: 10px 20px;
-                        text-decoration: none;
-                        border-radius: 5px;
-                        display: inline-block;
-                        margin-bottom: 20px;
-                    }}
-                    .back-button:hover {{
-                        background-color: #45a049;
-                    }}
-                </style>
-            </head>
-            <body>
-                <a href="/debug" class="back-button">← Back to Debug</a>
-                <h1>Edit .env File</h1>
-                <div class="env-container">
-                    <div class="editor-section">
-                        <h2>Edit Configuration</h2>
-                        <form method="post">
-                            <textarea name="env_content">{env_content}</textarea><br>
-                            <button type="submit">Save Changes</button>
-                        </form>
-                    </div>
-                    <div class="vars-section">
-                        <h2>Variables Overview</h2>
-                        <div class="vars-comparison">
-                            {vars_comparison}
-                        </div>
-                    </div>
-                </div>
-                
-                <h2>Restore .env from Backup</h2>
-                <form method="post">
-                    <select name="restore_file">
-                        {restore_options_html}
-                    </select>
-                    <button type="submit" name="restore">Restore Selected</button>
-                </form>
-                <p>If the server is unresponsive, use the following shell commands to restore a backup:</p>
-                <pre>{restore_commands}</pre>
-
-                <h2>Confirm Initial Settings</h2>
-                <form method="post">
-                    <button type="submit" name="confirm_settings">
-                        {'I am happy with my initial settings, restart my Pi' if show_confirm_button else 'Restart Display Service'}
-                    </button>
-                </form>
-            </body>
-        </html>
-        '''
+        # Generate HTML...
+        return render_template('env_editor.html', configs=configs)
 
     except Exception as e:
         logger.error(f"Error in edit_env: {e}")
         return "Internal server error", 500
-    
+
 @app.route('/favicon.ico')
 def favicon():
     """Return 204 No Content for favicon requests"""

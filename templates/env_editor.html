@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Configuration Editor</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .config-section { margin-bottom: 30px; }
+        .editor { width: 100%; height: 300px; font-family: monospace; }
+        .backup-list { margin: 10px 0; }
+        .var-list { 
+            background: #f5f5f5;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        .var-item {
+            margin: 5px 0;
+            padding: 5px;
+            border-left: 3px solid #ccc;
+        }
+        .var-explanation {
+            color: #666;
+            font-size: 0.9em;
+            margin-top: 5px;
+            font-style: italic;
+        }
+        .var-example {
+            color: #2196F3;
+            font-size: 0.9em;
+            margin-top: 3px;
+        }
+        .var-current {
+            font-weight: bold;
+            color: #4CAF50;
+        }
+        .var-modified {
+            border-left-color: #FFA000;
+        }
+        .var-missing {
+            border-left-color: #F44336;
+        }
+    </style>
+</head>
+<body>
+    <h1>Configuration Editor</h1>
+    
+    {% for config_type, config in configs.items() %}
+    <div class="config-section">
+        <h2>{{ config_type }}</h2>
+        
+        <form method="post">
+            <input type="hidden" name="config_type" value="{{ config_type }}">
+            <textarea name="content" class="editor">{{ config.content }}</textarea>
+            <button type="submit" name="save">Save Changes</button>
+        </form>
+
+        {% if config.backups %}
+        <div class="backup-list">
+            <h3>Available Backups</h3>
+            <form method="post">
+                <input type="hidden" name="config_type" value="{{ config_type }}">
+                <select name="restore_file">
+                    {% for backup in config.backups %}
+                    <option value="{{ backup.name }}">{{ backup.name }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" name="restore">Restore Selected</button>
+            </form>
+        </div>
+        {% endif %}
+
+        <div class="var-list">
+            <h3>Current Variables</h3>
+            {% for key, var in config.variables.items() %}
+            <div class="var-item {% if var.example and var.value != var.example %}var-modified{% endif %} 
+                            {% if not var.example %}var-missing{% endif %}">
+                <strong>{{ key }}</strong>
+                <div class="var-current">Current: {{ var.value }}</div>
+                {% if var.example %}
+                <div class="var-example">Example: {{ var.example }}</div>
+                {% endif %}
+                {% if var.explanation %}
+                <div class="var-explanation">{{ var.explanation }}</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+</body>
+</html> 

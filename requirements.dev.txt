@@ -1,5 +1,5 @@
 #As certain packages don't seem to work, these ones should be available in a dev environment on a Mac
-certifi==2024.8.30
+certifi==2024.12.14
 charset-normalizer==3.4.0
 colorzero==2.0
 gpiozero==2.0.1

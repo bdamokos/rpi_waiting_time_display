@@ -18,6 +18,7 @@ from wifi_config import WiFiConfig
 import logging
 import log_config
 from config_manager import ConfigManager
+import os
 
 # Set up logging
 logging.basicConfig(
@@ -64,6 +65,13 @@ class WebSerialServer:
 
             # Bluetooth Serial (if available)
             try:
+                # Wait for rfcomm0 to be available (up to 5 seconds)
+                for _ in range(5):
+                    if os.path.exists('/dev/rfcomm0'):
+                        break
+                    logger.info("Waiting for /dev/rfcomm0...")
+                    time.sleep(1)
+
                 bt_serial = serial.Serial(
                     port='/dev/rfcomm0',  # Default Bluetooth serial port
                     baudrate=115200,

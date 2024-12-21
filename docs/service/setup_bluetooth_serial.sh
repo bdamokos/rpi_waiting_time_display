@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "Version: 0.0.4 (2024-12-21)"  # AUTO-INCREMENT
+echo "Version: 0.0.5 (2024-12-21)"  # AUTO-INCREMENT
 
 # Check if Bluetooth is disabled in config.txt or dtoverlay
 if grep -q "^dtoverlay=disable-bt\|^dtoverlay=pi3-disable-bt" /boot/config.txt; then
@@ -78,6 +78,8 @@ Pairable = true
 # Enable Serial Port Profile
 [Policy]
 AutoEnable=true
+[Serial]
+InitiallyPowered=true
 EOL
 
 # Restart bluetooth to apply settings
@@ -90,15 +92,8 @@ hciconfig hci0 piscan
 # Set up Serial Port Profile
 sdptool add SP
 
-# Create rfcomm binding
-# Note: You might need to adjust the MAC address and channel
-echo "rfcomm0 {
-  bind yes;
-  # Listen on any device
-  device *;
-  channel 1;
-  comment 'Serial Port';
-}" | sudo tee /etc/bluetooth/rfcomm.conf
+# Create rfcomm device
+rfcomm bind 0 00:00:00:00:00:00 1
 
 # Create udev rule for rfcomm0
 echo 'KERNEL=="rfcomm[0-9]*", GROUP="dialout", MODE="0660"' | sudo tee /etc/udev/rules.d/45-rfcomm.rules
@@ -106,6 +101,12 @@ echo 'KERNEL=="rfcomm[0-9]*", GROUP="dialout", MODE="0660"' | sudo tee /etc/udev
 # Reload udev rules
 sudo udevadm control --reload-rules
 sudo udevadm trigger
+
+# Make sure rfcomm module is loaded
+modprobe rfcomm
+
+# Clean up any existing rfcomm bindings
+rfcomm release all
 
 # Install and start rfcomm service
 cp "$ACTUAL_HOME/display_programme/docs/service/bluetooth-serial.service" /etc/systemd/system/

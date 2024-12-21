@@ -9,6 +9,48 @@ title: WebSerial Test Page
     padding: 20px;
 }
 
+.command-list {
+    margin: 20px 0;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 4px;
+}
+
+.command-group {
+    margin-bottom: 15px;
+}
+
+.command-group h3 {
+    color: #2196F3;
+    margin-bottom: 10px;
+}
+
+.preset-commands {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 10px;
+    margin: 15px 0;
+}
+
+.preset-button {
+    padding: 8px;
+    background: #e3f2fd;
+    border: 1px solid #90caf9;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.preset-button:hover {
+    background: #bbdefb;
+}
+
+code {
+    background: #f1f1f1;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-family: monospace;
+}
+
 #status {
     margin: 20px 0;
     padding: 10px;
@@ -43,6 +85,47 @@ title: WebSerial Test Page
 
 <div class="container">
     <h1>WebSerial Test Interface</h1>
+    <div class="command-list">
+        <h2>Available Commands</h2>
+        
+        <div class="command-group">
+            <h3>WiFi Commands</h3>
+            <ul>
+                <li><code>{"command": "wifi_scan"}</code> - Scan for available WiFi networks</li>
+                <li><code>{"command": "wifi_saved"}</code> - List saved WiFi networks</li>
+                <li><code>{"command": "wifi_connect", "ssid": "network_name", "password": "pass"}</code> - Connect to a network</li>
+                <li><code>{"command": "wifi_forget", "uuid": "network_uuid"}</code> - Forget a saved network</li>
+            </ul>
+        </div>
+        
+        <div class="command-group">
+            <h3>Configuration Commands</h3>
+            <ul>
+                <li><code>{"command": "config_read", "config_type": "display_env", "verbose": true}</code> - Read config with examples</li>
+                <li><code>{"command": "config_read", "config_type": "display_env"}</code> - Read config (simple)</li>
+                <li><code>{"command": "config_get", "config_type": "display_env", "key": "debug_port"}</code> - Get single value</li>
+                <li><code>{"command": "config_set", "config_type": "display_env", "key": "debug_port", "value": "5002"}</code> - Set value</li>
+                <li><code>{"command": "config_update", "config_type": "display_env", "content": "..."}</code> - Update entire file</li>
+            </ul>
+        </div>
+
+        <div class="command-group">
+            <h3>Available Config Types</h3>
+            <ul>
+                <li><code>display_env</code> - Display program .env file</li>
+                <li><code>transit_env</code> - Transit program .env file</li>
+                <li><code>transit_local</code> - Transit program local.py config</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="preset-commands">
+        <button class="preset-button" onclick="setPresetCommand('wifi_scan')">Scan WiFi</button>
+        <button class="preset-button" onclick="setPresetCommand('wifi_saved')">Saved Networks</button>
+        <button class="preset-button" onclick="setPresetCommand('config_read_verbose')">Read Config (Verbose)</button>
+        <button class="preset-button" onclick="setPresetCommand('config_read_simple')">Read Config (Simple)</button>
+    </div>
+
     <div id="status">Status: Disconnected</div>
     <button id="connect" class="button">Connect Device</button>
     <div id="communication" style="display:none">
@@ -53,6 +136,32 @@ title: WebSerial Test Page
 </div>
 
 <script>
+// Preset command templates
+const PRESET_COMMANDS = {
+    wifi_scan: {
+        command: 'wifi_scan'
+    },
+    wifi_saved: {
+        command: 'wifi_saved'
+    },
+    config_read_verbose: {
+        command: 'config_read',
+        config_type: 'display_env',
+        verbose: true
+    },
+    config_read_simple: {
+        command: 'config_read',
+        config_type: 'display_env'
+    }
+};
+
+function setPresetCommand(commandKey) {
+    const command = PRESET_COMMANDS[commandKey];
+    if (command) {
+        document.getElementById('message').value = JSON.stringify(command, null, 2);
+    }
+}
+
 class WebSerialDevice {
     constructor() {
         this.port = null;

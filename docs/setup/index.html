@@ -46,28 +46,72 @@
             <div class="step">
                 <h2>Step 2: Basic Configuration</h2>
                 <p>Set up your basic display configuration.</p>
-                <button onclick="startBasicSetup()" class="button">Start Basic Setup</button>
+                <button onclick="sendConfigSet('basic_env')" class="button">Start Basic Setup</button>
             </div>
 
             <div class="step">
                 <h2>Step 3: Transit Configuration</h2>
                 <p>Configure your transit stops and preferences.</p>
-                <button onclick="startTransitSetup()" class="button">Configure Transit</button>
+                <button onclick="sendConfigSet('transit_env')" class="button">Configure Transit</button>
             </div>
 
             <div class="step">
                 <h2>Step 4: Weather Configuration</h2>
                 <p>Set up your weather display preferences.</p>
-                <button onclick="startWeatherSetup()" class="button">Configure Weather</button>
+                <button onclick="sendConfigSet('weather_env')" class="button">Configure Weather</button>
             </div>
 
             <div class="step">
                 <h2>Step 5: Review & Finish</h2>
                 <p>Review your configuration and start the display service.</p>
-                <button onclick="reviewSetup()" class="button">Review & Finish</button>
+                <button onclick="startReview()" class="button">Review & Finish</button>
             </div>
         </div>
     </div>
+
+    <script>
+        // Function to send config_set commands
+        async function sendConfigSet(configType) {
+            const command = {
+                command: 'config_set',
+                config_type: configType,
+                key: 'setup_step',
+                value: configType.split('_')[0]  // Example value based on configType
+            };
+            try {
+                await setupDevice.send(JSON.stringify(command));
+                showMessage(`Sent config_set for ${configType}`);
+            } catch (error) {
+                showError('Failed to set configuration: ' + error.message);
+            }
+        }
+        
+        // Function to start the review process
+        async function startReview() {
+            const command = {
+                command: 'config_read',
+                config_type: 'display_env',
+                verbose: true
+            };
+            try {
+                await setupDevice.send(JSON.stringify(command));
+                showMessage('Sent config_read for display_env with verbose=true');
+            } catch (error) {
+                showError('Failed to read configuration: ' + error.message);
+            }
+        }
+        
+        // Utility function to show informational messages
+        function showMessage(message) {
+            const errorDiv = document.getElementById('error-message');
+            errorDiv.textContent = message;
+            errorDiv.style.color = 'green';
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+    </script>
 
     <script src="js/setup.js" type="module"></script>
     <script src="js/wifi_setup.js" type="module"></script>

@@ -1,4 +1,13 @@
 #!/usr/bin/env python3
+
+'''
+This file implements a WebSerial server that enables communication between a web interface and a Raspberry Pi device over USB serial.
+
+
+
+Important: when adding new commands, also update the docs/setup/webserial_test.html file
+'''
+
 import serial
 import time
 import json
@@ -73,19 +82,18 @@ class WebSerialServer:
             elif command == 'wifi_forget':
                 response = self.wifi.forget_network(data.get('uuid'))
             elif command == 'config_get':
-                response = {
-                    'value': self.config.get_value(
-                        data.get('config_type'),
-                        data.get('key')
-                    )
-                }
+                value = self.config.get_value(
+                    data.get('config_type'),
+                    data.get('key')
+                )
+                response = {'status': 'success', 'value': value}
             elif command == 'config_set':
                 success = self.config.set_value(
                     data.get('config_type'),
                     data.get('key'),
                     data.get('value')
                 )
-                response = {'success': success}
+                response = {'status': 'success' if success else 'error'}
             elif command == 'config_read':
                 verbose = data.get('verbose', False)
                 content, variables = self.config.read_config(
@@ -93,6 +101,7 @@ class WebSerialServer:
                     verbose=verbose
                 )
                 response = {
+                    'status': 'success',
                     'content': content,
                     'variables': variables
                 }
@@ -101,7 +110,7 @@ class WebSerialServer:
                     data.get('config_type'),
                     data.get('content')
                 )
-                response = {'success': success}
+                response = {'status': 'success' if success else 'error'}
             else:
                 response = {'status': 'error', 'message': 'Unknown command'}
             
@@ -154,14 +163,38 @@ class WebSerialServer:
                 
                 for fd, event in events:
                     if event & select.POLLIN:
-                        data = self.ser.readline()
-                        message = data.decode().strip()
-                        logger.debug(f"Received: {message}")
-                        self.handle_message(message)
+                        try:
+                            data = self.ser.readline()
+                            if not data:
+                                logger.warning("No data received, attempting to reconnect...")
+                                self.reconnect()
+                                break
+                            message = data.decode().strip()
+                            logger.debug(f"Received: {message}")
+                            self.handle_message(message)
+                        except serial.SerialException as e:
+                            logger.error(f"Serial error: {e}")
+                            self.reconnect()
+                            break
                 
             except Exception as e:
                 logger.error(f"Error in main loop: {e}")
                 time.sleep(1)  # Prevent rapid error loops
+
+    def reconnect(self):
+        """Attempt to reconnect to the serial device"""
+        try:
+            logger.info("Attempting to reconnect...")
+            if self.ser and self.ser.is_open:
+                self.ser.close()
+            time.sleep(1)  # Wait before reconnecting
+            self.setup_serial()
+            self.poll = select.poll()
+            self.poll.register(self.ser.fileno(), select.POLLIN)
+            logger.info("Reconnected successfully")
+        except Exception as e:
+            logger.error(f"Failed to reconnect: {e}")
+            time.sleep(5)  # Wait longer before next attempt
 
     def cleanup(self):
         """Cleanup resources"""

@@ -182,18 +182,7 @@ class WebSerialDevice {
 
             // Request port access
             this.port = await navigator.serial.requestPort({
-                filters: [
-                    // USB Gadget filter
-                    { 
-                        usbVendorId: 0x1209,
-                        usbProductId: 0x0001
-                    },
-                    // Bluetooth SPP filter
-                    { 
-                        // Match EPaperDisplay name
-                        name: 'EPaperDisplay'
-                    }
-                ]
+                filters: []
             });
 
             // Open the port with standard serial settings

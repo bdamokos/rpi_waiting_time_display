@@ -6,10 +6,86 @@
 # chmod +x ~/start_display.sh
 echo "----------------------------------------"
 echo "Starting display service script (Docker Version)"
-echo "Version: 0.0.1 (2024-12-04)"  # AUTO-INCREMENT
+echo "Version: 0.0.2 (2024-12-21)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
+
+# Function to check and update a service file if needed
+check_service_file() {
+    local example_file=$1
+    local service_name
+    local installed_file
+    local needs_username_change=false
+    local current_user=$(whoami)
+    
+    # Determine if this is an example file that needs username adjustment
+    if [[ "$example_file" == *.example ]]; then
+        service_name=$(basename "$example_file" .example)
+        needs_username_change=true
+    else
+        service_name=$(basename "$example_file")
+    fi
+    installed_file="/etc/systemd/system/$service_name"
+    
+    echo "Checking $service_name..."
+    if [ -f "$example_file" ]; then
+        # Get current version from installed service file
+        INSTALLED_VERSION=""
+        if [ -f "$installed_file" ]; then
+            INSTALLED_VERSION=$(grep "^# Version: " "$installed_file" | cut -d' ' -f3)
+            
+            # Get new version from example file
+            NEW_VERSION=$(grep "^# Version: " "$example_file" | cut -d' ' -f3)
+            
+            if [ "$INSTALLED_VERSION" != "$NEW_VERSION" ]; then
+                echo "Service file $service_name needs to be updated (Current: ${INSTALLED_VERSION:-none}, New: $NEW_VERSION)"
+                if [ "$needs_username_change" = true ]; then
+                    echo "Updating service file with username $current_user..."
+                    # Create a temporary file with username replaced
+                    local temp_file=$(mktemp)
+                    sed "s|/home/pi|/home/$current_user|g" "$example_file" > "$temp_file"
+                    sed -i "s|User=pi|User=$current_user|g" "$temp_file"
+                    
+                    # Copy the modified file to systemd
+                    sudo cp "$temp_file" "$installed_file"
+                    rm "$temp_file"
+                    
+                    sudo systemctl daemon-reload
+                    echo "Service file updated and daemon reloaded."
+                else
+                    echo "Updating service file..."
+                    sudo cp "$example_file" "$installed_file"
+                    sudo systemctl daemon-reload
+                    echo "Service file updated and daemon reloaded."
+                fi
+            else
+                echo "Service file $service_name is up to date."
+            fi
+        else
+            if [ "$needs_username_change" = true ]; then
+                echo "Service $service_name is not installed."
+                echo "Creating service file with username $current_user..."
+                # Create a temporary file with username replaced
+                local temp_file=$(mktemp)
+                sed "s|/home/pi|/home/$current_user|g" "$example_file" > "$temp_file"
+                sed -i "s|User=pi|User=$current_user|g" "$temp_file"
+                
+                # Copy the modified file to systemd
+                sudo cp "$temp_file" "$installed_file"
+                rm "$temp_file"
+                
+                sudo systemctl daemon-reload
+                echo "Service file created and daemon reloaded."
+                echo "To enable the service, run: sudo systemctl enable $service_name"
+                echo "To start the service, run: sudo systemctl start $service_name"
+            else
+                echo "Warning: $service_name is not installed. If you want to use this feature, please install it first."
+                echo "Available version: $(grep "^# Version: " "$example_file" | cut -d' ' -f3)"
+            fi
+        fi
+    fi
+}
 
 # Sleep for 10 seconds to allow for network and Docker to be ready
 sleep 10
@@ -46,7 +122,20 @@ fi
 echo "Startup script is up to date."
 echo "----------------------------------------"
 
-# Step 3: Update brussels_transit and rebuild Docker image
+# Step 3: Check and update service files if needed
+echo "Checking service files..."
+cd ~/display_programme/docs/service
+
+# Check main display service (requires username adjustment)
+check_service_file "display.service.docker.example"
+
+# Check optional services (direct install)
+check_service_file "bluetooth-serial.service"
+check_service_file "webserial.service"
+
+echo "----------------------------------------"
+
+# Step 4: Update brussels_transit and rebuild Docker image
 cd ~/brussels_transit
 echo "Updating brussels_transit from git..."
 git fetch -v origin main
@@ -58,13 +147,13 @@ echo "Building Docker image..."
 docker build -t brussels_transit:latest .
 echo "----------------------------------------"
 
-# Step 4: Activate virtual environment (for display program only)
+# Step 5: Activate virtual environment (for display program only)
 echo "Activating virtual environment..."
 source ~/display_env/bin/activate
 echo "Virtual environment activated."
 echo "----------------------------------------"
 
-# Step 5: Install requirements (for display program only) if changed
+# Step 6: Install requirements (for display program only) if changed
 echo "Checking requirements..."
 cd ~/display_programme
 if [ ! -f ~/.display_requirements_version ] || \
@@ -106,7 +195,7 @@ cleanup() {
 # Trap SIGTERM and SIGINT
 trap cleanup SIGTERM SIGINT
 
-# Step 6: Clean up any existing containers
+# Step 7: Clean up any existing containers
 echo "Cleaning up any existing brussels_transit containers..."
 docker ps -q --filter "ancestor=brussels_transit:latest" | xargs -r docker stop
 
@@ -119,7 +208,7 @@ echo "----------------------------------------"
 # Wait for backend to start
 sleep 5
 
-# Step 7: Start the display program
+# Step 8: Start the display program
 cd ~/display_programme
 echo "Starting display program..."
 python basic.py &

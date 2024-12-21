@@ -6,7 +6,7 @@
 # chmod +x ~/start_display.sh
 echo "----------------------------------------"
 echo "Starting display service script"
-echo "Version: 0.0.13 (2024-12-21)"  # AUTO-INCREMENT
+echo "Version: 0.0.14 (2024-12-21)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -32,8 +32,8 @@ check_service_file() {
     if [ -f "$example_file" ]; then
         # Get current version from installed service file
         INSTALLED_VERSION=""
-        if [ -f "$installed_file" ]; then
-            INSTALLED_VERSION=$(grep "^# Version: " "$installed_file" | cut -d' ' -f3)
+        if sudo test -f "$installed_file"; then
+            INSTALLED_VERSION=$(sudo grep "^# Version: " "$installed_file" 2>/dev/null | cut -d' ' -f3)
             
             # Get new version from example file
             NEW_VERSION=$(grep "^# Version: " "$example_file" | cut -d' ' -f3)
@@ -41,18 +41,24 @@ check_service_file() {
             if [ "$INSTALLED_VERSION" != "$NEW_VERSION" ]; then
                 echo "Service file $service_name needs to be updated (Current: ${INSTALLED_VERSION:-none}, New: $NEW_VERSION)"
                 if [ "$needs_username_change" = true ]; then
-                    echo "Updating service file with username $current_user..."
-                    # Create a temporary file with username replaced
-                    local temp_file=$(mktemp)
-                    sed "s|/home/pi|/home/$current_user|g" "$example_file" > "$temp_file"
-                    sed -i "s|User=pi|User=$current_user|g" "$temp_file"
-                    
-                    # Copy the modified file to systemd
-                    sudo cp "$temp_file" "$installed_file"
-                    rm "$temp_file"
-                    
-                    sudo systemctl daemon-reload
-                    echo "Service file updated and daemon reloaded."
+                    # Only update if this is the service file for the current mode
+                    if [ "$example_file" = "display.service.example" ]; then
+                        echo "Updating service file with username $current_user..."
+                        # Create a temporary file with username replaced
+                        local temp_file=$(mktemp)
+                        sed "s|/home/pi|/home/$current_user|g" "$example_file" > "$temp_file"
+                        sed -i "s|User=pi|User=$current_user|g" "$temp_file"
+                        
+                        # Copy the modified file to systemd
+                        sudo cp "$temp_file" "$installed_file"
+                        rm "$temp_file"
+                        
+                        sudo systemctl daemon-reload
+                        echo "Service file updated and daemon reloaded."
+                    else
+                        echo "This is an alternative service mode. Not installing automatically."
+                        echo "To switch to this mode, use the switch_display_mode.sh script."
+                    fi
                 else
                     echo "Updating service file..."
                     sudo cp "$example_file" "$installed_file"
@@ -64,21 +70,26 @@ check_service_file() {
             fi
         else
             if [ "$needs_username_change" = true ]; then
-                echo "Service $service_name is not installed."
-                echo "Creating service file with username $current_user..."
-                # Create a temporary file with username replaced
-                local temp_file=$(mktemp)
-                sed "s|/home/pi|/home/$current_user|g" "$example_file" > "$temp_file"
-                sed -i "s|User=pi|User=$current_user|g" "$temp_file"
-                
-                # Copy the modified file to systemd
-                sudo cp "$temp_file" "$installed_file"
-                rm "$temp_file"
-                
-                sudo systemctl daemon-reload
-                echo "Service file created and daemon reloaded."
-                echo "To enable the service, run: sudo systemctl enable $service_name"
-                echo "To start the service, run: sudo systemctl start $service_name"
+                if [ "$example_file" = "display.service.example" ]; then
+                    echo "Service $service_name is not installed."
+                    echo "Creating service file with username $current_user..."
+                    # Create a temporary file with username replaced
+                    local temp_file=$(mktemp)
+                    sed "s|/home/pi|/home/$current_user|g" "$example_file" > "$temp_file"
+                    sed -i "s|User=pi|User=$current_user|g" "$temp_file"
+                    
+                    # Copy the modified file to systemd
+                    sudo cp "$temp_file" "$installed_file"
+                    rm "$temp_file"
+                    
+                    sudo systemctl daemon-reload
+                    echo "Service file created and daemon reloaded."
+                    echo "To enable the service, run: sudo systemctl enable $service_name"
+                    echo "To start the service, run: sudo systemctl start $service_name"
+                else
+                    echo "This is an alternative service mode. Not installing automatically."
+                    echo "To switch to this mode, use the switch_display_mode.sh script."
+                fi
             else
                 echo "Warning: $service_name is not installed. If you want to use this feature, please install it first."
                 echo "Available version: $(grep "^# Version: " "$example_file" | cut -d' ' -f3)"

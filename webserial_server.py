@@ -36,31 +36,53 @@ logger = logging.getLogger(__name__)
 
 class WebSerialServer:
     def __init__(self):
-        self.ser = None
+        self.serial_ports = {}  # Dictionary to hold multiple serial connections
         self.running = True
         self.wifi = WiFiConfig()
         self.config = ConfigManager()
-        self.setup_serial()
         self.poll = select.poll()
-        self.poll.register(self.ser.fileno(), select.POLLIN)
+        self.setup_serial_ports()
 
-    def setup_serial(self):
-        """Initialize serial connection"""
+    def setup_serial_ports(self):
+        """Initialize serial connections"""
         try:
-            self.ser = serial.Serial(
-                port='/dev/ttyGS0',
+            # USB Gadget Serial
+            usb_serial = serial.Serial(
+                port='/dev/ttyGS0',  # USB gadget serial port
                 baudrate=115200,
                 bytesize=serial.EIGHTBITS,
                 parity=serial.PARITY_NONE,
                 stopbits=serial.STOPBITS_ONE,
-                timeout=None,  # Changed to None for blocking mode
+                timeout=None,
                 xonxoff=False,
                 rtscts=False,
                 dsrdtr=False
             )
-            logger.info("Serial connection established")
+            self.serial_ports['usb'] = usb_serial
+            self.poll.register(usb_serial.fileno(), select.POLLIN)
+            logger.info("USB Serial connection established")
+
+            # Bluetooth Serial (if available)
+            try:
+                bt_serial = serial.Serial(
+                    port='/dev/rfcomm0',  # Default Bluetooth serial port
+                    baudrate=115200,
+                    bytesize=serial.EIGHTBITS,
+                    parity=serial.PARITY_NONE,
+                    stopbits=serial.STOPBITS_ONE,
+                    timeout=None,
+                    xonxoff=False,
+                    rtscts=False,
+                    dsrdtr=False
+                )
+                self.serial_ports['bluetooth'] = bt_serial
+                self.poll.register(bt_serial.fileno(), select.POLLIN)
+                logger.info("Bluetooth Serial connection established")
+            except Exception as e:
+                logger.info(f"Bluetooth Serial not available: {e}")
+
         except Exception as e:
-            logger.error(f"Failed to setup serial: {e}")
+            logger.error(f"Failed to setup serial ports: {e}")
             raise
 
     def handle_message(self, message):
@@ -146,8 +168,9 @@ class WebSerialServer:
         """Send response back through serial"""
         try:
             message = json.dumps(response) + '\n'
-            self.ser.write(message.encode())
-            self.ser.flush()
+            for port in self.serial_ports.values():
+                port.write(message.encode())
+                port.flush()
             logger.debug(f"Sent response: {message.strip()}")
         except Exception as e:
             logger.error(f"Failed to send response: {e}")
@@ -158,13 +181,22 @@ class WebSerialServer:
         
         while self.running:
             try:
-                # Wait for data with a 1-second timeout
                 events = self.poll.poll(1000)  # 1000ms timeout
                 
                 for fd, event in events:
                     if event & select.POLLIN:
                         try:
-                            data = self.ser.readline()
+                            # Find which port triggered the event
+                            active_port = None
+                            for port_type, port in self.serial_ports.items():
+                                if port.fileno() == fd:
+                                    active_port = port
+                                    break
+
+                            if not active_port:
+                                continue
+
+                            data = active_port.readline()
                             if not data:
                                 logger.warning("No data received, attempting to reconnect...")
                                 self.reconnect()
@@ -185,12 +217,11 @@ class WebSerialServer:
         """Attempt to reconnect to the serial device"""
         try:
             logger.info("Attempting to reconnect...")
-            if self.ser and self.ser.is_open:
-                self.ser.close()
+            for port in self.serial_ports.values():
+                if port.is_open:
+                    port.close()
             time.sleep(1)  # Wait before reconnecting
-            self.setup_serial()
-            self.poll = select.poll()
-            self.poll.register(self.ser.fileno(), select.POLLIN)
+            self.setup_serial_ports()
             logger.info("Reconnected successfully")
         except Exception as e:
             logger.error(f"Failed to reconnect: {e}")
@@ -200,8 +231,9 @@ class WebSerialServer:
         """Cleanup resources"""
         logger.info("Cleaning up...")
         self.running = False
-        if self.ser and self.ser.is_open:
-            self.ser.close()
+        for port in self.serial_ports.values():
+            if port.is_open:
+                port.close()
         logger.info("Cleanup complete")
 
 if __name__ == "__main__":

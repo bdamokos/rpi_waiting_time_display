@@ -1,7 +1,7 @@
 [Unit]
 Description=WebSerial Configuration Interface
-After=network.target
-Wants=network.target
+After=network.target bluetooth.target
+Wants=network.target bluetooth.target
 
 [Service]
 Type=simple

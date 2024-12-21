@@ -8,6 +8,7 @@ from logging.handlers import RotatingFileHandler
 from wifi_config import WiFiConfig
 import logging
 import log_config
+from config_manager import ConfigManager
 
 # Set up logging
 logging.basicConfig(
@@ -29,6 +30,7 @@ class WebSerialServer:
         self.ser = None
         self.running = True
         self.wifi = WiFiConfig()
+        self.config = ConfigManager()
         self.setup_serial()
         self.poll = select.poll()
         self.poll.register(self.ser.fileno(), select.POLLIN)
@@ -70,12 +72,36 @@ class WebSerialServer:
                 )
             elif command == 'wifi_forget':
                 response = self.wifi.forget_network(data.get('uuid'))
-            elif command == 'basic_setup':
-                response = self.handle_basic_setup(data)
-            elif command == 'transit_setup':
-                response = self.handle_transit_setup(data)
-            elif command == 'weather_setup':
-                response = self.handle_weather_setup(data)
+            elif command == 'config_get':
+                response = {
+                    'value': self.config.get_value(
+                        data.get('config_type'),
+                        data.get('key')
+                    )
+                }
+            elif command == 'config_set':
+                success = self.config.set_value(
+                    data.get('config_type'),
+                    data.get('key'),
+                    data.get('value')
+                )
+                response = {'success': success}
+            elif command == 'config_read':
+                verbose = data.get('verbose', False)
+                content, variables = self.config.read_config(
+                    data.get('config_type'),
+                    verbose=verbose
+                )
+                response = {
+                    'content': content,
+                    'variables': variables
+                }
+            elif command == 'config_update':
+                success = self.config.update_config(
+                    data.get('config_type'),
+                    data.get('content')
+                )
+                response = {'success': success}
             else:
                 response = {'status': 'error', 'message': 'Unknown command'}
             

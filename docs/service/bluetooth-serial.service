@@ -1,5 +1,5 @@
 [Unit]
-# Version: 0.0.4 (2024-12-21) # AUTO-INCREMENT
+# Version: 0.0.6 (2024-12-21) # AUTO-INCREMENT
 Description=Bluetooth Serial Port Service
 After=bluetooth.target
 Requires=bluetooth.target
@@ -8,6 +8,7 @@ Requires=bluetooth.target
 Type=simple
 ExecStartPre=/bin/sh -c '/usr/bin/rfcomm release all || true'
 ExecStartPre=/bin/sh -c '/usr/bin/hciconfig hci0 name "EPaperDisplay" && /usr/bin/hciconfig hci0 class 0x000100'
+ExecStartPre=/bin/sh -c '/usr/bin/sdptool add --channel=1 SP || true'
 ExecStart=/bin/sh -c '\
     /usr/bin/rfcomm bind 0 00:00:00:00:00:00 1 && \
     while true; do \

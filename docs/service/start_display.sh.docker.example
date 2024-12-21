@@ -6,7 +6,7 @@
 # chmod +x ~/start_display.sh
 echo "----------------------------------------"
 echo "Starting display service script (Docker Version)"
-echo "Version: 0.0.3 (2024-12-21)"  # AUTO-INCREMENT
+echo "Version: 0.0.4 (2024-12-21)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -142,7 +142,7 @@ check_service_file "display.service.docker.example"
 
 # Check optional services (direct install)
 check_service_file "bluetooth-serial.service"
-check_service_file "webserial.service"
+check_service_file "webserial.service.example"
 
 echo "----------------------------------------"
 

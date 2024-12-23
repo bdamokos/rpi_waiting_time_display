@@ -48,7 +48,7 @@ def _parse_lines(lines_str: str) -> list:
         logger.error("No bus lines configured")
         return []
     
-    # Remove any whitespace
+    # Remove leading/trailing whitespace
     lines_str = lines_str.strip()
     
     # Handle list-like formats
@@ -71,9 +71,10 @@ def _parse_lines(lines_str: str) -> list:
         return [str(int(lines_str))]
     except ValueError:
         # If that fails, try to split and parse as list
-        # Remove all whitespace and split on comma
-        cleaned = ''.join(lines_str.split())  # Remove all whitespace
-        cleaned = cleaned.replace(',', ' ').split()  # Split on comma or space
+        # First replace commas with spaces
+        cleaned = lines_str.replace(',', ' ')
+        # Split on whitespace and filter out empty strings
+        cleaned = [x.strip() for x in cleaned.split() if x.strip()]
         
         # Convert to integers and back to strings to validate and normalize
         try:

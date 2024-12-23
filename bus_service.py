@@ -43,6 +43,7 @@ def _parse_lines(lines_str: str) -> list:
     - Mixed format: "64, 59"
     - List format: [59, 64]
     - String list format: ["59", "64"]
+    - Preserves leading zeros: "0090" stays "0090"
     """
     if not lines_str:
         logger.error("No bus lines configured")
@@ -61,14 +62,18 @@ def _parse_lines(lines_str: str) -> list:
         # Split on comma and handle quotes
         items = [item.strip().strip('"\'') for item in content.split(',')]
         try:
-            return [str(int(item)) for item in items]
+            # Verify each item is a valid number but return original string
+            for item in items:
+                int(item)  # Just to validate it's a number
+            return items
         except ValueError as e:
             logger.error(f"Invalid number in list format: {e}")
             return []
     
     try:
-        # Try to parse as a single number
-        return [str(int(lines_str))]
+        # Try to parse as a single number (validate but preserve format)
+        int(lines_str)  # Just to validate it's a number
+        return [lines_str]
     except ValueError:
         # If that fails, try to split and parse as list
         # First replace commas with spaces
@@ -76,9 +81,11 @@ def _parse_lines(lines_str: str) -> list:
         # Split on whitespace and filter out empty strings
         cleaned = [x.strip() for x in cleaned.split() if x.strip()]
         
-        # Convert to integers and back to strings to validate and normalize
+        # Validate numbers but preserve original format
         try:
-            return [str(int(line)) for line in cleaned]
+            for line in cleaned:
+                int(line)  # Just to validate it's a number
+            return cleaned
         except ValueError as e:
             logger.error(f"Invalid bus line number format: {e}")
             return []
@@ -249,7 +256,16 @@ class BusService:
                 all_times = []
                 minutes_source = None
                 minutes_keys = ['minutes', 'scheduled_minutes', 'realtime_minutes']
+                
+                # Get line display name from metadata if available
+                display_line = line  # Default to route ID
+                if '_metadata' in line_data and 'route_short_name' in line_data['_metadata']:
+                    display_line = line_data['_metadata']['route_short_name']
+                    logger.debug(f"Using display line number {display_line} for route {line}")
+                
                 for destination, times in line_data.items():
+                    if destination == '_metadata':  # Skip metadata
+                        continue
                     logger.debug(f"Processing destination: {destination}")
                     for bus in times:
                         # Get all available minutes values
@@ -274,6 +290,7 @@ class BusService:
                         else:
                             minutes_source = None
                             minutes = None
+                            minutes_emoji = ''
                         time = f"{minutes_emoji}{minutes}"
                         message = None
                         
@@ -336,7 +353,7 @@ class BusService:
                 primary_color, secondary_color, ratio = self.get_line_color(line)
 
                 bus_times.append({
-                    "line": line,
+                    "line": display_line,  # Use display line number
                     "times": waiting_times,
                     "messages": messages,
                     "colors": (primary_color, secondary_color, ratio)

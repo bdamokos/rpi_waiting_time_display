@@ -6,7 +6,7 @@ from pathlib import Path
 import logging
 from display_adapter import display_full_refresh, initialize_display, display_cleanup
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from weather import WeatherService, draw_weather_display
 from bus_service import BusService, update_display
 import importlib
@@ -169,21 +169,10 @@ class BusManager:
         }
         self.last_update = None
         self._lock = threading.Lock()
-        self._thread = None
-        self._stop_event = threading.Event()
         logger.info("BusManager initialized")
 
-    def start(self):
-        logger.info("Starting bus manager thread...")
-        self._thread = threading.Thread(target=self._update_bus_data, daemon=True)
-        self._thread.start()
-        logger.info("Bus manager thread started")
-        # Get initial bus data
-        logger.info("Getting initial bus data...")
-        self._update_bus_data_once()
-
-    def _update_bus_data_once(self):
-        """Get bus data once"""
+    def fetch_data(self):
+        """Fetch new bus data on demand"""
         try:
             logger.debug("Fetching new bus data...")
             data, error_message, stop_name = self.bus_service.get_waiting_times()
@@ -204,22 +193,6 @@ class BusManager:
             logger.error(f"Error updating bus data: {e}")
             logger.debug(traceback.format_exc())
 
-    def _update_bus_data(self):
-        """Bus update loop"""
-        logger.info("Bus update loop started")
-        while not self._stop_event.is_set():
-            try:
-                logger.debug("Starting bus data update cycle")
-                self._update_bus_data_once()
-                logger.debug("Bus data update cycle completed")
-            except Exception as e:
-                logger.error(f"Error in bus update loop: {e}")
-                logger.debug(traceback.format_exc())
-            
-            sleep_time = min(30, BUS_DATA_MAX_AGE - 5)  # Update at least 5 seconds before data becomes stale
-            logger.debug(f"Sleeping for {sleep_time} seconds")
-            time.sleep(sleep_time)
-
     def get_bus_data(self):
         """Get current bus data"""  
         with self._lock:
@@ -233,22 +206,12 @@ class BusManager:
                 logger.warning(f"Bus data is stale (last update: {time_since_update:.0f} seconds ago)")
                 return [], f"Data stale ({time_since_update:.0f}s old)", self.bus_data['stop_name']
             
-            logger.debug(f"Returning bus data from {self.last_update.strftime('%H:%M:%S')} (age: {time_since_update:.1f}s) with times: {[bus.get('times', []) for bus in self.bus_data['data']]}")
+            logger.debug(f"Returning bus data from {self.last_update.strftime('%H:%M:%S')} (age: {time_since_update:.1f}s)")
             return (
                 self.bus_data['data'],
                 self.bus_data['error_message'],
                 self.bus_data['stop_name']
-        )
-
-    def stop(self):
-        if self._thread:
-            logger.info("Stopping bus manager thread...")
-            self._stop_event.set()
-            try:
-                self._thread.join(timeout=1.0)
-                logger.info("Bus manager thread stopped")
-            except TimeoutError:
-                logger.warning("Bus thread did not stop cleanly")
+            )
 
     def get_valid_bus_data(self):
         """Get current bus data if it's valid"""
@@ -295,15 +258,18 @@ class DisplayManager:
         self.iss_tracker = None
         self._iss_thread = None
         self.in_iss_mode = False
+        self.prefetch_offset = 10  # seconds before display update to fetch new data
+        self.display_interval = DISPLAY_REFRESH_INTERVAL
+        self.next_update_time = None
+        self.next_prefetch_time = None
         logger.info(f"DisplayManager initialized with min refresh interval: {self.min_refresh_interval}s")
         logger.info(f"DisplayManager initialized with coordinates: {self.coordinates_lat}, {self.coordinates_lng}")
         logger.info(f"DisplayManager initialized with flight mode duration: {self.flight_mode_duration}s")
         
     def start(self):
         logger.info("Starting display manager components...")
-        # Start data managers first
+        # Start weather manager
         self.weather_manager.start()
-        self.bus_manager.start()
         
         # Initialize flight monitoring if enabled
         if self.flights_enabled:
@@ -313,7 +279,8 @@ class DisplayManager:
         # Initialize ISS tracking if enabled
         self.initialize_iss_tracking()
         
-        # Wait briefly for initial data
+        # Get initial bus data
+        self.bus_manager.fetch_data()
         time.sleep(2)
         
         # Force first display update
@@ -486,9 +453,19 @@ class DisplayManager:
         time_since_last_update = (current_time - self.last_display_update).total_seconds()
         return time_since_last_update >= self.min_refresh_interval
 
+    def _schedule_next_update(self):
+        """Schedule the next update and prefetch times"""
+        current_time = datetime.now()
+        self.next_update_time = current_time + timedelta(seconds=self.display_interval)
+        self.next_prefetch_time = self.next_update_time - timedelta(seconds=self.prefetch_offset)
+        logger.debug(f"Next update scheduled for {self.next_update_time.strftime('%H:%M:%S')}")
+        logger.debug(f"Next prefetch scheduled for {self.next_prefetch_time.strftime('%H:%M:%S')}")
+
     def _check_display_updates(self):
         """Continuously check for updates and switch modes as needed"""
-        last_flight_log = 0
+        self._schedule_next_update()  # Initial schedule
+        last_flight_log = 0  # Add this back
+
         while not self._stop_event.is_set():
             try:
                 if self.in_iss_mode:
@@ -497,8 +474,8 @@ class DisplayManager:
                     continue
                 
                 current_time = datetime.now()
-                
-                # Check if we need to exit flight mode
+
+                # Handle flight mode checks
                 with self._flight_lock:
                     if self.in_flight_mode:
                         time_in_flight_mode = (current_time - self.flight_mode_start).total_seconds()
@@ -516,22 +493,21 @@ class DisplayManager:
                         time.sleep(1)  # Add sleep when in flight mode
                         continue
 
-                # Only check for updates every DISPLAY_REFRESH_MINIMAL_TIME seconds
-                time_since_last_update = (current_time - self.last_display_update).total_seconds()
-                if time_since_last_update < DISPLAY_REFRESH_MINIMAL_TIME:
-                    time.sleep(1)
-                    continue
+                # Check if it's time to prefetch data
+                if current_time >= self.next_prefetch_time:
+                    logger.debug("Prefetching bus data...")
+                    self.bus_manager.fetch_data()
 
-                weather_data = self.weather_manager.get_weather_data() if weather_enabled else None
-                valid_bus_data = self.bus_manager.get_valid_bus_data()
-                error_message = None
-                stop_name = self.bus_manager.get_stop_name()
+                # Check if it's time to update display
+                if current_time >= self.next_update_time:
+                    logger.debug("Updating display...")
+                    weather_data = self.weather_manager.get_weather_data() if weather_enabled else None
+                    valid_bus_data = self.bus_manager.get_valid_bus_data()
+                    error_message = None
+                    stop_name = self.bus_manager.get_stop_name()
 
-                with self._display_lock:
-                    # Priority 1: Bus data
-                    if valid_bus_data and not error_message:
-                        logger.debug(f"Time since last update: {time_since_last_update:.1f}s, DISPLAY_REFRESH_INTERVAL: {DISPLAY_REFRESH_INTERVAL}s, in_weather_mode: {self.in_weather_mode}")
-                        if time_since_last_update >= DISPLAY_REFRESH_INTERVAL or self.in_weather_mode:
+                    with self._display_lock:
+                        if valid_bus_data and not error_message:
                             logger.info("Updating bus display...")
                             self.in_weather_mode = False
                             self.perform_full_refresh()
@@ -540,13 +516,7 @@ class DisplayManager:
                             self.last_display_update = datetime.now()
                             self.update_count += 1
                             logger.info("Bus display updated successfully")
-                        else:
-                            logger.debug(f"Skipping bus display update (waiting {DISPLAY_REFRESH_INTERVAL - time_since_last_update:.1f}s)")
-                    
-                    # Priority 2: Weather
-                    elif weather_enabled and weather_data:
-                        if (not self.in_weather_mode or 
-                            time_since_last_update >= WEATHER_UPDATE_INTERVAL):
+                        elif weather_enabled and weather_data:
                             logger.info("Updating weather display...")
                             self.in_weather_mode = True
                             self.perform_full_refresh()
@@ -556,11 +526,15 @@ class DisplayManager:
                             self.last_display_update = datetime.now()
                             logger.info("Weather display updated successfully")
 
+                    # Schedule next update cycle
+                    self._schedule_next_update()
+
             except Exception as e:
                 logger.error(f"Error in display update checker: {e}")
                 logger.debug(traceback.format_exc())
 
-            time.sleep(DISPLAY_REFRESH_MINIMAL_TIME)  # Add minimum sleep between checks
+            # Sleep for a short time to prevent CPU spinning
+            time.sleep(1)
 
     def needs_full_refresh(self):
         return self.update_count >= (DISPLAY_REFRESH_FULL_INTERVAL // DISPLAY_REFRESH_INTERVAL)
@@ -593,7 +567,6 @@ class DisplayManager:
                     logger.warning(f"{thread.name} did not stop cleanly")
         
         self.weather_manager.stop()
-        self.bus_manager.stop()
         logger.info("Display manager cleanup completed")
 
 def main():

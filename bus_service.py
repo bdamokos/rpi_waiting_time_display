@@ -553,6 +553,8 @@ def update_display(epd, weather_data=None, bus_data=None, error_message=None, st
                 time = str(time) + "'"
             if time.lower()=="0'" or time.lower()=="0":
                 time = "↓↓"
+            if  time.lower()=="⚡0'" or time.lower()=="⚡ 0":
+                time = "⚡↓↓"
             # Calculate width needed for this time + message
             time_bbox = draw.textbbox((0, 0), time, font=font_medium)
             time_width = time_bbox[2] - time_bbox[0]

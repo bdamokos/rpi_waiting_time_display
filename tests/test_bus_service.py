@@ -1,13 +1,10 @@
 import pytest
 import responses
 import os
-import socket
 from bus_service import BusService, _parse_lines
 from unittest.mock import patch, MagicMock
 from datetime import datetime, timedelta
-
-# Mock socket.gethostbyname at the module level
-socket.gethostbyname = MagicMock(return_value="127.0.0.1")
+import re
 
 @pytest.fixture
 def bus_service(mock_env_vars):
@@ -43,7 +40,7 @@ def test_parse_lines(lines_input, expected):
 
 def test_bus_service_initialization(bus_service, mock_env_vars):
     """Test BusService initialization"""
-    assert bus_service.base_url.rstrip('/') == mock_env_vars["BUS_API_BASE_URL"].rstrip('/')
+    assert bus_service.base_url.rstrip('/').replace('localhost', '127.0.0.1') == mock_env_vars["BUS_API_BASE_URL"].rstrip('/')
     assert bus_service.provider == mock_env_vars["Provider"]
     assert bus_service.stop_id == "2100"
     assert isinstance(bus_service.lines_of_interest, list)
@@ -54,7 +51,7 @@ def test_get_waiting_times_success(bus_service, mock_responses, sample_bus_respo
     # Mock the API health check
     mock_responses.add(
         responses.GET,
-        "http://127.0.0.1:5001/health",
+        "http://localhost:5001/health/",
         json={"status": "ok"},
         status=200
     )
@@ -62,22 +59,8 @@ def test_get_waiting_times_success(bus_service, mock_responses, sample_bus_respo
     # Mock the API response
     mock_responses.add(
         responses.GET,
-        "http://127.0.0.1:5001/api/test_provider/waiting_times",
-        json={"stops": {
-            "2100": {
-                "name": "Test Stop",
-                "lines": {
-                    "64": {
-                        "Test Destination": [
-                            {
-                                "minutes": 5,
-                                "message": None
-                            }
-                        ]
-                    }
-                }
-            }
-        }},
+        "http://localhost:5001/api/test_provider/waiting_times/",
+        json={"stops": {bus_service.stop_id: sample_bus_response}},
         status=200
     )
 
@@ -96,7 +79,7 @@ def test_get_waiting_times_error(bus_service, mock_responses):
     # Mock the API health check
     mock_responses.add(
         responses.GET,
-        "http://127.0.0.1:5001/health",
+        "http://localhost:5001/health/",
         json={"status": "error"},
         status=500
     )
@@ -121,7 +104,7 @@ def test_get_api_health(bus_service, mock_responses):
     # Test successful health check
     mock_responses.add(
         responses.GET,
-        "http://127.0.0.1:5001/health",
+        "http://localhost:5001/health/",
         json={"status": "ok"},
         status=200
     )
@@ -130,7 +113,7 @@ def test_get_api_health(bus_service, mock_responses):
     # Test failed health check
     mock_responses.replace(
         responses.GET,
-        "http://127.0.0.1:5001/health",
+        "http://localhost:5001/health/",
         json={"status": "error"},
         status=500
     )

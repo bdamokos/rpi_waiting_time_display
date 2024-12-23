@@ -13,3 +13,6 @@ stations.txt
 de421.bsp
 de440.bsp
 de441.bsp
+.vscode/
+__pycache__/
+htmlcov/

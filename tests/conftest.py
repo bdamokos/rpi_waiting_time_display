@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 @pytest.fixture(autouse=True)
 def load_env():
     """Load environment variables from .env file for all tests"""
-    load_dotenv()
+    pass
 
 @pytest.fixture
 def mock_env_vars(monkeypatch):
@@ -23,10 +23,10 @@ def mock_env_vars(monkeypatch):
         'Coordinates_LNG': '-0.1257',
         'City': 'Test City',
         'Country': 'Test Country',
-        'BUS_API_BASE_URL': 'http://localhost:5001/',
+        'BUS_API_BASE_URL': 'http://127.0.0.1:5001/',
         'Provider': 'test_provider',
         'Lines': '64,59',
-        'Stop': 'test_stop',
+        'Stops': '2100',
         'mock_display_type': 'bw',
         'display_model': 'epd2in13'
     }
@@ -61,7 +61,7 @@ def sample_weather_response():
 def sample_bus_response():
     """Fixture providing a sample bus API response"""
     return {
-        "stop_name": "Test Stop",
+        "name": "Test Stop",
         "lines": {
             "64": {
                 "Test Destination": [

@@ -86,7 +86,7 @@ def _parse_lines(lines_str: str) -> list:
 class BusService:
     def __init__(self):
         self.base_url = self._resolve_base_url()
-        self.provider = bus_provider
+        self.provider = os.getenv("Provider", "stib")
         logger.debug(f"Bus provider: {self.provider}. Resolved Base URL: {self.base_url}")
         self.api_url = f"{self.base_url}/api/{self.provider}/waiting_times"
         logger.debug(f"API URL: {self.api_url}")

@@ -24,7 +24,6 @@ class MockDisplay:
         self.width = 120
         
         # Get mock display type from environment
-        dotenv.load_dotenv(override=True)
         self.mock_display_type = os.getenv('mock_display_type', 'bw').lower()
         
         # Standard colors

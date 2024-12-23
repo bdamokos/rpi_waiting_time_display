@@ -159,10 +159,12 @@ class BusService:
         
         return color1, color2, ratio
 
+    @lru_cache(maxsize=1024)
     def get_line_color(self, line: str) -> Tuple[str, str, float]:
         """
         Get the dithering colors and ratio for a specific bus line
         Returns (primary_color, secondary_color, primary_ratio)
+        Cached to avoid repeated API calls for the same line number
         """
         try:
             response = requests.get(f"{self.colors_url}/{line}")

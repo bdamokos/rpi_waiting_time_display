@@ -51,7 +51,7 @@ def test_get_waiting_times_success(bus_service, mock_responses, sample_bus_respo
     # Mock the API health check
     mock_responses.add(
         responses.GET,
-        "http://localhost:5001/health/",
+        "http://localhost:5001/health",
         json={"status": "ok"},
         status=200
     )
@@ -79,7 +79,7 @@ def test_get_waiting_times_error(bus_service, mock_responses):
     # Mock the API health check
     mock_responses.add(
         responses.GET,
-        "http://localhost:5001/health/",
+        "http://localhost:5001/health",
         json={"status": "error"},
         status=500
     )
@@ -104,7 +104,7 @@ def test_get_api_health(bus_service, mock_responses):
     # Test successful health check
     mock_responses.add(
         responses.GET,
-        "http://localhost:5001/health/",
+        "http://localhost:5001/health",
         json={"status": "ok"},
         status=200
     )
@@ -113,7 +113,7 @@ def test_get_api_health(bus_service, mock_responses):
     # Test failed health check
     mock_responses.replace(
         responses.GET,
-        "http://localhost:5001/health/",
+        "http://localhost:5001/health",
         json={"status": "error"},
         status=500
     )

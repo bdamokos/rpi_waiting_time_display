@@ -463,7 +463,7 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
     qr_img = qr_img.convert('RGB')
 
     # Scale QR code to larger size
-    qr_size = 58
+    qr_size = 54
     qr_img = qr_img.resize((qr_size, qr_size))
     qr_x = Himage.width - qr_size - MARGIN
     qr_y = MARGIN

@@ -42,7 +42,7 @@ def test_bus_service_initialization(bus_service, mock_env_vars):
     """Test BusService initialization"""
     assert bus_service.base_url.rstrip('/').replace('localhost', '127.0.0.1') == mock_env_vars["BUS_API_BASE_URL"].rstrip('/')
     assert bus_service.provider == mock_env_vars["Provider"]
-    assert bus_service.stop_id == "2100"
+    assert bus_service.stop_id == "F00583"
     assert isinstance(bus_service.lines_of_interest, list)
 
 @responses.activate

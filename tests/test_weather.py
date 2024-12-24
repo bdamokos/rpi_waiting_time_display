@@ -8,7 +8,13 @@ from unittest.mock import patch, MagicMock
 def weather_service(mock_env_vars):
     """Fixture providing a WeatherService instance with mocked environment variables"""
     with patch.dict(os.environ, mock_env_vars, clear=True):
-        return WeatherService()
+        with patch('weather.weather_api_key', mock_env_vars['OPENWEATHER_API_KEY']), \
+             patch('weather.coordinates_lat', mock_env_vars['Coordinates_LAT']), \
+             patch('weather.coordinates_lng', mock_env_vars['Coordinates_LNG']), \
+             patch('weather.city', mock_env_vars['City']), \
+             patch('weather.country', mock_env_vars['Country']):
+            service = WeatherService()
+            return service
 
 @pytest.fixture
 def mock_responses():

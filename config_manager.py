@@ -40,7 +40,10 @@ class ConfigManager:
     def _safe_path(self, base_path: Path, filename: str) -> Path:
         """Safely resolve a file path relative to a base path"""
         try:
+            # Validate base_path first
             base_path = Path(base_path).resolve()
+            if not base_path.exists():
+                raise ValueError("Base path does not exist")
             
             # Explicit whitelist for allowed dotfiles
             ALLOWED_DOTFILES = {'.env', '.env.example', '.env.backup', 'local.py', 'local.py.example'}
@@ -51,14 +54,19 @@ class ConfigManager:
                 for prefix in ['.env', 'local.py']
             )
             
-            if filename in ALLOWED_DOTFILES or is_backup:
-                sanitized_filename = filename
-            else:
+            # Validate filename before constructing path
+            if not (filename in ALLOWED_DOTFILES or is_backup):
                 raise ValueError(f"Invalid filename: {filename}")
+            
+            # Prevent directory traversal by removing path separators
+            clean_filename = os.path.basename(filename)
+            if clean_filename != filename:
+                raise ValueError("Path traversal detected in filename")
                 
-            file_path = (base_path / sanitized_filename).resolve()
-
-            # Check if the resolved path is within the base directory
+            # Construct and validate the final path
+            file_path = (base_path / clean_filename).resolve()
+            
+            # Ensure the resolved path is within the base directory
             if not str(file_path).startswith(str(base_path)):
                 raise ValueError("Path traversal detected")
                 
@@ -277,11 +285,29 @@ class ConfigManager:
             if config_type not in self.config_files:
                 raise ValueError(f"Unknown config type: {config_type}")
 
-            backup_path = self._safe_path(self.backup_dirs[config_type], backup_file)
+            # Get and validate the backup directory
+            backup_dir = self.backup_dirs.get(config_type)
+            if not backup_dir:
+                raise ValueError(f"No backup directory for config type: {config_type}")
+
+            # Validate and resolve the backup file path
+            backup_path = self._safe_path(backup_dir, backup_file)
             if not backup_path.exists():
                 raise ValueError(f"Backup file does not exist: {backup_file}")
 
-            shutil.copy(backup_path, self.config_files[config_type])
+            # Get and validate the target config file path
+            target_path = self.config_files[config_type]
+            if not isinstance(target_path, Path):
+                raise ValueError("Invalid target path")
+            target_path = target_path.resolve()
+
+            # Ensure the target path is within one of our managed directories
+            if not any(str(target_path).startswith(str(base_dir.resolve())) 
+                      for base_dir in [self.display_dir, self.transit_dir]):
+                raise ValueError("Invalid target path location")
+
+            # Perform the copy operation
+            shutil.copy2(backup_path, target_path)
             return True
 
         except Exception as e:

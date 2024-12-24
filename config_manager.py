@@ -38,42 +38,46 @@ class ConfigManager:
             backup_dir.mkdir(parents=True, exist_ok=True)
 
     def _safe_path(self, base_path: Path, filename: str) -> Path:
-        """Safely resolve a file path relative to a base path"""
+        """Validate and resolve a file path safely"""
         try:
-            # Validate base_path first
-            base_path = Path(base_path).resolve()
-            if not base_path.exists():
-                raise ValueError("Base path does not exist")
+            # Ensure base_path is a Path object and exists
+            if not isinstance(base_path, Path) or not base_path.exists():
+                raise ValueError("Invalid base path")
             
-            # Explicit whitelist for allowed dotfiles
-            ALLOWED_DOTFILES = {'.env', '.env.example', '.env.backup', 'local.py', 'local.py.example'}
-            
-            # Check if it's a backup file with timestamp
-            is_backup = any(
-                filename.startswith(f"{prefix}.backup.") and filename.split('.')[-1].isdigit()
-                for prefix in ['.env', 'local.py']
-            )
-            
-            # Validate filename before constructing path
-            if not (filename in ALLOWED_DOTFILES or is_backup):
-                raise ValueError(f"Invalid filename: {filename}")
+            # Normalize the base path
+            base_path = base_path.resolve()
             
             # Prevent directory traversal by removing path separators
             clean_filename = os.path.basename(filename)
             if clean_filename != filename:
                 raise ValueError("Path traversal detected in filename")
-                
+            
+            # Additional validation for backup files
+            if '.backup.' in clean_filename:
+                # Ensure the backup file follows our naming convention
+                parts = clean_filename.split('.backup.')
+                if len(parts) != 2 or not parts[1].isdigit() or len(parts[1]) != 20:  # YYYYMMDDHHmmssxxxxxx
+                    raise ValueError("Invalid backup filename format")
+            
             # Construct and validate the final path
             file_path = (base_path / clean_filename).resolve()
             
             # Ensure the resolved path is within the base directory
             if not str(file_path).startswith(str(base_path)):
                 raise ValueError("Path traversal detected")
+            
+            # Additional check: ensure the parent directory exists and is within base_path
+            parent_dir = file_path.parent.resolve()
+            if not str(parent_dir).startswith(str(base_path)):
+                raise ValueError("Invalid parent directory")
                 
             return file_path
+        except ValueError as e:
+            logger.error(f"Path validation error: {e}")
+            raise  # Re-raise the original ValueError with its message
         except Exception as e:
             logger.error(f"Path validation error: {e}")
-            raise ValueError("Invalid path")
+            raise ValueError(f"Invalid path: {str(e)}")
 
     def _get_example_config_type(self, config_type: str) -> str:
         """Get the example config type for a given config type"""
@@ -129,16 +133,23 @@ class ConfigManager:
     def _should_create_backup(self) -> bool:
         """Determine if a new backup should be created based on session timing"""
         current_time = datetime.now()
-        
-        # If this is the first change or we've exceeded the timeout
-        if (self.last_change_time is None or 
-            (current_time - self.last_change_time).total_seconds() > self.SESSION_TIMEOUT):
+        logger.debug(f"Checking if backup should be created. last_change_time: {self.last_change_time}, current_time: {current_time}")
+
+        # Always create a backup if last_change_time is None
+        if self.last_change_time is None:
+            logger.debug("Creating new backup: no previous change time")
             self.current_session = current_time
-            self.last_change_time = current_time
             return True
-            
-        # Update last change time but don't create backup
-        self.last_change_time = current_time
+
+        # Create a backup if we've exceeded the timeout
+        time_diff = (current_time - self.last_change_time).total_seconds()
+        if time_diff > self.SESSION_TIMEOUT:
+            logger.debug(f"Creating new backup: session timeout exceeded ({time_diff} seconds)")
+            self.current_session = current_time
+            return True
+
+        # Don't create a backup if we're within the same session
+        logger.debug(f"Not creating backup: within same session (time_diff: {time_diff} seconds)")
         return False
 
     def read_config(self, config_type: str, verbose: bool = False) -> Tuple[str, Dict[str, str]]:
@@ -217,29 +228,75 @@ class ConfigManager:
             file_path = self.config_files[config_type]
             backup_dir = self.backup_dirs.get(config_type)
 
-            if backup_dir and self._should_create_backup():
-                # Create backup
-                timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
-                backup_path = backup_dir / f"{file_path.name}.backup.{timestamp}"
-                if file_path.exists():
-                    shutil.copy(file_path, backup_path)
+            # Ensure parent directory exists
+            file_path.parent.mkdir(parents=True, exist_ok=True)
 
-                # Rotate backups (keep last 5)
-                self._rotate_backups(backup_dir)
+            # Create backup if needed
+            if backup_dir:
+                # Create backup directory if it doesn't exist
+                backup_dir.mkdir(parents=True, exist_ok=True);
+
+                # Check if we should create a backup
+                should_backup = self._should_create_backup()
+                logger.debug(f"Should create backup: {should_backup}, last_change_time: {self.last_change_time}")
+
+                if should_backup:
+                    # Create backup with current timestamp (including milliseconds)
+                    timestamp = datetime.now().strftime('%Y%m%d%H%M%S%f')[:20]  # YYYYMMDDHHmmssxxxxxx
+                    backup_path = backup_dir / f"{file_path.name}.backup.{timestamp}"
+
+                    # If file exists, copy it; otherwise create an empty backup
+                    if file_path.exists():
+                        shutil.copy2(file_path, backup_path)
+                    else:
+                        backup_path.write_text("")
+
+                    logger.debug(f"Created backup: {backup_path}")
+                    # Update last_change_time only after successful backup creation
+                    self.last_change_time = datetime.now()
+                else:
+                    logger.debug("Backup not created: within same session")
 
             # Write new content
             file_path.write_text(content)
+            logger.debug(f"Updated config file: {file_path}")
+
+            # Rotate backups after writing new content
+            if backup_dir:
+                # Get current backup files
+                backup_files = []
+                for f in backup_dir.glob(f"{file_path.name}.backup.*"):
+                    if f.is_file():
+                        try:
+                            timestamp = f.name.split('.backup.')[1]
+                            if timestamp.isdigit() and len(timestamp) == 20:  # YYYYMMDDHHmmssxxxxxx
+                                backup_files.append((f, timestamp))
+                                logger.debug(f"Found backup file: {f} with timestamp {timestamp}")
+                        except Exception:
+                            continue
+
+                # Sort by timestamp (newest first)
+                backup_files.sort(key=lambda x: x[1], reverse=True)
+                logger.debug(f"Found {len(backup_files)} backup files after sorting")
+                logger.debug(f"Sorted backup files: {[f'{f.name} ({ts})' for f, ts in backup_files]}")
+
+                # Keep only the last 5 backups
+                if len(backup_files) > 5:
+                    files_to_remove = backup_files[5:]  # Remove all but the first 5 (newest)
+                    logger.debug(f"Found {len(backup_files)} backups, removing {len(files_to_remove)} old ones")
+                    logger.debug(f"Files to remove: {[f'{f.name} ({ts})' for f, ts in files_to_remove]}")
+                    for old_backup, ts in files_to_remove:
+                        try:
+                            old_backup.unlink()
+                            logger.debug(f"Removed old backup: {old_backup} ({ts})")
+                        except Exception as e:
+                            logger.error(f"Error removing old backup {old_backup}: {e}")
+
             return True
 
         except Exception as e:
             logger.error(f"Error updating config {config_type}: {e}")
             return False
-
-    def _rotate_backups(self, backup_dir: Path, keep: int = 5):
-        """Rotate backup files, keeping only the most recent ones"""
-        backups = sorted(backup_dir.glob('*.backup.*'), key=os.path.getmtime, reverse=True)
-        for old_backup in backups[keep:]:
-            old_backup.unlink()
 
     def get_value(self, config_type: str, key: str) -> Optional[str]:
         """Get a specific value from a configuration file"""
@@ -276,8 +333,35 @@ class ConfigManager:
             return []
 
         backup_dir = self.backup_dirs[config_type]
-        return sorted(backup_dir.glob(f"{self.config_files[config_type].name}.backup.*"),
-                     key=os.path.getmtime, reverse=True)
+        try:
+            # Get all backup files sorted by modification time
+            base_name = self.config_files[config_type].name
+            pattern = f"{base_name}.backup.*"
+            logger.debug(f"Looking for backup files matching pattern: {pattern}")
+            
+            # First collect all valid backup files
+            backups = []
+            for f in backup_dir.glob(pattern):
+                if f.is_file():
+                    try:
+                        # Extract timestamp from filename
+                        timestamp = f.name.split('.backup.')[1]
+                        if timestamp.isdigit() and len(timestamp) == 20:  # YYYYMMDDHHmmssxxxxxx
+                            backups.append(f)
+                            logger.debug(f"Found valid backup: {f}")
+                    except Exception as e:
+                        logger.warning(f"Skipping invalid backup file {f}: {e}")
+                        continue
+            
+            # Sort by timestamp (newest first)
+            backups.sort(key=lambda x: x.name.split('.backup.')[1], reverse=True)
+            
+            logger.debug(f"Found {len(backups)} valid backup files in {backup_dir}")
+            return backups
+            
+        except Exception as e:
+            logger.error(f"Error getting backup files for {config_type}: {e}")
+            return []
 
     def restore_backup(self, config_type: str, backup_file: str) -> bool:
         """Restore a configuration from a backup file"""
@@ -295,6 +379,10 @@ class ConfigManager:
             if not backup_path.exists():
                 raise ValueError(f"Backup file does not exist: {backup_file}")
 
+            # Verify that this is actually a backup file
+            if not backup_path.name.startswith(self.config_files[config_type].name + '.backup.'):
+                raise ValueError("Invalid backup file name")
+
             # Get and validate the target config file path
             target_path = self.config_files[config_type]
             if not isinstance(target_path, Path):
@@ -302,14 +390,26 @@ class ConfigManager:
             target_path = target_path.resolve()
 
             # Ensure the target path is within one of our managed directories
+            valid_dirs = [self.display_dir, self.transit_dir]
             if not any(str(target_path).startswith(str(base_dir.resolve())) 
-                      for base_dir in [self.display_dir, self.transit_dir]):
+                      for base_dir in valid_dirs):
                 raise ValueError("Invalid target path location")
 
-            # Perform the copy operation
-            shutil.copy2(backup_path, target_path)
-            return True
+            # Create a temporary copy first
+            temp_path = target_path.parent / f".temp_{target_path.name}"
+            try:
+                shutil.copy2(backup_path, temp_path)
+                # If copy was successful, rename to final location
+                temp_path.replace(target_path)
+                return True
+            finally:
+                # Clean up temp file if it exists
+                if temp_path.exists():
+                    temp_path.unlink()
 
+        except ValueError as e:
+            logger.error(f"Error restoring backup {backup_file} for {config_type}: {e}")
+            raise  # Re-raise the original ValueError
         except Exception as e:
             logger.error(f"Error restoring backup {backup_file} for {config_type}: {e}")
             return False 

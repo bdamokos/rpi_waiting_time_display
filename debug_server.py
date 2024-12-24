@@ -153,6 +153,19 @@ def debug_index():
                 .danger-button:hover {
                     background-color: #ff0000;
                 }
+                .log-controls {
+                    margin: 10px 0;
+                }
+                .log-controls button {
+                    padding: 5px 15px;
+                    margin-right: 10px;
+                    cursor: pointer;
+                }
+                .log-controls button.active {
+                    background-color: #4CAF50;
+                    color: white;
+                    border: none;
+                }
             </style>
         </head>
         <body>
@@ -171,6 +184,10 @@ def debug_index():
             
             <div class="debug-link">
                 <h2>Application Logs</h2>
+                <div class="log-controls">
+                    <button id="pauseButton" onclick="toggleLogPause()">⏸️ Pause</button>
+                    <button onclick="clearLogs()">🗑️ Clear</button>
+                </div>
                 <div id="log-container">Loading logs...</div>
             </div>
 
@@ -190,6 +207,10 @@ def debug_index():
             </div>
 
             <script>
+                let isPaused = false;
+                let logReader = null;
+                let logDecoder = new TextDecoder();
+
                 function refreshImage() {
                     const img = document.getElementById('display-image');
                     img.src = '/debug/display?' + new Date().getTime();
@@ -212,6 +233,27 @@ def debug_index():
                     }
                 }
 
+                function toggleLogPause() {
+                    isPaused = !isPaused;
+                    const button = document.getElementById('pauseButton');
+                    if (isPaused) {
+                        button.textContent = '▶️ Resume';
+                        button.classList.add('active');
+                    } else {
+                        button.textContent = '⏸️ Pause';
+                        button.classList.remove('active');
+                        // Resume reading if we have a reader
+                        if (logReader) {
+                            readChunk();
+                        }
+                    }
+                }
+
+                function clearLogs() {
+                    const logContainer = document.getElementById('log-container');
+                    logContainer.textContent = '';
+                }
+
                 // Auto-refresh image every 10 seconds
                 setInterval(refreshImage, 10000);
 
@@ -220,26 +262,26 @@ def debug_index():
                 fetch('/debug/logs')
                     .then(response => response.body)
                     .then(body => {
-                        const reader = body.getReader();
-                        let decoder = new TextDecoder();
-                        
-                        function readChunk() {
-                            reader.read().then(({value, done}) => {
-                                if (done) return;
-                                
-                                const text = decoder.decode(value);
-                                logContainer.textContent += text;
-                                logContainer.scrollTop = logContainer.scrollHeight;
-                                
-                                readChunk();
-                            });
-                        }
-                        
+                        logReader = body.getReader();
                         readChunk();
                     })
                     .catch(error => {
                         logContainer.textContent = 'Error loading logs: ' + error;
                     });
+
+                function readChunk() {
+                    if (!isPaused && logReader) {
+                        logReader.read().then(({value, done}) => {
+                            if (done) return;
+                            
+                            const text = logDecoder.decode(value);
+                            logContainer.textContent += text;
+                            logContainer.scrollTop = logContainer.scrollHeight;
+                            
+                            readChunk();
+                        });
+                    }
+                }
             </script>
         </body>
     </html>

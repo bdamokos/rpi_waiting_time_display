@@ -6,7 +6,7 @@
 # chmod +x ~/start_display.sh
 echo "----------------------------------------"
 echo "Starting display service script"
-echo "Version: 0.0.16 (2024-12-21)"  # AUTO-INCREMENT
+echo "Version: 0.0.17 (2024-12-24)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -257,9 +257,9 @@ cleanup() {
 trap cleanup SIGTERM SIGINT
 
 # Step 7: Start the backend server
-cd ~/brussels_transit/app
+cd ~/brussels_transit
 echo "Starting backend server..."
-python main.py &
+python start.py &
 BACKEND_PID=$!
 echo "Backend server started."
 echo "----------------------------------------"

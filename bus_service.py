@@ -16,7 +16,33 @@ from weather import WEATHER_ICONS
 logger = logging.getLogger(__name__)
 
 dotenv.load_dotenv(override=True)
-Stop = os.getenv("Stops")
+
+def _get_stop_config():
+    """
+    Get stop configuration from environment variables.
+    Handles both 'Stops' and 'Stop' variables for backward compatibility.
+    Case-insensitive: accepts any variation like STOP, stop, Stops, STOPS, etc.
+    Also accepts variants with a period like 'stop.'
+    """
+    # Get all environment variables
+    env_vars = dict(os.environ)
+    
+    # Try to find any variation of 'stops' first
+    stops_pattern = 'stops'
+    for key in env_vars:
+        if key.lower().rstrip('.') == stops_pattern:
+            return env_vars[key]
+    
+    # If not found, try to find any variation of 'stop'
+    stop_pattern = 'stop'
+    for key in env_vars:
+        if key.lower().rstrip('.') == stop_pattern:
+            logger.warning(f"Using '{key}' instead of 'Stops' in .env file. Please update your configuration to use 'Stops' for consistency.")
+            return env_vars[key]
+    
+    return None
+
+Stop = _get_stop_config()
 Lines = os.getenv("Lines")
 bus_api_base_url = os.getenv("BUS_API_BASE_URL", "http://localhost:5001/")
 bus_provider = os.getenv("Provider", "stib")

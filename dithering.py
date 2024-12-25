@@ -305,6 +305,23 @@ def draw_multicolor_dither(draw, epd, x, y, width, height, colors_with_ratios):
         actual_ratio = color_counts[color] / total_pixels
         logging.debug(f"Color {color}: target ratio = {dict(valid_colors)[color]:.2f}, actual ratio = {actual_ratio:.2f}")
 
+def draw_multicolor_dither_with_text(draw, epd, x, y, width, height, text, colors_with_ratios, font):
+    """Draw a block using multiple colors with specified ratios using a checkerboard pattern, and add text on top"""
+    # Draw the dithered background
+    draw_multicolor_dither(draw, epd, x, y, width, height, colors_with_ratios)
+
+    # Add text on top
+    text_bbox = draw.textbbox((0, 0), text, font=font)
+    text_x = x + (width - (text_bbox[2] - text_bbox[0])) // 2
+    text_y = y + (height - (text_bbox[3] - text_bbox[1])) // 2
+
+    # Use white text for dark backgrounds, black text for light backgrounds
+    primary_color = max(colors_with_ratios, key=lambda x: x[1])[0]
+    text_color = epd.WHITE if primary_color == 'black' else epd.BLACK
+
+    draw.text((text_x, text_y), text, font=font, fill=text_color)
+    return text_bbox
+
 def process_icon_for_epd(icon, epd):
     """Process icon using multi-color dithering"""
     width, height = icon.size

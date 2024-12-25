@@ -5,7 +5,8 @@ import logging
 from typing import List, Dict, Tuple
 import os
 import dotenv
-from dithering import draw_dithered_box
+from dithering import draw_dithered_box, draw_multicolor_dither_with_text
+from color_utils import find_optimal_colors
 from font_utils import get_font_paths
 import log_config
 import socket
@@ -186,10 +187,10 @@ class BusService:
         return color1, color2, ratio
 
     @lru_cache(maxsize=1024)
-    def get_line_color(self, line: str) -> Tuple[str, str, float]:
+    def get_line_color(self, line: str) -> list:
         """
-        Get the dithering colors and ratio for a specific bus line
-        Returns (primary_color, secondary_color, primary_ratio)
+        Get the optimal colors and ratios for a specific bus line
+        Returns a list of (color, ratio) tuples
         Cached to avoid repeated API calls for the same line number
         """
         try:
@@ -197,32 +198,19 @@ class BusService:
             response.raise_for_status()
             line_colors = response.json()
 
-            # Get display colors from mock display to determine available colors
-            epd = DisplayAdapter.get_display()
-            available_colors = set()
-            if hasattr(epd, 'RED') and epd.RED != epd.BLACK and epd.RED != 0x00:
-                available_colors.add('red')
-            if hasattr(epd, 'YELLOW') and epd.YELLOW != epd.BLACK and epd.YELLOW != 0x00:
-                available_colors.add('yellow')
-            
-            logger.debug(f"Display supports colors: {available_colors}")
-            
-            # If display only supports B&W, use black/white dithering
-            if not available_colors:
-                return 'black', 'white', 0.7  # Use higher ratio for better contrast
-            
-            # Otherwise, use the color mapping as before
+            # Extract the hex color from the response
             if isinstance(line_colors, dict) and 'background' in line_colors:
                 hex_color = line_colors['background']
             else:
                 hex_color = line_colors.get(line)
-            
-            target_rgb = self._hex_to_rgb(hex_color)
-            return self._get_dithering_colors(target_rgb)
-            
+
+            # Convert hex to RGB
+            target_rgb = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+            return find_optimal_colors(target_rgb, self.epd)
+
         except Exception as e:
-            logger.error(f"Error fetching line color: {e}")
-            return 'black', 'white', 0.7  # Default to B&W with good contrast
+            logger.error(f"Error getting line color for {line}: {e}")
+            return [('black', 0.7), ('white', 0.3)]  # Fallback to black and white
 
     def get_api_health(self) -> bool:
         """Check if the API is healthy"""
@@ -279,7 +267,7 @@ class BusService:
                     bus_times.append({
                         "line": line,
                         "times": [],
-                        "colors": ('black', 'black', 1.0),
+                        "colors": [('black', 0.7), ('white', 0.3)],
                         "message": None
                     })
                     continue
@@ -382,13 +370,13 @@ class BusService:
                     messages = [None]
 
                 # Get colors for dithering
-                primary_color, secondary_color, ratio = self.get_line_color(line)
+                colors = self.get_line_color(line)
 
                 bus_times.append({
                     "line": display_line,  # Use display line number
                     "times": waiting_times,
                     "messages": messages,
-                    "colors": (primary_color, secondary_color, ratio)
+                    "colors": colors
                 })
 
             return bus_times, None, stop_name
@@ -402,8 +390,8 @@ class BusService:
     def _get_error_data(self) -> List[Dict]:
         """Return error data structure when something goes wrong"""
         return [
-            {"line": "56", "times": [""], "colors": ('black', 'black', 1.0)},
-            {"line": "59", "times": [""], "colors": ('black', 'black', 1.0)}
+            {"line": "56", "times": [""], "colors": [('black', 0.7), ('white', 0.3)]},
+            {"line": "59", "times": [""], "colors": [('black', 0.7), ('white', 0.3)]}
         ]
 
 if __name__ == "__main__":
@@ -540,10 +528,10 @@ def update_display(epd, weather_data=None, bus_data=None, error_message=None, st
         y_position = first_box_y if idx == 0 else second_box_y
 
         # Draw dithered box with line number
-        primary_color, secondary_color, ratio = bus['colors']
+        colors_with_ratios = bus['colors']
         line_text_length = len(bus['line'])
         line_text_width = 35 + (line_text_length * 9)
-        stop_name_bbox = draw_dithered_box(
+        stop_name_bbox = draw_multicolor_dither_with_text(
             draw=draw,
             epd=epd,
             x=10,
@@ -551,9 +539,7 @@ def update_display(epd, weather_data=None, bus_data=None, error_message=None, st
             width=line_text_width,
             height=BOX_HEIGHT,
             text=bus['line'],
-            primary_color=primary_color,
-            secondary_color=secondary_color,
-            ratio=ratio,
+            colors_with_ratios=colors_with_ratios,
             font=font_large
         )
 

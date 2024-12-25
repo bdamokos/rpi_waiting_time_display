@@ -227,7 +227,7 @@ def draw_dots_dither(draw, epd, x, y, width, height, text, primary_color, second
 
 
 def draw_multicolor_dither(draw, epd, x, y, width, height, colors_with_ratios):
-    """Draw a block using multiple colors with specified ratios"""
+    """Draw a block using multiple colors with specified ratios using a checkerboard pattern"""
     # Only include colors that the display supports
     epd_colors = {
         'white': ((255, 255, 255), epd.WHITE),
@@ -242,8 +242,6 @@ def draw_multicolor_dither(draw, epd, x, y, width, height, colors_with_ratios):
     if hasattr(epd, 'YELLOW'):
         epd_colors['yellow'] = ((255, 255, 0), epd.YELLOW)
 
-    total_pixels = width * height
-
     # Filter out any colors that aren't supported by the display
     valid_colors = [(color, ratio) for color, ratio in colors_with_ratios if color in epd_colors]
 
@@ -256,22 +254,56 @@ def draw_multicolor_dither(draw, epd, x, y, width, height, colors_with_ratios):
     if total_ratio != 1.0:
         valid_colors = [(color, ratio/total_ratio) for color, ratio in valid_colors]
 
+    # If only one color, fill the entire box with that color
+    if len(valid_colors) == 1:
+        color_name = valid_colors[0][0]
+        draw.rectangle([x, y, x + width - 1, y + height - 1], fill=epd_colors[color_name][1])
+        return
+
+    # Create cumulative ratios for easier color selection
+    cumulative_ratios = []
+    cumsum = 0
+    for color, ratio in valid_colors:
+        cumsum += ratio
+        cumulative_ratios.append((color, cumsum))
+
+    # Count actual pixels of each color for verification
+    color_counts = {color: 0 for color, _ in valid_colors}
+    total_pixels = width * height
+
+    # Create checkerboard pattern with offset rows
     for i in range(width):
         for j in range(height):
-            pos = (i + j * width) / total_pixels
+            # Offset every other row by one pixel
+            offset = (j % 2) * 1
+            # Use the offset in the pattern calculation
+            pattern_value = ((i + offset + j) % 4) / 4.0
 
-            # Simplified color selection - more deterministic
-            cumulative_ratio = 0
-            chosen_color = 'white'  # default
+            # Add some controlled randomness to break up patterns while maintaining ratio
+            noise = ((i * 37 + j * 17) % 7) / 28.0  # Pseudo-random noise between 0 and 0.25
+            selection_value = (pattern_value + noise) % 1.0
 
-            for color_name, ratio in valid_colors:
-                cumulative_ratio += ratio
-                if pos <= cumulative_ratio:
-                    chosen_color = color_name
+            # Select color based on cumulative ratios
+            chosen_color = valid_colors[-1][0]  # default to last color
+            for color, cumulative_ratio in cumulative_ratios:
+                if selection_value <= cumulative_ratio:
+                    chosen_color = color
                     break
 
+            # Update pixel count
+            color_counts[chosen_color] += 1
+            
+            # Draw the pixel
             draw.point((x + i, y + j), fill=epd_colors[chosen_color][1])
 
+    # Draw border in the dominant color
+    primary_color = max(valid_colors, key=lambda x: x[1])[0]
+    draw.rectangle([x, y, x + width - 1, y + height - 1], outline=epd_colors[primary_color][1])
+
+    # Log actual ratios achieved
+    for color, _ in valid_colors:
+        actual_ratio = color_counts[color] / total_pixels
+        logging.debug(f"Color {color}: target ratio = {dict(valid_colors)[color]:.2f}, actual ratio = {actual_ratio:.2f}")
 
 def process_icon_for_epd(icon, epd):
     """Process icon using multi-color dithering"""

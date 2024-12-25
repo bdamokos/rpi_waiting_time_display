@@ -16,3 +16,4 @@ de441.bsp
 .vscode/
 __pycache__/
 htmlcov/
+test_output/

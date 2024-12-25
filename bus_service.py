@@ -252,7 +252,11 @@ class BusService:
             for key in stops_data_location_keys:
                 if key in data:
                     stop_data = data[key].get(self.stop_id, {})
-                    logger.debug(f"Stop data found: {stop_data}")
+                    # Debug print all stop IDs found
+                    all_stop_ids = list(data[key].keys())
+                    logger.debug(f"All stop IDs found in response: {all_stop_ids}")
+                    logger.debug(f"Looking for target stop ID: {self.stop_id}")
+                    logger.debug(f"Target stop ID found: {self.stop_id in all_stop_ids}")
                     break
 
             # Extract waiting times for our stop

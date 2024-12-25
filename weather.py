@@ -14,6 +14,8 @@ import log_config
 import json
 import traceback
 from pathlib import Path
+from backoff import ExponentialBackoff
+
 logger = logging.getLogger(__name__)
 
 WEATHER_ICON_URL = "https://openweathermap.org/img/wn/{}@4x.png"
@@ -49,8 +51,14 @@ class WeatherService:
             4: "Poor",
             5: "Very Poor"
         }
+        self._backoff = ExponentialBackoff()
+
     def get_air_quality(self):
         """Get current air quality data"""
+        if not self._backoff.should_retry():
+            logger.warning(f"Skipping air quality request, backing off until {self._backoff.get_retry_time_str()}")
+            return None
+
         try:
             if not (self.lat and self.lon):
                 return None
@@ -68,6 +76,7 @@ class WeatherService:
             aqi = data['list'][0]['main']['aqi']
             components = data['list'][0]['components']
             
+            self._backoff.update_backoff_state(True)
             return {
                 'aqi': aqi,
                 'aqi_label': self.aqi_labels.get(aqi, "Unknown"),
@@ -75,10 +84,21 @@ class WeatherService:
             }
             
         except Exception as e:
+            self._backoff.update_backoff_state(False)
             logger.error(f"Error fetching air quality: {e}")
             return None
-        
+
     def get_weather(self):
+        if not self._backoff.should_retry():
+            logger.warning(f"Skipping weather request, backing off until {self._backoff.get_retry_time_str()}")
+            return {
+                'temperature': '--',
+                'description': f'Retry at {self._backoff.get_retry_time_str()}',
+                'humidity': '--',
+                'time': datetime.now().strftime('%H:%M'),
+                'icon': 'unknown'
+            }
+
         try:
             if self.lat and self.lon:
                 params = {
@@ -101,6 +121,8 @@ class WeatherService:
             
             weather_data = response.json()
             logger.info(f"Weather data: {weather_data}")
+
+            self._backoff.update_backoff_state(True)
             return {
                 'temperature': round(weather_data['main']['temp']),
                 'description': weather_data['weather'][0]['main'],
@@ -110,8 +132,9 @@ class WeatherService:
                 'feels_like': round(weather_data['main']['feels_like']),
                 'pressure': weather_data['main']['pressure']
             }
-            
+
         except Exception as e:
+            self._backoff.update_backoff_state(False)
             logger.error(f"Error fetching weather: {e}")
             return {
                 'temperature': '--',
@@ -123,6 +146,10 @@ class WeatherService:
 
     def get_detailed_weather(self):
         """Get current weather and forecast data"""
+        if not self._backoff.should_retry():
+            logger.warning(f"Skipping detailed weather request, backing off until {self._backoff.get_retry_time_str()}")
+            return self._get_error_weather_data(f"Retry at {self._backoff.get_retry_time_str()}")
+
         try:
             # Get current weather with sunrise/sunset
             if self.lat and self.lon:
@@ -142,7 +169,6 @@ class WeatherService:
             response = requests.get(self.base_url, params=params)
             response.raise_for_status()
             current_data = response.json()
-            # logger.debug(f"Current weather data: \n{json.dumps(current_data, indent=2, ensure_ascii=False)}")
             
             current = {
                 'temperature': round(current_data['main']['temp']),
@@ -162,7 +188,6 @@ class WeatherService:
             air_quality = None
             if self.lat and self.lon:
                 air_quality = self.get_air_quality()
-                # logger.debug(f"Air quality data: {air_quality}")
             
             # Get forecast data for next 3 days using 5 day/3 hour forecast API
             if self.lat and self.lon:
@@ -181,22 +206,15 @@ class WeatherService:
                 }
                 url = self.forecast_url
             
-            # logger.debug(f"Fetching forecast from URL: {url}")
             response = requests.get(url, params=params)
             response.raise_for_status()
             forecast_data = response.json()
 
-
-           
-           
             try:
                 # Get forecasts for next 3 days
                 today = datetime.now().date()
                 forecasts = []
 
-                
-
-                
                 for day_offset in range(0, 4):  # Next 3 days
                     target_date = today + timedelta(days=day_offset)
                     
@@ -257,16 +275,24 @@ class WeatherService:
                 raise
                 
         except requests.exceptions.RequestException as e:
+            self._backoff.update_backoff_state(False)
             logger.error(f"Network error fetching detailed weather: {e}")
             return self._get_error_weather_data()
         except Exception as e:
+            self._backoff.update_backoff_state(False)
             logger.error(f"Error fetching detailed weather: {e}", exc_info=True)
             return self._get_error_weather_data()
 
-    def _get_error_weather_data(self):
+    def _get_error_weather_data(self, error_message="Error"):
         """Return default error data structure"""
         error_data = {
-            'current': self.get_weather(),  # This has its own error handling
+            'current': {
+                'temperature': '--',
+                'description': error_message,
+                'humidity': '--',
+                'time': datetime.now().strftime('%H:%M'),
+                'icon': 'unknown'
+            },
             'humidity': '--',
             'wind_speed': '--',
             'sunrise': '--:--',

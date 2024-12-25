@@ -14,6 +14,7 @@ import requests_cache
 from functools import lru_cache
 from threading import Event, Lock
 from requests_cache import CachedSession
+from backoff import ExponentialBackoff
 logger = logging.getLogger(__name__)
 
 
@@ -67,6 +68,8 @@ def gather_flights_within_radius(lat, lon, radius=radius*2, distance_threshold=r
     monitored_flights = []
     lock = Lock()
     stop_event = Event()  # Create stop_event here
+    # Initialize backoff with 1 minute initial and 1 hour max
+    _backoff = ExponentialBackoff(initial_backoff=60, max_backoff=3600)
     logger.debug(f"Monitoring flights within {radius}km of {lat}, {lon}, with threshold {distance_threshold} km")
     
     def gather_data():
@@ -78,6 +81,12 @@ def gather_flights_within_radius(lat, lon, radius=radius*2, distance_threshold=r
             # Ensure minimum interval between checks
             if current_time - last_check_time < flight_check_interval:
                 time.sleep(1)  # Short sleep to prevent CPU spinning
+                continue
+
+            # Check if we should retry based on backoff
+            if not _backoff.should_retry():
+                logger.warning(f"Skipping flight data request, backing off until {_backoff.get_retry_time_str()}")
+                time.sleep(5)  # Short sleep when backing off
                 continue
                 
             try:
@@ -117,10 +126,15 @@ def gather_flights_within_radius(lat, lon, radius=radius*2, distance_threshold=r
                                     'heading': flight.get('true_heading', ''),
                                     'last_update': current_time
                                 })
-                
+                    _backoff.update_backoff_state(True)
+                else:
+                    _backoff.update_backoff_state(False)
+                    logger.error(f"Error response from flight API: {response.status_code}")
+
                 last_check_time = current_time
                 
             except Exception as e:
+                _backoff.update_backoff_state(False)
                 logger.error(f"Error gathering flight data: {e}")
                 time.sleep(flight_check_interval)  # Sleep on error
             
@@ -199,23 +213,41 @@ def format_flight_number(operator_iata, flight_number):
         return f"{operator_iata}{flight_number}"
     return None
 
+# Create a global backoff instance for AeroAPI
+_aeroapi_backoff = ExponentialBackoff(initial_backoff=30, max_backoff=3600)  # 30s to 1 hour
+
 def _aeroapi_get_data(endpoint, url_params=None, call_params=None):
-    api_base_url = "https://aeroapi.flightaware.com/aeroapi"
-    headers = {
-        "x-apikey": aeroapi_key,
-        "Content-Type": "application/json"
-    }
-    if url_params and call_params:
-        response = flight_session.get(f"{api_base_url}/{endpoint}/{url_params}?{call_params}", headers=headers)
-    elif call_params:
-        response = flight_session.get(f"{api_base_url}/{endpoint}?{call_params}", headers=headers)
-    elif url_params:
-        response = flight_session.get(f"{api_base_url}/{endpoint}/{url_params}", headers=headers)
-    else:
-        response = flight_session.get(f"{api_base_url}/{endpoint}", headers=headers)
-    
-    if response.status_code == 200:
-        return response.json()
+    """Internal function to make AeroAPI requests with backoff handling"""
+    if not _aeroapi_backoff.should_retry():
+        logger.warning(f"Skipping AeroAPI request, backing off until {_aeroapi_backoff.get_retry_time_str()}")
+        return None
+
+    try:
+        api_base_url = "https://aeroapi.flightaware.com/aeroapi"
+        headers = {
+            "x-apikey": aeroapi_key,
+            "Content-Type": "application/json"
+        }
+        if url_params and call_params:
+            response = flight_session.get(f"{api_base_url}/{endpoint}/{url_params}?{call_params}", headers=headers)
+        elif call_params:
+            response = flight_session.get(f"{api_base_url}/{endpoint}?{call_params}", headers=headers)
+        elif url_params:
+            response = flight_session.get(f"{api_base_url}/{endpoint}/{url_params}", headers=headers)
+        else:
+            response = flight_session.get(f"{api_base_url}/{endpoint}", headers=headers)
+        
+        if response.status_code == 200:
+            _aeroapi_backoff.update_backoff_state(True)
+            return response.json()
+        else:
+            _aeroapi_backoff.update_backoff_state(False)
+            return None
+
+    except Exception as e:
+        _aeroapi_backoff.update_backoff_state(False)
+        logger.error(f"Error in AeroAPI request: {e}")
+        return None
 
 def aeroapi_get_data(endpoint, url_params=None, call_params=None):
     if not aeroapi_enabled:

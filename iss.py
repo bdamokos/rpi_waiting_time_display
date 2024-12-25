@@ -23,6 +23,8 @@ from PIL import Image, ImageDraw, ImageFont
 from threading import Event
 import humanize
 from astronomy_utils import get_moon_phase, get_appropriate_ephemeris
+from backoff import ExponentialBackoff
+
 logger = logging.getLogger(__name__)
 # Set urllib3 and urllib3.connectionpool log levels to warning
 logging.getLogger('urllib3').setLevel(logging.WARNING)
@@ -45,8 +47,14 @@ class ISSTracker:
         self.iss_check_interval = int(os.getenv('ISS_CHECK_INTERVAL', '30'))
         self.prediction_interval = 12 * 3600  # 12 hours in seconds
         self.last_prediction_time = 0
+        self._backoff = ExponentialBackoff(initial_backoff=60, max_backoff=1800)  # 1 min to 30 min
+
     def calculate_next_passes(self):
         """Calculate next ISS passes and store them"""
+        if not self._backoff.should_retry():
+            logger.warning(f"Skipping ISS pass calculation, backing off until {self._backoff.get_retry_time_str()}")
+            return
+
         try:
             lat = float(Coordinates_LAT)
             lon = float(Coordinates_LNG)
@@ -80,8 +88,11 @@ class ISSTracker:
                               f"{visibility}")
             else:
                 logger.info("No visible passes predicted in the next period")
-                
+
+            self._backoff.update_backoff_state(True)
+
         except Exception as e:
+            self._backoff.update_backoff_state(False)
             logger.error(f"Error calculating passes: {e}")
             self.next_passes = []
 
@@ -136,65 +147,97 @@ class ISSTracker:
         """Stop the tracker"""
         self.stop_event.set()
 
+# Create a global backoff instance for the API functions
+_api_backoff = ExponentialBackoff(initial_backoff=30, max_backoff=300)  # 30s to 5min
 
 def get_iss_position():
-    response = requests.get('https://api.wheretheiss.at/v1/satellites/25544')
-    return response.json()
+    """Get current ISS position with backoff handling"""
+    if not _api_backoff.should_retry():
+        logger.warning(f"Skipping ISS position request, backing off until {_api_backoff.get_retry_time_str()}")
+        return None
 
+    try:
+        response = requests.get('https://api.wheretheiss.at/v1/satellites/25544')
+        response.raise_for_status()
+        data = response.json()
+        _api_backoff.update_backoff_state(True)
+        return data
+    except Exception as e:
+        _api_backoff.update_backoff_state(False)
+        logger.error(f"Error getting ISS position: {e}")
+        return None
 
 def is_iss_near(lat = Coordinates_LAT, lon = Coordinates_LNG, debug=False):
-    iss_position = get_iss_position()
-    # Get current location coordinates
-    lat = float(lat)
-    lon = float(lon)
-    
-    # Check if we're within reasonable distance of ISS position
-    iss_lat = float(iss_position['latitude'])
-    iss_lon = float(iss_position['longitude'])
-    
-    # Calculate position data regardless of distance
-    ts = load.timescale()
-    t = ts.now()
-    iss = get_tle_data()
-    location = wgs84.latlon(lat, lon)
-    difference = iss - location
-    topocentric = difference.at(t)
-    alt_deg, az_deg, distance = topocentric.altaz()
-    
-    # Get the next setting event
-    t2 = t + timedelta(minutes=20)  # Look ahead 20 minutes
-    t_set, events = iss.find_events(location, t, t2, altitude_degrees=10.0)
-    set_time = None
-    for ti, event in zip(t_set, events):
-        if event == 2:  # Setting event
-            set_time = ti.utc_datetime()
-            break
+    """Check if ISS is near a location with backoff handling"""
+    position = get_iss_position()
+    if not position:
+        return False, None
 
-    position_data = {
-        'latitude': iss_lat,
-        'longitude': iss_lon,
-        'altitude': float(iss_position['altitude']),
-        'distance': distance.km,
-        'azimuth': az_deg.degrees,
-        'elevation': alt_deg.degrees,
-        'direction': get_direction(az_deg.degrees),
-        'visible_until': set_time,
-        'visible_until_human': set_time.astimezone().strftime('%Y-%m-%d %H:%M:%S %Z') if set_time else None
-    }
-    
-    # Rough check if we're within ~2000km viewing radius
-    if (abs(iss_lat - lat) > 20 or abs(iss_lon - lon) > 20):
-        return False, position_data if debug else None
+    try:
+        # Get current location coordinates
+        lat = float(lat)
+        lon = float(lon)
         
-    return True, position_data
+        # Check if we're within reasonable distance of ISS position
+        iss_lat = float(position['latitude'])
+        iss_lon = float(position['longitude'])
+        
+        # Calculate position data regardless of distance
+        ts = load.timescale()
+        t = ts.now()
+        iss = get_tle_data()
+        location = wgs84.latlon(lat, lon)
+        difference = iss - location
+        topocentric = difference.at(t)
+        alt_deg, az_deg, distance = topocentric.altaz()
+        
+        # Get the next setting event
+        t2 = t + timedelta(minutes=20)  # Look ahead 20 minutes
+        t_set, events = iss.find_events(location, t, t2, altitude_degrees=10.0)
+        set_time = None
+        for ti, event in zip(t_set, events):
+            if event == 2:  # Setting event
+                set_time = ti.utc_datetime()
+                break
 
+        position_data = {
+            'latitude': iss_lat,
+            'longitude': iss_lon,
+            'altitude': float(position['altitude']),
+            'distance': distance.km,
+            'azimuth': az_deg.degrees,
+            'elevation': alt_deg.degrees,
+            'direction': get_direction(az_deg.degrees),
+            'visible_until': set_time,
+            'visible_until_human': set_time.astimezone().strftime('%Y-%m-%d %H:%M:%S %Z') if set_time else None
+        }
+
+        # Rough check if we're within ~2000km viewing radius
+        if (abs(iss_lat - lat) > 20 or abs(iss_lon - lon) > 20):
+            return False, position_data if debug else None
+            
+        return True, position_data
+
+    except Exception as e:
+        logger.error(f"Error calculating ISS position: {e}")
+        return False, None
+
+# Create a global backoff instance for TLE data
+_tle_backoff = ExponentialBackoff(initial_backoff=300, max_backoff=3600)  # 5min to 1hour
 
 def get_tle_data():
-    """Get TLE data using skyfield's built-in caching"""
+    """Get TLE data using skyfield's built-in caching with backoff handling"""
+    if not _tle_backoff.should_retry():
+        logger.warning(f"Skipping TLE data request, backing off until {_tle_backoff.get_retry_time_str()}")
+        raise Exception("TLE data request is backed off")
+
     try:
         satellites = load.tle_file('https://celestrak.org/NORAD/elements/stations.txt')
-        return next(sat for sat in satellites if 'ISS' in sat.name)
+        iss = next(sat for sat in satellites if 'ISS' in sat.name)
+        _tle_backoff.update_backoff_state(True)
+        return iss
     except Exception as e:
+        _tle_backoff.update_backoff_state(False)
         logger.error(f"Error loading TLE data: {e}")
         raise
 

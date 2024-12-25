@@ -236,6 +236,7 @@ class DisplayManager:
         self.in_weather_mode = False
         self.weather_manager = WeatherManager()
         self.bus_manager = BusManager()
+        self.bus_manager.bus_service.set_epd(epd)  # Set the EPD object for the bus service
         self._display_lock = threading.Lock()
         self._check_data_thread = None
         self._flight_thread = None

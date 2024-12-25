@@ -135,6 +135,7 @@ class BusService:
         # Initialize backoff with 3 minutes initial and 1 hour max
         self._backoff = ExponentialBackoff(initial_backoff=180, max_backoff=3600)
         self._stop_event = Event()
+        self.epd = None  # Will be set later
         
     def _resolve_base_url(self) -> str:
         """Resolve the base URL, handling .local domains"""
@@ -159,6 +160,15 @@ class BusService:
         """Convert hex color to RGB tuple"""
         hex_color = hex_color.lstrip('#')
         return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+
+    def _is_valid_hex_color(self, hex_color: str) -> bool:
+        """Validate if a string is a valid hex color code"""
+        if not hex_color:
+            return False
+        # Remove '#' if present
+        hex_color = hex_color.lstrip('#')
+        # Check if it's a valid hex color (6 characters, valid hex digits)
+        return len(hex_color) == 6 and all(c in '0123456789ABCDEFabcdef' for c in hex_color)
 
     @lru_cache(maxsize=1024)
     def _get_color_distance(self, color1: Tuple[int, int, int], color2: Tuple[int, int, int]) -> float:
@@ -191,6 +201,10 @@ class BusService:
         
         return color1, color2, ratio
 
+    def set_epd(self, epd):
+        """Set the EPD display object for color optimization"""
+        self.epd = epd
+
     @lru_cache(maxsize=1024)
     def get_line_color(self, line: str) -> list:
         """
@@ -199,6 +213,10 @@ class BusService:
         Cached to avoid repeated API calls for the same line number
         """
         try:
+            if not self.epd:
+                logger.warning("EPD not set, falling back to black and white")
+                return [('black', 0.7), ('white', 0.3)]
+
             response = requests.get(f"{self.colors_url}/{line}")
             response.raise_for_status()
             line_colors = response.json()
@@ -209,8 +227,13 @@ class BusService:
             else:
                 hex_color = line_colors.get(line)
 
+            # Validate hex color
+            if not hex_color or not self._is_valid_hex_color(hex_color):
+                logger.warning(f"Invalid hex color received for line {line}: {hex_color}")
+                return [('black', 0.7), ('white', 0.3)]  # Fallback to black and white
+
             # Convert hex to RGB
-            target_rgb = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+            target_rgb = self._hex_to_rgb(hex_color)
             return find_optimal_colors(target_rgb, self.epd)
 
         except Exception as e:

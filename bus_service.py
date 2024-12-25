@@ -1,5 +1,5 @@
 from PIL import Image, ImageDraw, ImageFont
-from datetime import datetime
+from datetime import datetime, timedelta
 import requests
 import logging
 from typing import List, Dict, Tuple
@@ -130,6 +130,11 @@ class BusService:
         logger.debug(f"Stop ID: {self.stop_id}")
         self.lines_of_interest = _parse_lines(Lines)
         logger.info(f"Monitoring bus lines: {self.lines_of_interest}")
+        # Initialize backoff state
+        self._consecutive_failures = 0
+        self._next_retry_time = None
+        self._initial_backoff = 180  # 3 minutes
+        self._max_backoff = 3600  # 1 hour
         
     def _resolve_base_url(self) -> str:
         """Resolve the base URL, handling .local domains"""
@@ -222,10 +227,37 @@ class BusService:
             logger.error(f"Health check failed: {e}")
             return False
 
+    def _should_retry(self) -> bool:
+        """Check if we should retry based on backoff strategy"""
+        if self._next_retry_time is None:
+            return True
+        return datetime.now() >= self._next_retry_time
+
+    def _update_backoff_state(self, success: bool):
+        """Update backoff state based on success/failure"""
+        if success:
+            # Reset backoff on success
+            self._consecutive_failures = 0
+            self._next_retry_time = None
+        else:
+            # Update backoff on failure
+            self._consecutive_failures += 1
+            backoff_seconds = min(
+                self._initial_backoff * (3 ** (self._consecutive_failures - 1)),
+                self._max_backoff
+            )
+            self._next_retry_time = datetime.now() + timedelta(seconds=backoff_seconds)
+            logger.warning(f"Connection failed. Backing off for {backoff_seconds} seconds. Next retry at {self._next_retry_time.strftime('%H:%M:%S')}")
+
     def get_waiting_times(self) -> tuple[List[Dict], str, str]:
         """Fetch and process waiting times for our bus lines"""
+        # Check if we should retry based on backoff
+        if not self._should_retry():
+            return self._get_error_data(), f"Backing off until {self._next_retry_time.strftime('%H:%M:%S')}", ""
+
         # First check API health
         if not self.get_api_health():
+            self._update_backoff_state(False)
             logger.error("API not available")
             return self._get_error_data(), "API not available", ""
 
@@ -379,19 +411,23 @@ class BusService:
                     "colors": colors
                 })
 
+            # Update backoff state on success
+            self._update_backoff_state(True)
             return bus_times, None, stop_name
 
-        except requests.exceptions.ConnectionError:
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
+            self._update_backoff_state(False)
             return self._get_error_data(), "Connection failed", ""
         except Exception as e:
+            self._update_backoff_state(False)
             logger.error(f"Error fetching bus times: {e}", exc_info=True)
             return self._get_error_data(), f"Error: {str(e)}", ""
 
     def _get_error_data(self) -> List[Dict]:
         """Return error data structure when something goes wrong"""
         return [
-            {"line": "56", "times": [""], "colors": [('black', 0.7), ('white', 0.3)]},
-            {"line": "59", "times": [""], "colors": [('black', 0.7), ('white', 0.3)]}
+            {"line": "98", "times": [""], "colors": [('black', 0.7), ('white', 0.3)]},
+            {"line": "99", "times": [""], "colors": [('black', 0.7), ('white', 0.3)]}
         ]
 
 if __name__ == "__main__":

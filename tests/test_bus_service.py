@@ -1,9 +1,11 @@
 import pytest
 import responses
+from datetime import datetime, timedelta
 import os
+import json
+
 from bus_service import BusService, _parse_lines
 from unittest.mock import patch, MagicMock
-from datetime import datetime, timedelta
 import re
 
 @pytest.fixture
@@ -84,11 +86,52 @@ def test_get_waiting_times_error(bus_service, mock_responses):
         status=500
     )
 
+    # First failure
     departures, error, stop_name = bus_service.get_waiting_times()
-    
     assert departures is not None  # Should return error data
     assert error == "API not available"
     assert stop_name == ""
+    assert bus_service._consecutive_failures == 1
+    assert bus_service._next_retry_time is not None
+
+    # Get initial backoff time
+    first_retry = bus_service._next_retry_time
+
+    # Second failure
+    departures, error, stop_name = bus_service.get_waiting_times()
+    assert "Backing off until" in error
+    assert bus_service._consecutive_failures == 1  # Shouldn't increment because we're in backoff
+    assert bus_service._next_retry_time == first_retry  # Should keep same retry time
+
+    # Simulate waiting past backoff time
+    bus_service._next_retry_time = datetime.now() - timedelta(seconds=1)
+
+    # Third failure
+    departures, error, stop_name = bus_service.get_waiting_times()
+    assert bus_service._consecutive_failures == 2
+    assert bus_service._next_retry_time > first_retry  # Should have a later retry time
+
+    # Test successful response resets backoff
+    mock_responses.replace(
+        responses.GET,
+        "http://localhost:5001/health",
+        json={"status": "ok"},
+        status=200
+    )
+    mock_responses.add(
+        responses.GET,
+        "http://localhost:5001/api/test_provider/waiting_times/",
+        json={"stops": {bus_service.stop_id: {"name": "Test Stop", "lines": {}}}},
+        status=200
+    )
+
+    # Simulate waiting past backoff time
+    bus_service._next_retry_time = datetime.now() - timedelta(seconds=1)
+
+    # Should reset on success
+    departures, error, stop_name = bus_service.get_waiting_times()
+    assert bus_service._consecutive_failures == 0
+    assert bus_service._next_retry_time is None
 
 def test_get_line_color(bus_service):
     """Test line color determination"""

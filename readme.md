@@ -11,6 +11,8 @@ Features:
 
     ![Next bus arrival times - example with 1 monitored line (line 44 at Trois Couleurs, arriving in 1 and 21 minutes)](docs/images/stop_display_1line.png)
 
+    ![Next bus arrival times - example with BKK](docs/images/bkk_display.png)
+
 - Color-coded bus line numbers matching STIB/MIVB official colors
 - If the Raspberry Pi is not connected to the internet, it will set up a hotspot and display a QR code to connect to it that allows you to connect the Pi to the internet
 

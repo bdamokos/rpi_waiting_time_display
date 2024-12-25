@@ -17,6 +17,17 @@ def find_optimal_colors(pixel_rgb, epd):
     yellow_ratio = min(r, g) / 255.0  # Yellow needs both red and green
     orange_factor = min(r, g) / max(1, r) if r > 0 else 0  # How "yellow" is the orange
 
+    # Check for dominant colors first
+    DOMINANCE_THRESHOLD = 0.8
+    if has_yellow and r > 200 and g > 200 and b < 100:  # Strong yellow
+        yellow_strength = min(r, g) / 255.0
+        if yellow_strength >= DOMINANCE_THRESHOLD:
+            return [('yellow', 1.0)]
+    if has_red and r > 200 and g < 100 and b < 100:  # Strong red
+        red_strength = r / 255.0
+        if red_strength >= DOMINANCE_THRESHOLD:
+            return [('red', 1.0)]
+
     # Handle pure white specially
     if r > 250 and g > 250 and b > 250:
         return [('white', 1.0)]

@@ -199,6 +199,11 @@ class BusService:
         # Ensure ratio is between 0.0 and 1.0
         ratio = max(0.0, min(1.0, ratio))
         
+        # If the primary color is very dominant (>80%), use it exclusively
+        DOMINANCE_THRESHOLD = 0.8
+        if ratio >= DOMINANCE_THRESHOLD:
+            return color1, color2, 1.0
+        
         return color1, color2, ratio
 
     def set_epd(self, epd):

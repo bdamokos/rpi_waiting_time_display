@@ -303,7 +303,7 @@ def draw_multicolor_dither(draw, epd, x, y, width, height, colors_with_ratios):
     # Log actual ratios achieved
     for color, _ in valid_colors:
         actual_ratio = color_counts[color] / total_pixels
-        logging.debug(f"Color {color}: target ratio = {dict(valid_colors)[color]:.2f}, actual ratio = {actual_ratio:.2f}")
+        #logging.debug(f"Color {color}: target ratio = {dict(valid_colors)[color]:.2f}, actual ratio = {actual_ratio:.2f}")
 
 def draw_multicolor_dither_with_text(draw, epd, x, y, width, height, text, colors_with_ratios, font):
     """Draw a block using multiple colors with specified ratios using a checkerboard pattern, and add text on top"""

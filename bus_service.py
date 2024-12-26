@@ -298,6 +298,11 @@ class BusService:
             stop_name = stop_data.get("name", "")
             logger.debug(f"Stop name: {stop_name}")
 
+            # Check if there are any lines in the stop data
+            if not stop_data.get("lines"):
+                logger.info(f"No active lines at stop {stop_name}")
+                return [], None, stop_name
+
             bus_times = []
             for line in self.lines_of_interest:
                 logger.debug(f"Processing line {line}")
@@ -353,7 +358,26 @@ class BusService:
                             minutes_source = None
                             minutes = None
                             minutes_emoji = ''
-                        time = f"{minutes_emoji}{minutes}"
+
+                        # Filter out invalid times (negative times less than -5 minutes)
+                        try:
+                            if minutes and isinstance(minutes, str):
+                                # Only clean and check if it might be a negative number
+                                if '-' in minutes:
+                                    # Remove any quotes and non-numeric characters except minus sign
+                                    cleaned_minutes = ''.join(c for c in minutes if c.isdigit() or c == '-')
+                                    if cleaned_minutes:
+                                        minutes_int = int(cleaned_minutes)
+                                        if minutes_int < -5:  # Skip if less than -5 minutes
+                                            logger.warning(f"Skipping invalid negative time: {minutes} minutes")
+                                            minutes = None
+                                            minutes_emoji = ''
+                        except ValueError as e:
+                            logger.warning(f"Could not parse minutes value '{minutes}': {e}")
+                            minutes = None
+                            minutes_emoji = ''
+
+                        time = f"{minutes_emoji}{minutes}" if minutes else ""
                         message = None
                         
                         # Check for special messages

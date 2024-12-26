@@ -429,10 +429,15 @@ class DisplayManager:
                 
                 valid_bus_data = [
                     bus for bus in bus_data 
-                    if any(time != "--" for time in bus["times"])
+                    if any(time and time != "--" for time in bus["times"])
                 ]
                 
-                if valid_bus_data and not error_message:
+                # Check if we have any bus data at all
+                if not bus_data and not error_message and weather_enabled and weather_data:
+                    logger.info("Initial display: no bus data available, showing weather data")
+                    draw_weather_display(self.epd, weather_data)
+                    self.in_weather_mode = True
+                elif valid_bus_data and not error_message:
                     logger.info(f"Initial display: showing bus data ({len(valid_bus_data)} entries)")
                     current_weather = weather_data['current'] if weather_data else None
                     update_display(self.epd, current_weather, valid_bus_data, error_message, stop_name)
@@ -508,7 +513,17 @@ class DisplayManager:
                     stop_name = self.bus_manager.get_stop_name()
 
                     with self._display_lock:
-                        if valid_bus_data and not error_message:
+                        # Check if we have any bus data at all
+                        if not valid_bus_data and not error_message and weather_enabled and weather_data:
+                            logger.info("No bus data available, switching to weather mode...")
+                            self.in_weather_mode = True
+                            self.perform_full_refresh()
+                            draw_weather_display(self.epd, weather_data)
+                            self.last_weather_data = weather_data
+                            self.last_weather_update = current_time
+                            self.last_display_update = datetime.now()
+                            logger.info("Weather display updated successfully")
+                        elif valid_bus_data and not error_message:
                             logger.info("Updating bus display...")
                             self.in_weather_mode = False
                             self.perform_full_refresh()

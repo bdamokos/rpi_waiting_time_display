@@ -360,6 +360,7 @@ WEATHER_ICONS = {
     'Thunderstorm': '⚡',
     'Drizzle': '🌦',
     'Mist': '🌫',
+    'Fog': '🌫',
 }
 
 

@@ -272,7 +272,7 @@ class BusService:
             return self._get_error_data(), "API not available", ""
 
         try:
-            response = requests.get(self.api_url, timeout=30)  # 30 second timeout
+            response = requests.get(self.api_url, timeout=120)  # 120 second timeout
             logger.debug(f"API response time: {response.elapsed.total_seconds():.3f} seconds")
             response.raise_for_status()
             data = response.json()

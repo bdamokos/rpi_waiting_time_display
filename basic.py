@@ -429,7 +429,7 @@ class DisplayManager:
                 
                 valid_bus_data = [
                     bus for bus in bus_data 
-                    if any(time and time != "--" for time in bus["times"])
+                    if any(time and time != "--" and time != "" for time in bus["times"])
                 ]
                 
                 # Check if we have any bus data at all

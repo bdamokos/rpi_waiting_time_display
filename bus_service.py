@@ -361,7 +361,7 @@ class BusService:
 
                         # Filter out invalid times (negative times less than -5 minutes)
                         try:
-                            if minutes and isinstance(minutes, str):
+                            if minutes is not None and isinstance(minutes, str):
                                 # Only clean and check if it might be a negative number
                                 if '-' in minutes:
                                     # Remove any quotes and non-numeric characters except minus sign
@@ -372,12 +372,14 @@ class BusService:
                                             logger.warning(f"Skipping invalid negative time: {minutes} minutes")
                                             minutes = None
                                             minutes_emoji = ''
+                                elif minutes == '0' or minutes == "0'":  # Handle 0 minutes case
+                                    minutes = '0'  # Keep the zero
                         except ValueError as e:
                             logger.warning(f"Could not parse minutes value '{minutes}': {e}")
                             minutes = None
                             minutes_emoji = ''
 
-                        time = f"{minutes_emoji}{minutes}" if minutes else ""
+                        time = f"{minutes_emoji}{minutes}" if minutes is not None else ""
                         message = None
                         
                         # Check for special messages

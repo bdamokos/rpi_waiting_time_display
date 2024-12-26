@@ -121,7 +121,7 @@ class WeatherManager:
                     self._update_weather_once()
                 else:
                     time_since_update = (current_time - self.last_update).total_seconds()
-                    logger.debug(f"Time since last update: {time_since_update:.1f} seconds")
+                    logger.debug(f"Time since last weatherupdate: {time_since_update:.1f} seconds")
                     if time_since_update >= WEATHER_UPDATE_INTERVAL:
                         logger.debug("Update interval reached, updating weather")
                         self._update_weather_once()

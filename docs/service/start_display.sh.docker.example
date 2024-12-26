@@ -6,7 +6,7 @@
 # chmod +x ~/start_display.sh
 echo "----------------------------------------"
 echo "Starting display service script (Docker Version)"
-echo "Version: 0.0.5 (2024-12-21)"  # AUTO-INCREMENT
+echo "Version: 0.0.6 (2024-12-26)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -254,7 +254,7 @@ echo "Backend server started in container: $CONTAINER_ID"
 echo "----------------------------------------"
 
 # Wait for backend to start
-sleep 5
+sleep 15
 
 # Step 8: Start the display program
 cd ~/display_programme

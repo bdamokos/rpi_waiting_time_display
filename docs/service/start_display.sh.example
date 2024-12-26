@@ -6,7 +6,7 @@
 # chmod +x ~/start_display.sh
 echo "----------------------------------------"
 echo "Starting display service script"
-echo "Version: 0.0.17 (2024-12-24)"  # AUTO-INCREMENT
+echo "Version: 0.0.18 (2024-12-26)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -265,7 +265,7 @@ echo "Backend server started."
 echo "----------------------------------------"
 
 # Wait for backend to start
-sleep 5
+sleep 15
 
 # Step 8: Start the display program
 cd ~/display_programme

@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hardware Guide - RPi Waiting Time Display</title>
+    <style>
+        :root {
+            --primary-color: #2ea44f;
+            --text-color: #24292e;
+            --border-color: #e1e4e8;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 1012px;
+            margin: 0 auto;
+            padding: 2rem 1rem;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 2rem;
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+
+        .hardware-section {
+            margin: 2rem 0;
+            padding: 2rem;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: #fff;
+        }
+
+        .hardware-section h2 {
+            margin-top: 0;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.5rem;
+        }
+
+        .hardware-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .hardware-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 1rem 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .hardware-item:last-child {
+            border-bottom: none;
+        }
+
+        .item-details {
+            flex: 1;
+        }
+
+        .item-price {
+            color: #24292e;
+            font-weight: 600;
+            margin-left: 2rem;
+            white-space: nowrap;
+        }
+
+        .total-cost {
+            margin-top: 2rem;
+            padding: 1rem;
+            background: #f6f8fa;
+            border-radius: 4px;
+            font-weight: 600;
+            text-align: right;
+        }
+
+        .note {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: #fff8c5;
+            border: 1px solid #eed888;
+            border-radius: 4px;
+        }
+
+        .display-comparison {
+            margin-top: 2rem;
+        }
+
+        .display-comparison table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+
+        .display-comparison th,
+        .display-comparison td {
+            padding: 0.75rem;
+            border: 1px solid var(--border-color);
+            text-align: left;
+        }
+
+        .display-comparison th {
+            background: #f6f8fa;
+        }
+
+        .extensions {
+            margin-top: 2rem;
+            padding: 1rem;
+            background: #f6f8fa;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../" class="back-link">← Back to home</a>
+        <h1>Hardware Guide</h1>
+        
+        <div class="hardware-section">
+            <h2>Core Components</h2>
+            <div class="note">
+                This project has been tested with the hardware listed below. While it should work with more powerful Raspberry Pi models, these are the recommended components for the most cost-effective setup.
+            </div>
+            <ul class="hardware-list">
+                <li class="hardware-item">
+                    <div class="item-details">
+                        <h3><a href="https://www.raspberrypi.com/products/raspberry-pi-zero-2-w/">Raspberry Pi Zero 2W</a></h3>
+                        <p>Board with headers</p>
+                    </div>
+                    <div class="item-price">~€20</div>
+                </li>
+                <li class="hardware-item">
+                    <div class="item-details">
+                        <h3>MicroSD Card</h3>
+                        <p>16GB or 32GB recommended (tested), but 8GB should work</p>
+                    </div>
+                    <div class="item-price">€4-15</div>
+                </li>
+                <li class="hardware-item">
+                    <div class="item-details">
+                        <h3>Official Power Supply (optional)</h3>
+                        <p>If not using an existing charging cable</p>
+                    </div>
+                    <div class="item-price">€8</div>
+                </li>
+                <li class="hardware-item">
+                    <div class="item-details">
+                        <h3><a href="https://www.raspberrypi.com/products/usb-b-to-usb-c-adapter/">USB-C to micro-USB adapter</a></h3>
+                        <p>For connecting to modern computers and to avoid having to buy a new micro-USB cable or the official power supply</p>
+                    </div>
+                    <div class="item-price">~€1</div>
+                </li>
+            </ul>
+            <div class="total-cost">
+                Subtotal: ~€33 to €43
+            </div>
+        </div>
+
+        <div class="hardware-section">
+            <h2>Display Options</h2>
+            <div class="display-comparison">
+                <table>
+                    <tr>
+                        <th>Display Model</th>
+                        <th>Features</th>
+                        <th>Price</th>
+                        <th>Notes</th>
+                    </tr>
+                    <tr>
+                        <td><a href="https://www.waveshare.com/2.13inch-e-Paper-HAT-G.htm">Waveshare 2.13" G V2</a></td>
+                        <td>Black, white, red, yellow</td>
+                        <td>~€20</td>
+                        <td>No partial refresh support, so it flickers with every refresh. Nice colors but less ideal for this application.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="https://www.waveshare.com/2.13inch-e-paper-hat.htm">Waveshare 2.13" Basic</a></td>
+                        <td>Black, white</td>
+                        <td>~€20</td>
+                        <td>Partial refresh support, good for our application but no case included.</td>
+                    </tr>
+                    <tr>
+                        <td><a href="https://www.waveshare.com/2.13inch-Touch-e-Paper-HAT-with-case.htm">Waveshare 2.13" with Case</a></td>
+                        <td>Black, white</td>
+                        <td>~€20-30</td>
+                        <td>Best option so far. Includes case (designed for horizontal placement), partial refresh support.</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <div class="hardware-section">
+            <h2>Optional Extensions</h2>
+            <div class="extensions">
+                <h3>Battery Power</h3>
+                <p><a href="https://www.amazon.com/dp/B07Z333333">PiSugar 3</a> or similar battery pack for portable use</p>
+                
+                <h3>Custom Case</h3>
+                <p>3D printed case or use the one included with some display models. A vertical orientation case would be ideal for this application.</p>
+            </div>
+        </div>
+
+        <div class="total-cost">
+            Total Cost (Basic setup with Waveshare 2.13" with Case): ~€60
+        </div>
+    </div>
+</body>
+</html> 

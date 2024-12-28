@@ -1,89 +1,144 @@
----
-layout: default
----
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RPi Waiting Time Display</title>
+    <style>
+        :root {
+            --primary-color: #2ea44f;
+            --hover-color: #2c974b;
+            --text-color: #24292e;
+            --link-color: #0366d6;
+        }
 
-<style>
-.container {
-    max-width: 1012px;
-    margin: 0 auto;
-    padding: 1rem;
-}
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+        }
 
-.header {
-    text-align: center;
-    margin-bottom: 2rem;
-}
+        .container {
+            max-width: 1012px;
+            margin: 0 auto;
+            padding: 2rem 1rem;
+        }
 
-.button {
-    display: inline-block;
-    padding: 0.75rem 1.5rem;
-    font-size: 1rem;
-    font-weight: 600;
-    line-height: 1.5;
-    text-align: center;
-    white-space: nowrap;
-    vertical-align: middle;
-    cursor: pointer;
-    -webkit-user-select: none;
-    user-select: none;
-    border: 1px solid transparent;
-    border-radius: 6px;
-    color: #fff;
-    background-color: #2ea44f;
-    border-color: rgba(27,31,35,0.15);
-    box-shadow: 0 1px 0 rgba(27,31,35,0.1);
-    transition: background-color .2s cubic-bezier(0.3, 0, 0.5, 1);
-    text-decoration: none;
-}
+        .hero {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
 
-.button:hover {
-    background-color: #2c974b;
-    text-decoration: none;
-}
+        .hero img {
+            max-width: 800px;
+            width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
 
-.repo-link {
-    display: block;
-    text-align: center;
-    margin: 1rem 0;
-    color: #0366d6;
-    text-decoration: none;
-}
+        .button-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2rem;
+            margin-bottom: 3rem;
+            max-width: 1012px;
+            margin: 0 auto;
+        }
 
-.repo-link:hover {
-    color: #0056b3;
-    text-decoration: underline;
-}
+        .primary-button-container {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
 
-.content {
-    margin-top: 2rem;
-}
-</style>
+        .button-row {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            width: 100%;
+            max-width: 800px;
+        }
 
-<div class="container">
-    <div class="header">
-        <h1>{{ page.title }}</h1>
-        <p>{{ page.description }}</p>
-        <div>
-            <a href="setup/" class="button">USB Setup Interface</a>
+        .button {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            text-align: center;
+            text-decoration: none;
+            border-radius: 6px;
+            color: #fff;
+            background-color: var(--primary-color);
+            border: 1px solid rgba(27,31,35,0.15);
+            box-shadow: 0 1px 0 rgba(27,31,35,0.1);
+            transition: all 0.2s ease;
+        }
+
+        .button:hover {
+            background-color: var(--hover-color);
+            transform: translateY(-1px);
+        }
+
+        .button.primary {
+            font-size: 1.2rem;
+            padding: 1rem 2rem;
+            background-color: #0366d6;
+        }
+
+        .button.primary:hover {
+            background-color: #0056b3;
+        }
+
+        .setup-note {
+            text-align: center;
+            max-width: 600px;
+            margin: 1rem auto;
+            padding: 1rem;
+            background-color: #f6f8fa;
+            border-radius: 6px;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 3rem;
+            padding-top: 2rem;
+            border-top: 1px solid #eaecef;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="hero">
+            <h1>RPi Waiting Time Display</h1>
+            <img src="images/display_example_cropped.jpg" alt="Display Example showing bus waiting times and weather information">
+        </div>
+
+        <div class="button-container">
+            <div class="primary-button-container">
+                <a href="setup/" class="button primary">USB Setup Interface</a>
+                <div class="setup-note">
+                    If you have a device already set up, plug it in via USB and click the above button to configure it
+                </div>
+            </div>
+
+            <div class="button-row">
+                <a href="features/" class="button">Features</a>
+                <a href="setting-up-the-rpi/" class="button">How to Setup a Raspberry Pi</a>
+                <a href="api-features/" class="button">API Key Features</a>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>View the <a href="https://github.com/bdamokos/rpi_waiting_time_display">project on GitHub</a></p>
         </div>
     </div>
-
-    <a href="https://github.com/bdamokos/rpi_waiting_time_display#readme" class="repo-link">
-        View full project documentation on GitHub →
-    </a>
-
-    <div class="content">
-        {% capture md_content %}{% include_relative setting-up-the-rpi.md %}{% endcapture %}
-        {{ md_content | markdownify }}
-    </div>
-</div>
-
-<script>
-    // Convert relative image paths to absolute paths within the docs folder
-    document.querySelectorAll('img').forEach(img => {
-        const src = img.getAttribute('src');
-        if (src && src.startsWith('images/')) {
-            img.src = src;
-        }
-    });
-</script>
+</body>
+</html>

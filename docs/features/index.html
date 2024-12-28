@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Features - RPi Waiting Time Display</title>
+    <style>
+        :root {
+            --primary-color: #2ea44f;
+            --text-color: #24292e;
+            --border-color: #e1e4e8;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 1012px;
+            margin: 0 auto;
+            padding: 2rem 1rem;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin: 2rem 0;
+        }
+
+        .feature-card {
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 1.5rem;
+            background: #fff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .feature-card img {
+            width: 100%;
+            height: auto;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+        }
+
+        .feature-card h3 {
+            margin-top: 0;
+            margin-bottom: 1rem;
+        }
+
+        .feature-card p {
+            margin: 0;
+            color: #586069;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 2rem;
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+
+        .emoji {
+            font-size: 1.5em;
+            margin-right: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../" class="back-link">← Back to home</a>
+        <h1>Features</h1>
+        
+        <div class="feature-grid">
+            <div class="feature-card">
+                <img src="../images/weather%20mode%20with%20dithered%20weather%20icons.png" alt="Weather Mode">
+                <h3><span class="emoji">☀️</span>Weather Information</h3>
+                <p>Display current temperature, next sunset/sunrise time, and 3-day forecast with weather condition icons. Includes a QR code for the debugging page.</p>
+            </div>
+
+            <div class="feature-card">
+                <img src="../images/stop_display_1line.png" alt="Bus Times Display">
+                <h3><span class="emoji">🚌</span>Public Transport Arrival Times</h3>
+                <p>Shows next bus arrival times for up to 2 lines at 1 stop, with color-coded line numbers matching official colors. Currently supported providers: Belgium STIB/MIVB and DeLijn, Hungary: BKK.</p>
+            </div>
+
+            <div class="feature-card">
+                <img src="../images/no_wifi.png" alt="No WiFi Mode">
+                <h3><span class="emoji">📡</span>Smart WiFi Setup</h3>
+                <p>When offline, automatically creates a hotspot and displays a QR code for easy WiFi configuration.</p> <p> (Needs further testing, if it doesn't work, you can plug the display to your computer and use the setup page to change the WiFi settings.)</p>
+            </div>
+
+            <div class="feature-card">
+                <img src="../images/flight_display_with_aeroapi.png" alt="Flight Tracking">
+                <h3><span class="emoji">✈️</span>Flight Tracking</h3>
+                <p>Optional feature to display overhead flights within a 3km radius. Enhanced with AeroAPI for additional flight information.</p>
+            </div>
+
+            <div class="feature-card">
+                <img src="../images/iss_tracking.png" alt="ISS Tracking">
+                <h3><span class="emoji">🛰️</span>ISS Tracking</h3>
+                <p>Displays the International Space Station position when visible from your location, including information about the next pass.</p>
+            </div>
+
+            <div class="feature-card">
+                <img src="../images/debug_screen.png" alt="Debugging Interface">
+                <h3><span class="emoji">🔧</span>Debugging Interface</h3>
+                <p>Web-based debugging interface to monitor the display's data and status in real-time.</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html> 

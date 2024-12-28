@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Features - RPi Waiting Time Display</title>
+    <style>
+        :root {
+            --primary-color: #2ea44f;
+            --text-color: #24292e;
+            --border-color: #e1e4e8;
+            --feature-available: #2ea44f;
+            --feature-unavailable: #d73a49;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 1012px;
+            margin: 0 auto;
+            padding: 2rem 1rem;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 2rem;
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+
+        .api-section {
+            margin: 3rem 0;
+            padding: 2rem;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: #fff;
+        }
+
+        .api-section h2 {
+            margin-top: 0;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+        }
+
+        .comparison-table th,
+        .comparison-table td {
+            padding: 1rem;
+            border: 1px solid var(--border-color);
+            text-align: left;
+        }
+
+        .comparison-table th {
+            background: #f6f8fa;
+        }
+
+        .feature-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .feature-status::before {
+            content: "";
+            display: inline-block;
+            width: 1rem;
+            height: 1rem;
+            border-radius: 50%;
+        }
+
+        .available::before {
+            background-color: var(--feature-available);
+        }
+
+        .unavailable::before {
+            background-color: var(--feature-unavailable);
+        }
+
+        .api-info {
+            margin-top: 1.5rem;
+            padding: 1rem;
+            background: #f6f8fa;
+            border-radius: 4px;
+        }
+
+        .api-info h3 {
+            margin-top: 0;
+        }
+
+        .api-info a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .api-info a:hover {
+            text-decoration: underline;
+        }
+
+        .image-comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        .image-comparison img {
+            width: 100%;
+            height: auto;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+        }
+
+        .image-comparison-label {
+            text-align: center;
+            margin-top: 0.5rem;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../" class="back-link">← Back to home</a>
+        <h1>API Features Comparison</h1>
+        
+        <div class="api-section">
+            <h2>☀️ OpenWeatherMap API</h2>
+            <table class="comparison-table">
+                <tr>
+                    <th>Feature</th>
+                    <th>Without API Key</th>
+                    <th>With API Key</th>
+                </tr>
+                <tr>
+                    <td>Current Temperature</td>
+                    <td><span class="feature-status unavailable">Not available</span></td>
+                    <td><span class="feature-status available">Available</span></td>
+                </tr>
+                <tr>
+                    <td>Weather Conditions</td>
+                    <td><span class="feature-status unavailable">Not available</span></td>
+                    <td><span class="feature-status available">Available</span></td>
+                </tr>
+                <tr>
+                    <td>3-Day Forecast</td>
+                    <td><span class="feature-status unavailable">Not available</span></td>
+                    <td><span class="feature-status available">Available</span></td>
+                </tr>
+                <tr>
+                    <td>Sunrise/Sunset Times</td>
+                    <td><span class="feature-status unavailable">Not available</span></td>
+                    <td><span class="feature-status available">Available</span></td>
+                </tr>
+            </table>
+            <div class="api-info">
+                <h3>How to Get an API Key</h3>
+                <p>OpenWeatherMap offers a free tier that is sufficient for this project:</p>
+                <ol>
+                    <li>Sign up at <a href="https://openweathermap.org/appid" target="_blank">OpenWeatherMap</a></li>
+                    <li>Generate an API key in your account dashboard</li>
+                    <li>Add the key to your .env file</li>
+                </ol>
+            </div>
+        </div>
+
+        <div class="api-section">
+            <h2>✈️ AeroAPI (FlightAware)</h2>
+            <table class="comparison-table">
+                <tr>
+                    <th>Feature</th>
+                    <th>Without API Key</th>
+                    <th>With API Key</th>
+                </tr>
+                <tr>
+                    <td>Basic Flight Detection</td>
+                    <td><span class="feature-status available">Available</span></td>
+                    <td><span class="feature-status available">Available</span></td>
+                </tr>
+                <tr>
+                    <td>Flight Altitude</td>
+                    <td><span class="feature-status available">Available</span></td>
+                    <td><span class="feature-status available">Available</span></td>
+                </tr>
+                <tr>
+                    <td>Distance from Location</td>
+                    <td><span class="feature-status available">Available</span></td>
+                    <td><span class="feature-status available">Available</span></td>
+                </tr>
+                <tr>
+                    <td>Flight Identification</td>
+                    <td><span class="feature-status available">Tail number and callsign</span></td>
+                    <td><span class="feature-status available">Flight number and airline</span></td>
+                </tr>
+                <tr>
+                    <td>Origin/Destination</td>
+                    <td><span class="feature-status unavailable">Not available</span></td>
+                    <td><span class="feature-status available">Available</span></td>
+                </tr>
+                <tr>
+                    <td>Aircraft Type</td>
+                    <td><span class="feature-status available">Available</span></td>
+                    <td><span class="feature-status available">Available</span></td>
+                </tr>
+            </table>
+            <div class="image-comparison">
+                <div>
+                    <img src="../images/flight_display_without_aeroapi.png" alt="Flight display without AeroAPI">
+                    <div class="image-comparison-label">Without AeroAPI</div>
+                </div>
+                <div>
+                    <img src="../images/flight_display_with_aeroapi.png" alt="Flight display with AeroAPI">
+                    <div class="image-comparison-label">With AeroAPI</div>
+                </div>
+            </div>
+            <div class="api-info">
+                <h3>How to Get an API Key</h3>
+                <p>FlightAware's AeroAPI offers a free tier with $5 monthly quota:</p>
+                <ol>
+                    <li>Sign up at <a href="https://www.flightaware.com/commercial/aeroapi" target="_blank">FlightAware AeroAPI</a></li>
+                    <li>Get your API key</li>
+                    <li>Add the key to your .env file</li>
+                </ol>
+                <p>Note: The application is designed to stay within the free tier limits unless specifically authorized.</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html> 

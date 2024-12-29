@@ -238,6 +238,71 @@
                 <p>Note: The application is designed to stay within the free tier limits unless specifically authorized.</p>
             </div>
         </div>
+
+        <div class="api-section">
+            <h2>🔧 Technical Details: APIs Used</h2>
+            
+            <h3>Weather Data</h3>
+            <ul>
+                <li><strong><a href="https://openweathermap.org/api" target="_blank">OpenWeatherMap API</a></strong>
+                    <ul>
+                        <li>Purpose: Provides local weather data and forecasts</li>
+                        <li>Usage: Temperature, conditions, and forecast data</li>
+                        <li>Free tier is sufficient for our needs</li>
+                        <li>Requires API key</li>
+                    </ul>
+                </li>
+            </ul>
+
+            <h3>Flight Tracking</h3>
+            <ul>
+                <li><strong><a href="https://adsb.one/" target="_blank">ADSB.one API</a></strong>
+                    <ul>
+                        <li>Purpose: Basic flight tracking without authentication</li>
+                        <li>Usage: Receives real-time aircraft position data from a network of ADS-B receivers</li>
+                        <li>Free data source</li>
+                        <li>No API key required</li>
+                    </ul>
+                </li>
+                <li><strong><a href="https://www.flightaware.com/commercial/aeroapi/" target="_blank">FlightAware AeroAPI</a></strong>
+                    <ul>
+                        <li>Purpose: Enhanced flight information</li>
+                        <li>Usage: Provides detailed flight data including origin/destination</li>
+                        <li>Free tier includes $5 monthly quota (sufficient for typical use)</li>
+                        <li>Optional API key</li>
+                    </ul>
+                </li>
+            </ul>
+
+            <h3>Astronomy and Space</h3>
+            <ul>
+                <li><strong><a href="https://celestrak.org/NORAD/elements/gp.php?CATNR=25544" target="_blank">Celestrak API</a></strong>
+                    <ul>
+                        <li>Purpose: Real-time ISS orbital data</li>
+                        <li>Usage: Retrieves current ISS position and predicts passes</li>
+                        <li>Free service, no authentication required</li>
+                        <li>No API key required</li>
+                    </ul>
+                </li>
+                <li><strong><a href="https://ssd.jpl.nasa.gov/orbits.html" target="_blank">NASA JPL Horizons API</a></strong>
+                    <ul>
+                        <li>Purpose: High-precision orbital calculations</li>
+                        <li>Usage: Downloads ephemeris data (positions of celestial bodies) to predict the future position of the ISS based on its current position and to calculate the phases of the moon</li>
+                        <li>Free service from NASA JPL</li>
+                        <li>No API key required</li>
+                    </ul>
+                </li>
+            </ul>
+
+            <div class="api-info">
+                <h3>API Usage Notes</h3>
+                <ul>
+                    <li>The application is designed to work with minimal API requirements - only OpenWeatherMap is strictly required for full functionality</li>
+                    <li>All APIs are used with appropriate rate limiting to stay within free tier limits</li>
+                    <li>Fallback mechanisms are <i>mostly</i> in place for when optional APIs are unavailable</li>
+                </ul>
+            </div>
+        </div>
     </div>
 </body>
 </html> 

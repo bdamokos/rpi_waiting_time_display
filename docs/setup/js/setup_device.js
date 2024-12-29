@@ -103,6 +103,47 @@ class SetupDevice {
         }
     }
 
+    updateCurrentConnection(connectionInfo) {
+        const currentConnElement = document.getElementById('current-connection');
+        if (!currentConnElement) {
+            // Create the element if it doesn't exist
+            const wifiNetworks = document.getElementById('wifi-networks');
+            const currentConnDiv = document.createElement('div');
+            currentConnDiv.id = 'current-connection';
+            currentConnDiv.className = 'current-connection';
+            wifiNetworks.insertBefore(currentConnDiv, wifiNetworks.firstChild);
+        }
+
+        const element = document.getElementById('current-connection');
+        
+        if (connectionInfo.status === 'connected') {
+            const signalStrength = connectionInfo.signal + '%';
+            const securityIcon = connectionInfo.security ? '🔒' : ''; // Lock emoji for secured networks
+            
+            element.innerHTML = `
+                <div class="connection-status connected">
+                    <strong>Connected to:</strong> ${connectionInfo.ssid} ${securityIcon}
+                    <div class="connection-details">
+                        <span>Signal: ${signalStrength}</span>
+                        <span>Rate: ${connectionInfo.rate}</span>
+                    </div>
+                </div>
+            `;
+        } else if (connectionInfo.status === 'not_connected') {
+            element.innerHTML = `
+                <div class="connection-status disconnected">
+                    <strong>Not connected to any network</strong>
+                </div>
+            `;
+        } else if (connectionInfo.error) {
+            element.innerHTML = `
+                <div class="connection-status error">
+                    <strong>Error:</strong> ${connectionInfo.error}
+                </div>
+            `;
+        }
+    }
+
     handleMessage(message) {
         try {
             console.log('Received message chunk:', message);
@@ -154,7 +195,7 @@ class SetupDevice {
                                     this.updateSavedNetworks(data.saved_networks);
                                 } else if (data.status === 'connected' || data.status === 'not_connected') {
                                     console.log('Updating current connection with:', data);
-                                    window.updateCurrentConnection(data);
+                                    this.updateCurrentConnection(data);
                                 } else if (data.error) {
                                     showError(data.error);
                                 } else if (data.settings) {

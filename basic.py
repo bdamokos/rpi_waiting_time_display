@@ -50,7 +50,7 @@ COORDINATES_LAT = float(os.getenv('Coordinates_LAT'))
 COORDINATES_LNG = float(os.getenv('Coordinates_LNG'))
 flights_enabled = True if os.getenv('flights_enabled', 'false').lower() == 'true' else False
 aeroapi_enabled = True if os.getenv('aeroapi_enabled', 'false').lower() == 'true' else False
-flight_check_interval = int(os.getenv('flight_check_interval', 10))
+flight_check_interval = max(1, int(os.getenv('flight_check_interval', 5)))
 FLIGHT_MAX_RADIUS = int(os.getenv('flight_max_radius', 3))
 flight_altitude_convert_feet = True if os.getenv('flight_altitude_convert_feet', 'false').lower() == 'true' else False
 

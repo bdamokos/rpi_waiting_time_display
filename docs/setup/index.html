@@ -44,25 +44,34 @@
             </div>
 
             <div class="step">
-                <h2>Step 2: Basic Configuration</h2>
+                <h2>Step 2: Display Configuration</h2>
+                <p>Set up your e-Paper display hardware.</p>
+                <div id="display-setup" style="display: none;">
+                    <!-- Display setup interface will be rendered here -->
+                </div>
+                <button id="display-setup-button" class="button">Configure Display</button>
+            </div>
+
+            <div class="step">
+                <h2>Step 3: Basic Configuration</h2>
                 <p>Set up your basic display configuration.</p>
                 <button onclick="sendConfigSet('basic_env')" class="button">Start Basic Setup</button>
             </div>
 
             <div class="step">
-                <h2>Step 3: Transit Configuration</h2>
+                <h2>Step 4: Transit Configuration</h2>
                 <p>Configure your transit stops and preferences.</p>
                 <button onclick="sendConfigSet('transit_env')" class="button">Configure Transit</button>
             </div>
 
             <div class="step">
-                <h2>Step 4: Weather Configuration</h2>
+                <h2>Step 5: Weather Configuration</h2>
                 <p>Set up your weather display preferences.</p>
                 <button onclick="sendConfigSet('weather_env')" class="button">Configure Weather</button>
             </div>
 
             <div class="step">
-                <h2>Step 5: Review & Finish</h2>
+                <h2>Step 6: Review & Finish</h2>
                 <p>Review your configuration and start the display service.</p>
                 <button onclick="startReview()" class="button">Review & Finish</button>
             </div>
@@ -115,6 +124,17 @@
 
     <script src="js/setup.js" type="module"></script>
     <script src="js/wifi_setup.js" type="module"></script>
+    <script src="js/display_setup.js" type="module"></script>
     <script src="js/setup_device.js" type="module"></script>
+    <script>
+        // Wait for display setup module to load
+        document.getElementById('display-setup-button').addEventListener('click', () => {
+            if (window.startDisplaySetup) {
+                window.startDisplaySetup();
+            } else {
+                showError('Display setup not initialized yet');
+            }
+        });
+    </script>
 </body>
 </html> 

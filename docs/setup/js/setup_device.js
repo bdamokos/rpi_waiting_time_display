@@ -76,6 +76,7 @@ class SetupDevice {
         }
         const writer = this.port.writable.getWriter();
         try {
+            console.log('📤 Sending:', message);
             await writer.write(new TextEncoder().encode(message + '\n'));
         } catch (error) {
             console.error('Send error:', error);

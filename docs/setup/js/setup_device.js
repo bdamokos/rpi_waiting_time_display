@@ -14,6 +14,7 @@ class SetupDevice {
         this.port = null;
         this.connected = false;
         this.messageBuffer = '';
+        this.pendingResponse = null;
         this.checkSupport();
         this.setupEventListeners();
     }
@@ -74,15 +75,31 @@ class SetupDevice {
         if (!this.connected) {
             throw new Error('Device not connected');
         }
-        const writer = this.port.writable.getWriter();
-        try {
-            console.log('📤 Sending:', message);
-            await writer.write(new TextEncoder().encode(message + '\n'));
-        } catch (error) {
-            console.error('Send error:', error);
-            showError('Send error: ' + error.message);
-        } finally {
-            writer.releaseLock();
+        
+        return new Promise((resolve, reject) => {
+            const writer = this.port.writable.getWriter();
+            try {
+                console.log('📤 Sending:', message);
+                writer.write(new TextEncoder().encode(message + '\n'));
+                
+                // Store the resolve function to be called when we get a response
+                this.pendingResponse = resolve;
+                
+            } catch (error) {
+                console.error('Send error:', error);
+                reject(error);
+            } finally {
+                writer.releaseLock();
+            }
+        });
+    }
+
+    handleResponse(response) {
+        console.log('Received:', response);
+        // If we have a pending response handler, call it
+        if (this.pendingResponse) {
+            this.pendingResponse(response);
+            this.pendingResponse = null;
         }
     }
 
@@ -133,7 +150,9 @@ class SetupDevice {
                                 } else if (data.error) {
                                     showError(data.error);
                                 } else {
+                                    // Handle general response
                                     console.log('Received:', data);
+                                    this.handleResponse(data);
                                 }
                             } catch (e) {
                                 console.error('Error parsing JSON:', e);
@@ -221,6 +240,54 @@ class SetupDevice {
         document.getElementById('connect-prompt').style.display = 'block';
         document.getElementById('setup-interface').style.display = 'none';
         document.getElementById('connect-button').textContent = 'Connect';
+    }
+
+    async readLoop() {
+        while (true) {
+            const reader = this.port.readable.getReader();
+            try {
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) {
+                        break;
+                    }
+                    // Decode the received data
+                    const chunk = new TextDecoder().decode(value);
+                    console.log('Received message chunk:', chunk);
+                    
+                    // Add to buffer
+                    this.messageBuffer += chunk;
+                    
+                    // Check for complete messages
+                    const messages = this.messageBuffer.split('\n');
+                    
+                    // Keep the last incomplete message in the buffer
+                    this.messageBuffer = messages.pop();
+                    
+                    // Process complete messages
+                    for (const message of messages) {
+                        if (message.trim()) {
+                            try {
+                                const parsed = JSON.parse(message);
+                                console.log('Parsed complete JSON:', parsed);
+                                this.handleResponse(parsed);
+                            } catch (e) {
+                                console.error('Error parsing JSON:', e);
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Read error:', error);
+            } finally {
+                reader.releaseLock();
+            }
+            
+            if (!this.connected) break;
+            
+            // Small delay before retrying
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
     }
 }
 

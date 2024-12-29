@@ -12,6 +12,7 @@
             <h1>Connect Your Display</h1>
             <p id="serial-support">Checking WebSerial support...</p>
             <button id="connect-button" class="button">Connect Device</button>
+            <p>In the window that opens, select Pi Zero Serial and click Connect.</p>
         </div>
 
         <div id="setup-interface" style="display: none;">
@@ -126,15 +127,5 @@
     <script src="js/wifi_setup.js" type="module"></script>
     <script src="js/display_setup.js" type="module"></script>
     <script src="js/setup_device.js" type="module"></script>
-    <script>
-        // Wait for display setup module to load
-        document.getElementById('display-setup-button').addEventListener('click', () => {
-            if (window.startDisplaySetup) {
-                window.startDisplaySetup();
-            } else {
-                showError('Display setup not initialized yet');
-            }
-        });
-    </script>
 </body>
 </html> 

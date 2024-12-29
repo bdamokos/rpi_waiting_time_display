@@ -23,7 +23,7 @@
             "url": "https://www.waveshare.com/product/2.13inch-e-paper-hat-g.htm",
             "notes": "Four-color display with partial refresh support",
             "images": [
-                "images/display_example_cropped.jpg", "https://www.waveshare.com/media/catalog/product/cache/1/image/560x560/9df78eab33525d08d6e5fb8d27136e95/2/_/2.13inch-e-paper-hat-g-1.jpg" , "https://www.waveshare.com/media/catalog/product/cache/1/image/800x800/9df78eab33525d08d6e5fb8d27136e95/2/_/2.13inch-e-paper-hat-g-3.jpg"
+                "../images/display_example_cropped.jpg", "https://www.waveshare.com/media/catalog/product/cache/1/image/560x560/9df78eab33525d08d6e5fb8d27136e95/2/_/2.13inch-e-paper-hat-g-1.jpg" , "https://www.waveshare.com/media/catalog/product/cache/1/image/800x800/9df78eab33525d08d6e5fb8d27136e95/2/_/2.13inch-e-paper-hat-g-3.jpg"
             ]
         },
         {
@@ -69,7 +69,7 @@
             "url": "https://www.waveshare.com/product/2.13inch-touch-e-paper-hat-with-case.htm",
             "notes": "Black and white display that comes with it's own case",
             "images": ["https://www.waveshare.com/media/catalog/product/cache/1/image/560x560/9df78eab33525d08d6e5fb8d27136e95/2/_/2.13inch-touch-e-paper-hat-with-case-1.jpg", 
-                "images/hardware_setup_insert_screen_into_case.jpeg"
+                "../images/hardware_setup_insert_screen_into_case.jpeg"
             ]
         }
     ],

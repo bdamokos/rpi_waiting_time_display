@@ -4,6 +4,12 @@
     <title>E-Paper Display Setup</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="css/style.css">
+    <script>
+        // Check if we're on 0.0.0.0:4000 and redirect to localhost:4000
+        if (window.location.hostname === '0.0.0.0' && window.location.port === '4000') {
+            window.location.href = window.location.href.replace('0.0.0.0', 'localhost');
+        }
+    </script>
 </head>
 <body>
     <div class="container">
@@ -52,23 +58,22 @@
                 </div>
                 <button id="display-setup-button" class="button">Configure Display</button>
             </div>
-
             <div class="step">
-                <h2>Step 3: Basic Configuration</h2>
-                <p>Set up your basic display configuration.</p>
-                <button onclick="sendConfigSet('basic_env')" class="button">Start Basic Setup</button>
+                <h2>Step 4: Service Configuration</h2>
+                <p>Choose which services to enable and configure their settings.</p>
+                <div id="service-setup" style="display: none;">
+                    <!-- Service setup interface will be rendered here -->
+                </div>
+                <button id="service-setup-button" class="button">Configure Services</button>
             </div>
 
             <div class="step">
-                <h2>Step 4: Transit Configuration</h2>
-                <p>Configure your transit stops and preferences.</p>
-                <button onclick="sendConfigSet('transit_env')" class="button">Configure Transit</button>
-            </div>
-
-            <div class="step">
-                <h2>Step 5: Weather Configuration</h2>
-                <p>Set up your weather display preferences.</p>
-                <button onclick="sendConfigSet('weather_env')" class="button">Configure Weather</button>
+                <h2>Step 5: API Keys</h2>
+                <p>Configure API keys for enabled services.</p>
+                <div id="api-setup" style="display: none;">
+                    <!-- API setup interface will be rendered here -->
+                </div>
+                <button id="api-setup-button" class="button">Configure API Keys</button>
             </div>
 
             <div class="step">
@@ -126,6 +131,7 @@
     <script src="js/setup.js" type="module"></script>
     <script src="js/wifi_setup.js" type="module"></script>
     <script src="js/display_setup.js" type="module"></script>
+    <script src="js/service_setup.js" type="module"></script>
     <script src="js/setup_device.js" type="module"></script>
 </body>
 </html> 

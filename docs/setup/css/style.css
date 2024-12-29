@@ -441,3 +441,475 @@ img {
         grid-template-columns: 1fr;
     }
 }
+
+/* Display Settings Styles */
+.settings-config {
+    background: var(--background-color);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 30px;
+}
+
+.rotation-setting {
+    margin-bottom: 30px;
+}
+
+.rotation-setting select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background-color: var(--background-color);
+    margin-top: 10px;
+}
+
+.preset-info {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 20px;
+    margin: 20px 0;
+}
+
+.preset-info h4 {
+    margin: 0 0 10px 0;
+    color: var(--accent-color);
+}
+
+.preset-settings {
+    margin-top: 15px;
+}
+
+.preset-settings p {
+    margin: 8px 0;
+    color: #666;
+}
+
+.advanced-settings-button {
+    width: 100%;
+    padding: 12px;
+    background: var(--accent-color);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    margin-top: 20px;
+    transition: background 0.3s;
+}
+
+.advanced-settings-button:hover {
+    background: var(--accent-hover);
+}
+
+.settings-form {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.settings-form .form-group {
+    margin-bottom: 20px;
+}
+
+.settings-form label {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--text-color);
+    font-weight: 500;
+}
+
+.settings-form input[type="number"] {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background-color: var(--background-color);
+}
+
+.settings-form input[type="number"]:focus {
+    border-color: var(--accent-color);
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
+}
+
+.button-group {
+    display: flex;
+    gap: 10px;
+    margin-top: 30px;
+}
+
+.button-group button {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background 0.3s;
+}
+
+.button-group button:first-child {
+    background: #6c757d;
+    color: white;
+}
+
+.button-group button:first-child:hover {
+    background: #5a6268;
+}
+
+.button-group button:last-child {
+    background: var(--accent-color);
+    color: white;
+}
+
+.button-group button:last-child:hover {
+    background: var(--accent-hover);
+}
+
+/* Responsive adjustments for settings */
+@media (max-width: 600px) {
+    .settings-form {
+        padding: 0 10px;
+    }
+    
+    .button-group {
+        flex-direction: column;
+    }
+    
+    .preset-info {
+        padding: 15px;
+    }
+}
+
+.button-group button small {
+    display: block;
+    font-size: 0.8em;
+    opacity: 0.8;
+    font-weight: normal;
+    margin-top: 4px;
+}
+
+.button-group button.keep-current {
+    background: #6c757d;
+}
+
+.button-group button.keep-current:hover {
+    background: #5a6268;
+}
+
+.settings-form .form-group small {
+    display: block;
+    color: #666;
+    font-size: 0.85em;
+    margin-top: 4px;
+}
+
+.preset-info p {
+    margin: 8px 0;
+    color: #666;
+}
+
+.preset-settings {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 4px;
+    margin-top: 10px;
+}
+
+.preset-actions {
+    margin-top: 30px;
+    border-top: 1px solid var(--light-border);
+    padding-top: 20px;
+}
+
+.preset-actions .button-group {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.preset-actions button {
+    padding: 15px;
+    text-align: center;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background 0.3s;
+    color: white;
+}
+
+.preset-actions button:not(.keep-current) {
+    background: var(--accent-color);
+}
+
+.preset-actions button:not(.keep-current):hover {
+    background: var(--accent-hover);
+}
+
+.preset-actions .advanced-settings-button {
+    background: var(--primary-color);
+}
+
+.preset-actions .advanced-settings-button:hover {
+    background: var(--hover-color);
+}
+
+.setup-steps {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.setup-step {
+    background: var(--background-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 20px;
+}
+
+.setup-step h4 {
+    margin: 0 0 10px 0;
+    color: var(--accent-color);
+}
+
+.setup-step p {
+    margin: 10px 0;
+    color: #666;
+}
+
+.step-button {
+    width: 100%;
+    padding: 12px;
+    background: var(--accent-color);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    margin-top: 10px;
+    transition: background 0.3s;
+}
+
+.step-button:hover:not(:disabled) {
+    background: var(--accent-hover);
+}
+
+.step-button:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
+#step-content {
+    margin-top: 30px;
+    border-top: 1px solid var(--light-border);
+    padding-top: 20px;
+}
+
+/* Service Setup Styles */
+.service-setup-container,
+.api-setup-container {
+    padding: 20px;
+}
+
+.service-grid,
+.api-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+    margin: 20px 0;
+}
+
+.service-card,
+.api-card {
+    background: var(--background-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+}
+
+.service-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.service-header h4 {
+    margin: 0;
+    color: var(--accent-color);
+}
+
+/* Toggle Switch */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 60px;
+    height: 34px;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: .4s;
+    border-radius: 34px;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 26px;
+    width: 26px;
+    left: 4px;
+    bottom: 4px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+}
+
+input:checked + .slider {
+    background-color: var(--primary-color);
+}
+
+input:focus + .slider {
+    box-shadow: 0 0 1px var(--primary-color);
+}
+
+input:checked + .slider:before {
+    transform: translateX(26px);
+}
+
+.api-note {
+    margin: 10px 0;
+    padding: 8px;
+    background: var(--warning-bg);
+    border-radius: 4px;
+    color: var(--warning-color);
+}
+
+.configure-button {
+    margin-top: auto;
+    padding: 10px;
+    background: var(--accent-color);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.configure-button:hover:not(:disabled) {
+    background: var(--accent-hover);
+}
+
+.configure-button:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
+.api-link {
+    display: inline-block;
+    margin: 10px 0;
+    color: var(--accent-color);
+    text-decoration: none;
+}
+
+.api-link:hover {
+    text-decoration: underline;
+}
+
+.api-input {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.api-input input {
+    flex: 1;
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+}
+
+.api-input button {
+    padding: 8px;
+    background: var(--accent-color);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.api-input button:hover {
+    background: var(--accent-hover);
+}
+
+.next-button {
+    width: 100%;
+    padding: 12px;
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    margin-top: 20px;
+    transition: background 0.3s;
+}
+
+.next-button:hover {
+    background: var(--hover-color);
+}
+
+.back-button {
+    width: 100%;
+    padding: 12px;
+    background: #6c757d;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    margin-top: 20px;
+    transition: background 0.3s;
+}
+
+.back-button:hover {
+    background: #5a6268;
+}
+
+/* Service Config Styles */
+.service-config-container {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+    .service-grid,
+    .api-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .service-header {
+        flex-direction: column;
+        gap: 10px;
+        text-align: center;
+    }
+}

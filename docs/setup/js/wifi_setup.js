@@ -11,15 +11,15 @@ window.startWiFiSetup = async function() {
             throw new Error("WiFi networks element not found");
         }
 
-        // Show WiFi setup UI first
+        // Show WiFi setup UI
         wifiNetworks.style.display = 'block';
 
-        // Scan for networks
+        // Request network scan
         await window.setupDevice.send(JSON.stringify({
             command: 'wifi_scan'
         }));
 
-        // Get saved networks
+        // Request saved networks
         await window.setupDevice.send(JSON.stringify({
             command: 'wifi_saved'
         }));
@@ -30,83 +30,81 @@ window.startWiFiSetup = async function() {
     }
 }
 
-window.connectToNetwork = async function(ssid) {
-    try {
-        const password = prompt(`Enter password for ${ssid}:`);
-        if (password === null) return; // User cancelled
-
-        await window.setupDevice.send(JSON.stringify({
-            command: 'wifi_connect',
-            ssid: ssid,
-            password: password
-        }));
-    } catch (error) {
-        console.error('Failed to connect:', error);
-        window.showError('Connection Error: ' + error.message);
+window.connectToNetwork = async function(ssid, requiresPassword = true) {
+    if (requiresPassword) {
+        showPasswordPrompt(ssid);
+    } else {
+        await sendConnectCommand(ssid, '');
     }
 }
 
 window.forgetNetwork = async function(uuid) {
     try {
-        if (confirm('Are you sure you want to forget this network?')) {
-            await window.setupDevice.send(JSON.stringify({
-                command: 'wifi_forget',
-                uuid: uuid
-            }));
+        const response = await window.setupDevice.send(JSON.stringify({
+            command: 'wifi_forget',
+            uuid: uuid
+        }));
+        
+        if (response.status === 'success') {
+            window.showMessage('Network forgotten');
+            startWiFiSetup(); // Refresh the network lists
+        } else {
+            throw new Error(response.message || 'Failed to forget network');
         }
     } catch (error) {
         console.error('Failed to forget network:', error);
-        window.showError('Error: ' + error.message);
+        window.showError('Failed to forget network: ' + error.message);
     }
 }
 
-// Add styles for WiFi setup
-const style = document.createElement('style');
-style.textContent = `
-    .network-list, .saved-network-list {
-        margin: 1em 0;
-        max-height: 300px;
-        overflow-y: auto;
+function showPasswordPrompt(ssid) {
+    const prompt = document.createElement('div');
+    prompt.className = 'wifi-password-prompt';
+    prompt.innerHTML = `
+        <h3>Connect to ${ssid}</h3>
+        <div class="input-group">
+            <input type="password" id="wifi-password" placeholder="Enter password">
+        </div>
+        <div class="button-group">
+            <button class="cancel" onclick="closePasswordPrompt()">Cancel</button>
+            <button class="connect" onclick="submitPassword('${ssid}')">Connect</button>
+        </div>
+    `;
+    document.body.appendChild(prompt);
+
+    // Focus the password input
+    document.getElementById('wifi-password').focus();
+}
+
+window.closePasswordPrompt = function() {
+    const prompt = document.querySelector('.wifi-password-prompt');
+    if (prompt) {
+        prompt.remove();
     }
-    
-    .network-item {
-        display: flex;
-        align-items: center;
-        padding: 0.5em;
-        border-bottom: 1px solid #eee;
+}
+
+window.submitPassword = async function(ssid) {
+    const passwordInput = document.getElementById('wifi-password');
+    const password = passwordInput.value;
+    closePasswordPrompt();
+    await sendConnectCommand(ssid, password);
+}
+
+async function sendConnectCommand(ssid, password) {
+    try {
+        const response = await window.setupDevice.send(JSON.stringify({
+            command: 'wifi_connect',
+            ssid: ssid,
+            password: password
+        }));
+        
+        if (response.status === 'success') {
+            window.showMessage(`Connecting to ${ssid}...`);
+        } else {
+            throw new Error(response.message || 'Failed to connect');
+        }
+    } catch (error) {
+        console.error('Failed to connect:', error);
+        window.showError('Failed to connect: ' + error.message);
     }
-    
-    .network-name {
-        flex-grow: 1;
-        margin-right: 1em;
-    }
-    
-    .network-signal {
-        margin-right: 1em;
-        color: #666;
-    }
-    
-    .error {
-        color: red;
-        margin: 1em 0;
-    }
-    
-    .network-controls {
-        margin-top: 1em;
-        text-align: center;
-    }
-    
-    .refresh-button {
-        background-color: #4CAF50;
-        color: white;
-        padding: 10px 20px;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-    }
-    
-    .refresh-button:hover {
-        background-color: #45a049;
-    }
-`;
-document.head.appendChild(style); 
+} 

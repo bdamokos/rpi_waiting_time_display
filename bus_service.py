@@ -313,24 +313,18 @@ class BusService:
                 
                 if not line_data:
                     logger.warning(f"No data found for line {line}")
-                    bus_times.append({
-                        "line": line,
-                        "times": [],
-                        "colors": [('black', 0.7), ('white', 0.3)],
-                        "message": None
-                    })
                     continue
 
-                # Process times and messages from all destinations
-                all_times = []
-                minutes_source = None
-                minutes_keys = ['minutes', 'scheduled_minutes', 'realtime_minutes']
-                
                 # Get line display name from metadata if available
                 display_line = line  # Default to route ID
                 if '_metadata' in line_data and 'route_short_name' in line_data['_metadata']:
                     display_line = line_data['_metadata']['route_short_name']
                     logger.debug(f"Using display line number {display_line} for route {line}")
+
+                # Process times and messages from all destinations
+                all_times = []
+                minutes_source = None
+                minutes_keys = ['minutes', 'scheduled_minutes', 'realtime_minutes']
                 
                 for destination, times in line_data.items():
                     if destination == '_metadata':  # Skip metadata
@@ -401,12 +395,13 @@ class BusService:
                             else:
                                 message = msg
                         logger.debug(f"Time: {time}, Message: {message}, Minutes: {bus.get(minutes_source, None)}, Destination: {destination}")
-                        all_times.append({
-                            'time': time,
-                            'message': message,
-                            'minutes': bus.get(minutes_source, None),
-                            'destination': destination
-                        })
+                        if time or message:  # Only add if we have either a time or a message
+                            all_times.append({
+                                'time': time,
+                                'message': message,
+                                'minutes': bus.get(minutes_source, None),
+                                'destination': destination
+                            })
 
                 # Sort times by minutes:
                 # - Extracts only digits from time strings (e.g., "⚡5" -> 5, "🕒10" -> 10)
@@ -415,10 +410,10 @@ class BusService:
                 all_times.sort(key=lambda x: int(''.join(filter(str.isdigit, str(x['minutes'])))) if x['minutes'] is not None and str(x['minutes']).strip() and any(c.isdigit() for c in str(x['minutes'])) else float('inf'))
                 logger.debug(f"All sorted times for line {line}: {all_times}")
 
-                # Take all available times
-                waiting_times = []
-                messages = []
+                # Only add the bus line if we have actual times or messages to display
                 if all_times:
+                    waiting_times = []
+                    messages = []
                     # Special handling for end of service
                     if any(t['message'] == "End of service" for t in all_times):
                         waiting_times = [""]
@@ -434,20 +429,15 @@ class BusService:
                             waiting_times.append(time_data['time'])
                             messages.append(time_data['message'])
 
-                # Ensure at least one slot
-                if not waiting_times:
-                    waiting_times = [""]
-                    messages = [None]
+                    # Get colors for dithering
+                    colors = self.get_line_color(line)
 
-                # Get colors for dithering
-                colors = self.get_line_color(line)
-
-                bus_times.append({
-                    "line": display_line,  # Use display line number
-                    "times": waiting_times,
-                    "messages": messages,
-                    "colors": colors
-                })
+                    bus_times.append({
+                        "line": display_line,  # Use display line number
+                        "times": waiting_times,
+                        "messages": messages,
+                        "colors": colors
+                    })
 
             # Update backoff state on success
             self._backoff.update_backoff_state(True)

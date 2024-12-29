@@ -43,6 +43,7 @@ class WebSerialServer:
         self.config = ConfigManager()
         self.poll = select.poll()
         self.setup_serial_ports()
+        self.load_display_database()
 
     def setup_serial_ports(self):
         """Initialize serial connections"""
@@ -93,6 +94,33 @@ class WebSerialServer:
             logger.error(f"Failed to setup serial ports: {e}")
             raise
 
+    def load_display_database(self):
+        """Load the display database from JSON"""
+        try:
+            with open('docs/data/displays.json', 'r') as f:
+                self.display_database = json.load(f)
+            logger.info("Display database loaded successfully")
+        except Exception as e:
+            logger.error(f"Failed to load display database: {e}")
+            self.display_database = {"displays": [], "categories": {}}
+
+    def get_current_display_config(self):
+        """Get current display configuration from .env"""
+        try:
+            display_model = self.config.get_value('display_env', 'display_model')
+            if not display_model:
+                return None
+            
+            # Find matching display in database
+            for display in self.display_database.get('displays', []):
+                if display['driver'] == display_model:
+                    return display
+            
+            return {'driver': display_model, 'notes': 'Custom or unknown display driver'}
+        except Exception as e:
+            logger.error(f"Error getting current display config: {e}")
+            return None
+
     def handle_message(self, message):
         """Handle incoming messages"""
         try:
@@ -100,7 +128,28 @@ class WebSerialServer:
             data = json.loads(message)
             command = data.get('command')
             
-            if command == 'wifi_scan':
+            if command == 'display_get_database':
+                response = {
+                    'status': 'success',
+                    'database': self.display_database
+                }
+            elif command == 'display_get_current':
+                current_config = self.get_current_display_config()
+                response = {
+                    'status': 'success',
+                    'current_config': current_config
+                }
+            elif command == 'display_set_driver':
+                success = self.config.set_value(
+                    'display_env',
+                    'display_model',
+                    data.get('driver')
+                )
+                response = {
+                    'status': 'success' if success else 'error',
+                    'message': 'Display driver updated successfully' if success else 'Failed to update display driver'
+                }
+            elif command == 'wifi_scan':
                 response = self.wifi.get_available_networks()
             elif command == 'wifi_saved':
                 response = self.wifi.get_saved_networks()
@@ -141,6 +190,14 @@ class WebSerialServer:
                     data.get('content')
                 )
                 response = {'status': 'success' if success else 'error'}
+            elif command == 'save_display_db':
+                try:
+                    with open('docs/data/displays.json', 'w') as f:
+                        json.dump(data.get('content'), f, indent=4)
+                    response = {'status': 'success', 'message': 'Display database saved successfully'}
+                except Exception as e:
+                    logger.error(f"Error saving display database: {e}")
+                    response = {'status': 'error', 'message': str(e)}
             else:
                 response = {'status': 'error', 'message': 'Unknown command'}
             

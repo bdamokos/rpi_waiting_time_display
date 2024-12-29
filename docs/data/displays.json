@@ -1,0 +1,90 @@
+{
+    "version": "1.0",
+    "displays": [
+        {
+            "id": "epd2in13g_V2",
+            "name": "2.13inch e-Paper (B/W/Y/R)",
+            "manufacturer": "Waveshare",
+            "size": "2.13",
+            "resolution": {
+                "width": 250,
+                "height": 122
+            },
+            "colors": [
+                "black",
+                "white",
+                "yellow",
+                "red"
+            ],
+            "features": {
+                "partial_refresh": false
+            },
+            "driver": "epd2in13g_V2",
+            "url": "https://www.waveshare.com/product/2.13inch-e-paper-hat-g.htm",
+            "notes": "Four-color display with partial refresh support",
+            "images": [
+                "images/display_example_cropped.jpg", "https://www.waveshare.com/media/catalog/product/cache/1/image/560x560/9df78eab33525d08d6e5fb8d27136e95/2/_/2.13inch-e-paper-hat-g-1.jpg" , "https://www.waveshare.com/media/catalog/product/cache/1/image/800x800/9df78eab33525d08d6e5fb8d27136e95/2/_/2.13inch-e-paper-hat-g-3.jpg"
+            ]
+        },
+        {
+            "id": "epd2in13_V4",
+            "name": "2.13inch e-Paper V4 (B/W)",
+            "manufacturer": "Waveshare",
+            "size": "2.13",
+            "resolution": {
+                "width": 250,
+                "height": 122
+            },
+            "colors": [
+                "black",
+                "white"
+            ],
+            "features": {
+                "partial_refresh": true,
+                "fast_refresh": true
+            },
+            "driver": "epd2in13_V4",
+            "url": "https://www.waveshare.com/2.13inch-e-paper-hat.htm",
+            "notes": "Black and white display with partial refresh support. Look for a a 'V4' sticker on the back of the display to be sure. Might work also with versions without the sticker, but not tested.",
+            "images": ["https://www.waveshare.com/media/catalog/product/cache/1/image/560x560/9df78eab33525d08d6e5fb8d27136e95/2/_/2.13inch-e-paper-hat-3_1_2.jpg", "https://www.waveshare.com/media/catalog/product/cache/1/image/560x560/9df78eab33525d08d6e5fb8d27136e95/2/_/2.13inch-touch-e-paper-hat-1_1.jpg" ]
+        },
+        {
+            "id": "Waveshare_2.13_display_hat_with_case",
+            "name": "2.13inch e-Paper display hat with case",
+            "manufacturer": "Waveshare",
+            "size": "2.13",
+            "resolution": {
+                "width": 250,
+                "height": 122
+            },
+            "colors": [
+                "black",
+                "white"
+            ],
+            "features": {
+                "partial_refresh": true,
+                "fast_refresh": true
+            },
+            "driver": "epd2in13_V4",
+            "url": "https://www.waveshare.com/product/2.13inch-touch-e-paper-hat-with-case.htm",
+            "notes": "Black and white display that comes with it's own case",
+            "images": ["https://www.waveshare.com/media/catalog/product/cache/1/image/560x560/9df78eab33525d08d6e5fb8d27136e95/2/_/2.13inch-touch-e-paper-hat-with-case-1.jpg", 
+                "images/hardware_setup_insert_screen_into_case.jpeg"
+            ]
+        }
+    ],
+    "categories": {
+        "sizes": [
+            "2.13"
+        ],
+        "colors": [
+            "black",
+            "white",
+            "red",
+            "yellow"
+        ],
+        "manufacturers": [
+            "Waveshare"
+        ]
+    }
+}

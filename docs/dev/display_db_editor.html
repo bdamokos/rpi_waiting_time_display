@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Display Database Editor</title>
+    <style>
+        body { font-family: monospace; margin: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .editor-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        #jsonEditor {
+            width: 100%;
+            height: 600px;
+            font-family: monospace;
+            white-space: pre;
+            tab-size: 4;
+        }
+        .preview {
+            border: 1px solid #ccc;
+            padding: 10px;
+            overflow: auto;
+        }
+        .error { color: red; }
+        .success { color: green; }
+        .button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .button:hover { background: #45a049; }
+        .display-card {
+            border: 1px solid #ccc;
+            margin: 10px 0;
+            padding: 10px;
+        }
+        .display-card img {
+            max-width: 200px;
+            height: auto;
+        }
+        .input-form {
+            margin-top: 20px;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .input-group {
+            margin-bottom: 10px;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        .input-group input, .input-group select {
+            width: 100%;
+            padding: 5px;
+            margin-bottom: 5px;
+        }
+        .checkbox-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .checkbox-group label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .checkbox-group input[type="checkbox"] {
+            width: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Display Database Editor</h1>
+        <p>This is a development tool for managing the display database.</p>
+        
+        <div class="editor-container">
+            <div>
+                <h2>JSON Editor</h2>
+                <textarea id="jsonEditor" spellcheck="false"></textarea>
+                <div>
+                    <button class="button" onclick="validateJson()">Validate JSON</button>
+                    <button class="button" onclick="formatJson()">Format JSON</button>
+                    <button class="button" onclick="downloadJson()">Download JSON</button>
+                    <button class="button" onclick="saveJson()" style="background-color: #2196F3;">Save to displays.json</button>
+                </div>
+                <div id="validationMessage"></div>
+
+                <div class="input-form">
+                    <h3>Add New Display</h3>
+                    <form id="displayForm" onsubmit="addNewDisplay(event)">
+                        <div class="input-group">
+                            <label>ID:</label>
+                            <input type="text" id="id" required placeholder="e.g., epd2in13_V4">
+                        </div>
+                        <div class="input-group">
+                            <label>Name:</label>
+                            <input type="text" id="name" required placeholder="e.g., 2.13inch e-Paper V4 (B/W)">
+                        </div>
+                        <div class="input-group">
+                            <label>Manufacturer:</label>
+                            <select id="manufacturer" required>
+                                <!-- Will be populated from categories -->
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label>Size:</label>
+                            <select id="size" required>
+                                <!-- Will be populated from categories -->
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label>Resolution:</label>
+                            <input type="number" id="width" placeholder="Width" required style="width: 45%">
+                            <input type="number" id="height" placeholder="Height" required style="width: 45%">
+                        </div>
+                        <div class="input-group">
+                            <label>Colors:</label>
+                            <div class="checkbox-group" id="colors">
+                                <!-- Will be populated from categories -->
+                            </div>
+                        </div>
+                        <div class="input-group">
+                            <label>Features:</label>
+                            <div class="checkbox-group">
+                                <label>
+                                    <input type="checkbox" id="partial_refresh">
+                                    Partial Refresh
+                                </label>
+                                <label>
+                                    <input type="checkbox" id="fast_refresh">
+                                    Fast Refresh
+                                </label>
+                            </div>
+                        </div>
+                        <div class="input-group">
+                            <label>Driver:</label>
+                            <input type="text" id="driver" required placeholder="e.g., epd2in13_V4">
+                        </div>
+                        <div class="input-group">
+                            <label>URL:</label>
+                            <input type="url" id="url" placeholder="Product page URL">
+                            <button type="button" class="button" onclick="window.open(document.getElementById('url').value, '_blank')" style="width: auto; margin-top: 5px;">
+                                Test URL
+                            </button>
+                        </div>
+                        <div class="input-group">
+                            <label>Notes:</label>
+                            <input type="text" id="notes" placeholder="Additional information">
+                        </div>
+                        <div class="input-group">
+                            <label>Images (comma-separated paths or URLs):</label>
+                            <input type="text" id="images" placeholder="e.g., images/display1.jpg, https://example.com/image.jpg">
+                            <div id="imagePreview" style="margin-top: 10px;"></div>
+                        </div>
+                        <button type="submit" class="button">Add Display</button>
+                    </form>
+                </div>
+            </div>
+            
+            <div>
+                <h2>Preview</h2>
+                <div id="preview" class="preview"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentData = null;
+
+        // Load the current database
+        fetch('../data/displays.json')
+            .then(response => response.json())
+            .then(data => {
+                currentData = data;
+                const formatted = JSON.stringify(data, null, 4);
+                document.getElementById('jsonEditor').value = formatted;
+                updatePreview(data);
+                populateFormSelections(data);
+            })
+            .catch(error => {
+                console.error('Error loading database:', error);
+                document.getElementById('validationMessage').innerHTML = 
+                    `<div class="error">Error loading database: ${error.message}</div>`;
+            });
+
+        function populateFormSelections(data) {
+            // Populate manufacturers
+            const manufacturerSelect = document.getElementById('manufacturer');
+            manufacturerSelect.innerHTML = data.categories.manufacturers.map(m => 
+                `<option value="${m}">${m}</option>`
+            ).join('');
+
+            // Populate sizes
+            const sizeSelect = document.getElementById('size');
+            sizeSelect.innerHTML = data.categories.sizes.map(s => 
+                `<option value="${s}">${s}"</option>`
+            ).join('');
+
+            // Populate colors
+            const colorsDiv = document.getElementById('colors');
+            colorsDiv.innerHTML = data.categories.colors.map(c => `
+                <label>
+                    <input type="checkbox" value="${c}">
+                    ${c}
+                </label>
+            `).join('');
+        }
+
+        function addNewDisplay(event) {
+            event.preventDefault();
+            
+            // Get form values
+            const newDisplay = {
+                id: document.getElementById('id').value,
+                name: document.getElementById('name').value,
+                manufacturer: document.getElementById('manufacturer').value,
+                size: document.getElementById('size').value,
+                resolution: {
+                    width: parseInt(document.getElementById('width').value),
+                    height: parseInt(document.getElementById('height').value)
+                },
+                colors: Array.from(document.querySelectorAll('#colors input:checked')).map(cb => cb.value),
+                features: {
+                    partial_refresh: document.getElementById('partial_refresh').checked,
+                    fast_refresh: document.getElementById('fast_refresh').checked
+                },
+                driver: document.getElementById('driver').value,
+                url: document.getElementById('url').value,
+                notes: document.getElementById('notes').value,
+                images: document.getElementById('images').value.split(',')
+                    .map(s => s.trim())
+                    .filter(s => s)
+            };
+
+            // Add to current data
+            currentData.displays.push(newDisplay);
+
+            // Update editor and preview
+            document.getElementById('jsonEditor').value = JSON.stringify(currentData, null, 4);
+            updatePreview(currentData);
+            
+            // Show success message
+            document.getElementById('validationMessage').innerHTML = 
+                '<div class="success">Display added successfully ✓</div>';
+            
+            // Reset form
+            document.getElementById('displayForm').reset();
+            document.getElementById('imagePreview').innerHTML = '';
+        }
+
+        // Add image preview functionality
+        document.getElementById('images').addEventListener('input', function(e) {
+            const imageUrls = e.target.value.split(',').map(s => s.trim()).filter(s => s);
+            const previewDiv = document.getElementById('imagePreview');
+            previewDiv.innerHTML = imageUrls.map(url => {
+                const imgSrc = url.match(/^(https?:)?\/\//) ? url : `/${url}`;
+                return `
+                    <div style="margin: 5px 0;">
+                        <img src="${imgSrc}" alt="Preview" style="max-width: 200px; max-height: 100px; object-fit: contain;">
+                        <br>
+                        <a href="${imgSrc}" target="_blank" style="font-size: 12px;">Test image link</a>
+                    </div>
+                `;
+            }).join('');
+        });
+
+        function validateJson() {
+            const editor = document.getElementById('jsonEditor');
+            const validationMessage = document.getElementById('validationMessage');
+            
+            try {
+                const json = JSON.parse(editor.value);
+                currentData = json;
+                validationMessage.innerHTML = '<div class="success">Valid JSON ✓</div>';
+                updatePreview(json);
+                populateFormSelections(json);
+            } catch (error) {
+                validationMessage.innerHTML = `<div class="error">Invalid JSON: ${error.message}</div>`;
+            }
+        }
+
+        function formatJson() {
+            const editor = document.getElementById('jsonEditor');
+            try {
+                const json = JSON.parse(editor.value);
+                editor.value = JSON.stringify(json, null, 4);
+                validationMessage.innerHTML = '<div class="success">JSON formatted ✓</div>';
+            } catch (error) {
+                validationMessage.innerHTML = `<div class="error">Invalid JSON: ${error.message}</div>`;
+            }
+        }
+
+        function downloadJson() {
+            try {
+                const json = JSON.parse(document.getElementById('jsonEditor').value);
+                const blob = new Blob([JSON.stringify(json, null, 4)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'displays.json';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            } catch (error) {
+                document.getElementById('validationMessage').innerHTML = 
+                    `<div class="error">Invalid JSON: ${error.message}</div>`;
+            }
+        }
+
+        function updatePreview(data) {
+            const preview = document.getElementById('preview');
+            preview.innerHTML = '';
+
+            // Display categories
+            const categories = document.createElement('div');
+            categories.innerHTML = `
+                <h3>Categories</h3>
+                <ul>
+                    ${Object.entries(data.categories).map(([key, values]) => `
+                        <li><strong>${key}:</strong> ${values.join(', ')}</li>
+                    `).join('')}
+                </ul>
+            `;
+            preview.appendChild(categories);
+
+            // Display entries
+            const displays = document.createElement('div');
+            displays.innerHTML = `
+                <h3>Displays (${data.displays.length})</h3>
+                ${data.displays.map(display => `
+                    <div class="display-card">
+                        <h4>${display.name}</h4>
+                        <p><strong>ID:</strong> ${display.id}</p>
+                        <p><strong>Driver:</strong> ${display.driver}</p>
+                        <p><strong>Manufacturer:</strong> ${display.manufacturer}</p>
+                        <p><strong>Size:</strong> ${display.size}"</p>
+                        <p><strong>Resolution:</strong> ${display.resolution.width}x${display.resolution.height}</p>
+                        <p><strong>Colors:</strong> ${display.colors.join(', ')}</p>
+                        <p><strong>Features:</strong> ${Object.entries(display.features)
+                            .filter(([_, value]) => value)
+                            .map(([key, _]) => key.replace('_', ' '))
+                            .join(', ')}</p>
+                        <p><strong>URL:</strong> <a href="${display.url}" target="_blank">${display.url}</a></p>
+                        ${display.notes ? `<p><strong>Notes:</strong> ${display.notes}</p>` : ''}
+                        ${display.images.map(img => {
+                            const imgSrc = img.match(/^(https?:)?\/\//) ? img : `/${img}`;
+                            return `
+                                <div style="margin: 5px 0;">
+                                    <img src="${imgSrc}" alt="Display image" style="max-width: 200px; max-height: 150px; object-fit: contain;">
+                                    <br>
+                                    <a href="${imgSrc}" target="_blank" style="font-size: 12px;">View full image</a>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                `).join('')}
+            `;
+            preview.appendChild(displays);
+        }
+
+        // Auto-validate on change
+        let timeout;
+        document.getElementById('jsonEditor').addEventListener('input', () => {
+            clearTimeout(timeout);
+            timeout = setTimeout(validateJson, 1000);
+        });
+
+        async function saveJson() {
+            try {
+                const json = JSON.parse(document.getElementById('jsonEditor').value);
+                
+                const response = await fetch('/dev/command', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        command: 'save_display_db',
+                        content: json
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                if (result.status === 'success') {
+                    document.getElementById('validationMessage').innerHTML = 
+                        `<div class="success">${result.message || 'Database saved successfully'} ✓</div>`;
+                } else {
+                    throw new Error(result.message || 'Failed to save database');
+                }
+            } catch (error) {
+                document.getElementById('validationMessage').innerHTML = 
+                    `<div class="error">Failed to save database: ${error.message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html> 

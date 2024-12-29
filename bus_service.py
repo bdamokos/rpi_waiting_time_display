@@ -126,7 +126,7 @@ class BusService:
         self.base_url = self._resolve_base_url()
         self.provider = os.getenv("Provider", "stib")
         logger.debug(f"Bus provider: {self.provider}. Resolved Base URL: {self.base_url}")
-        self.api_url = f"{self.base_url}/api/{self.provider}/waiting_times"
+        self.api_url = f"{self.base_url}/api/{self.provider}/waiting_times?stop_id={Stop}"
         logger.debug(f"API URL: {self.api_url}")
         self.colors_url = f"{self.base_url}/api/{self.provider}/colors"
         logger.debug(f"Colors URL: {self.colors_url}")

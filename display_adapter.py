@@ -66,14 +66,6 @@ class MockDisplay:
     
     def getbuffer(self, image):
         logger.debug("Mock: getbuffer() called")
-        # Convert image to appropriate mode based on display type
-        if self.is_bw_display:
-            image = image.convert('1')  # Convert to 1-bit B&W
-            logger.debug("Mock: Converting image to B&W mode")
-        else:
-            image = image.convert('RGB')  # Keep color information
-            logger.debug("Mock: Keeping color information")
-        
         # Save the image for debugging
         DisplayAdapter.save_debug_image(image)
         return image
@@ -158,10 +150,6 @@ class DisplayAdapter:
             # Wrap getbuffer method to handle different image formats
             original_getbuffer = epd.getbuffer
             def getbuffer_wrapper(image):
-                # Convert to 1-bit if it's a B&W display
-                if epd.is_bw_display:
-                    logger.debug("Converting image to 1-bit for B&W display")
-                    image = image.convert('1')
                 DisplayAdapter.save_debug_image(image)
                 return original_getbuffer(image)
             epd.getbuffer = getbuffer_wrapper
@@ -256,8 +244,6 @@ class DisplayAdapter:
                 def displayPartial_wrapper(image):
                     try:
                         logger.debug("Using native displayPartial mode")
-                        if epd.is_bw_display:
-                            image = image.convert('1')
                         DisplayAdapter.save_debug_image(image)
                         return original_displayPartial(epd.getbuffer(image))
                     except Exception as e:
@@ -271,8 +257,6 @@ class DisplayAdapter:
                     def displayPartBaseImage_wrapper(image):
                         try:
                             logger.debug("Using native displayPartBaseImage mode")
-                            if epd.is_bw_display:
-                                image = image.convert('1')
                             DisplayAdapter.save_debug_image(image)
                             return original_displayPartBaseImage(epd.getbuffer(image))
                         except Exception as e:

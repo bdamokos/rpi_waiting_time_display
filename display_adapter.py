@@ -83,11 +83,20 @@ class DisplayAdapter:
     def save_debug_image(image):
         """Save a debug image of the current display buffer"""
         try:
-            # Rotate the image back to normal orientation
-            image = image.rotate(-DISPLAY_SCREEN_ROTATION, expand=True)
-            debug_path = "debug_output.png"
-            image.save(debug_path)
-            logger.info(f"Debug image saved to {debug_path}")
+            # Skip saving debug image if it's a bytearray
+            if isinstance(image, bytearray):
+                logger.debug("Skipping debug image save for bytearray buffer")
+                return
+            
+            # Only try to save if it's a PIL Image
+            if isinstance(image, Image.Image):
+                # Rotate the image back to normal orientation
+                image = image.rotate(-DISPLAY_SCREEN_ROTATION, expand=True)
+                debug_path = "debug_output.png"
+                image.save(debug_path)
+                logger.info(f"Debug image saved to {debug_path}")
+            else:
+                logger.debug(f"Skipping debug image save for unsupported type: {type(image)}")
         except Exception as e:
             logger.error(f"Error saving debug image: {e}")
     
@@ -244,7 +253,12 @@ class DisplayAdapter:
                 def displayPartial_wrapper(image):
                     try:
                         logger.debug("Using native displayPartial mode")
+                        # Save debug image before converting to buffer
                         DisplayAdapter.save_debug_image(image)
+                        # If image is already a bytearray, use it directly
+                        if isinstance(image, bytearray):
+                            return original_displayPartial(image)
+                        # Otherwise convert to buffer
                         return original_displayPartial(epd.getbuffer(image))
                     except Exception as e:
                         logger.error(f"Error in displayPartial: {str(e)}\n{traceback.format_exc()}")
@@ -257,7 +271,12 @@ class DisplayAdapter:
                     def displayPartBaseImage_wrapper(image):
                         try:
                             logger.debug("Using native displayPartBaseImage mode")
+                            # Save debug image before converting to buffer
                             DisplayAdapter.save_debug_image(image)
+                            # If image is already a bytearray, use it directly
+                            if isinstance(image, bytearray):
+                                return original_displayPartBaseImage(image)
+                            # Otherwise convert to buffer
                             return original_displayPartBaseImage(epd.getbuffer(image))
                         except Exception as e:
                             logger.error(f"Error in displayPartBaseImage: {str(e)}\n{traceback.format_exc()}")

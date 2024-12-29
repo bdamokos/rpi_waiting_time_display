@@ -480,7 +480,7 @@ if __name__ == "__main__":
         print("Stopping flight monitoring")
 
 
-def update_display_with_flights(epd, flights):
+def update_display_with_flights(epd, flights, set_base_image=False):
     """Update the display with flight information."""
     # Create a new image with mode 'RGB'
     width = epd.height  # Account for rotation
@@ -492,7 +492,6 @@ def update_display_with_flights(epd, flights):
     draw = ImageDraw.Draw(Himage)
 
     # Get font paths based on the operating system
-
     font_paths = get_font_paths()
     # Try to load fonts
     try:
@@ -628,8 +627,13 @@ def update_display_with_flights(epd, flights):
     with display_lock:
         buffer = epd.getbuffer(Himage)
         if hasattr(epd, 'displayPartial'):
-            logger.debug("Using partial display update for flight info")
-            epd.displayPartial(buffer)
+            if set_base_image:
+                logger.debug("Setting base image for flight display mode")
+                epd.init()
+                epd.displayPartBaseImage(buffer)
+            else:
+                logger.debug("Using partial display update for flight info")
+                epd.displayPartial(buffer)
         else:
             logger.debug("Using full display update for flight info")
             epd.display(buffer)
@@ -637,9 +641,18 @@ def update_display_with_flights(epd, flights):
 
 def check_flights(epd, get_flights, flight_check_interval=10):
     """Check for flights within the set radius and update the display if any are found."""
+    refresh_minimal_time = int(os.getenv('refresh_minimal_time', '30'))
+    fast_mode_interval = int(os.getenv('flight_display_fast_mode_interval', '5'))
+    # Use fast mode interval only if partial updates are supported, otherwise use minimal refresh time
+    display_refresh_interval = fast_mode_interval if hasattr(epd, 'displayPartial') else refresh_minimal_time
+    last_display_update = 0
+    current_flight_data = None
+
     while True:
         try:
+            current_time = time.time()
             flights_within_3km = get_flights()
+
             if flights_within_3km:
                 logger.info(f"Flights within the set radius: {len(flights_within_3km)}")
 
@@ -662,13 +675,27 @@ def check_flights(epd, get_flights, flight_check_interval=10):
                     logger.debug(f"Closest flight: {closest_flight}")
                     enhanced_flight = enhance_flight_data(closest_flight)
                     logger.debug(f"Enhanced flight: {enhanced_flight}")
-                    # Update display with the enhanced flight data
-                    update_display_with_flights(epd, [enhanced_flight])
-            else:
-                logger.debug("No flights found within the radius")
 
-            # Always sleep before next check, regardless of whether flights were found
-            time.sleep(flight_check_interval)
+                    # Check if we should update the display
+                    should_update = False
+                    if current_flight_data is None:
+                        should_update = True
+                        # First display, set as base image if partial updates supported
+                        if hasattr(epd, 'displayPartial'):
+                            update_display_with_flights(epd, [enhanced_flight], set_base_image=True)
+                        else:
+                            update_display_with_flights(epd, [enhanced_flight])
+                    elif (current_time - last_display_update) >= display_refresh_interval:
+                        should_update = True
+                        update_display_with_flights(epd, [enhanced_flight])
+
+                    if should_update:
+                        current_flight_data = enhanced_flight
+                        last_display_update = current_time
+
+            # Sleep for the shorter of the two intervals
+            sleep_time = min(flight_check_interval, display_refresh_interval)
+            time.sleep(sleep_time)
 
         except Exception as e:
             logger.error(f"Error in flight check loop: {e}", exc_info=True)

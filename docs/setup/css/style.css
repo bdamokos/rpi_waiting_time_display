@@ -1409,3 +1409,36 @@ input:checked + .slider:before {
 .cross-verification .status-warning br + • {
     margin-left: -15px;
 }
+
+/* WiFi Connection Status Styles */
+.current-connection {
+    margin-bottom: 20px;
+    padding: 15px;
+    border-radius: 8px;
+    background-color: #f5f5f5;
+}
+
+.connection-status {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.connection-status.connected {
+    color: #2e7d32;
+}
+
+.connection-status.disconnected {
+    color: #757575;
+}
+
+.connection-status.error {
+    color: #c62828;
+}
+
+.connection-details {
+    display: flex;
+    gap: 20px;
+    font-size: 0.9em;
+    color: #666;
+}

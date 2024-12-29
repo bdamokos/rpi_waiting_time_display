@@ -111,6 +111,8 @@ class WebSerialServer:
                 )
             elif command == 'wifi_forget':
                 response = self.wifi.forget_network(data.get('uuid'))
+            elif command == 'wifi_current':
+                response = self.wifi.get_current_connection()
             elif command == 'config_get':
                 value = self.config.get_value(
                     data.get('config_type'),

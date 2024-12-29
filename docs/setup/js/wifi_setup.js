@@ -14,6 +14,12 @@ window.startWiFiSetup = async function() {
         // Show WiFi setup UI
         wifiNetworks.style.display = 'block';
 
+        // Get current connection status
+        console.log('Requesting current connection status');
+        await window.setupDevice.send(JSON.stringify({
+            command: 'wifi_current'
+        }));
+
         // Request network scan
         console.log('Requesting network scan');
         await window.setupDevice.send(JSON.stringify({
@@ -102,11 +108,59 @@ async function sendConnectCommand(ssid, password) {
         
         if (response.status === 'success') {
             window.showMessage(`Connecting to ${ssid}...`);
+            // After successful connection, update the current connection status
+            setTimeout(async () => {
+                await window.setupDevice.send(JSON.stringify({
+                    command: 'wifi_current'
+                }));
+            }, 2000); // Wait 2 seconds for connection to establish
         } else {
             throw new Error(response.message || 'Failed to connect');
         }
     } catch (error) {
         console.error('Failed to connect:', error);
         window.showError('Failed to connect: ' + error.message);
+    }
+}
+
+// Add function to update the current connection display
+window.updateCurrentConnection = function(connectionInfo) {
+    const currentConnElement = document.getElementById('current-connection');
+    if (!currentConnElement) {
+        // Create the element if it doesn't exist
+        const wifiNetworks = document.getElementById('wifi-networks');
+        const currentConnDiv = document.createElement('div');
+        currentConnDiv.id = 'current-connection';
+        currentConnDiv.className = 'current-connection';
+        wifiNetworks.insertBefore(currentConnDiv, wifiNetworks.firstChild);
+    }
+
+    const element = document.getElementById('current-connection');
+    
+    if (connectionInfo.status === 'connected') {
+        const signalStrength = connectionInfo.signal + '%';
+        const securityIcon = connectionInfo.security ? '🔒' : ''; // Lock emoji for secured networks
+        
+        element.innerHTML = `
+            <div class="connection-status connected">
+                <strong>Connected to:</strong> ${connectionInfo.ssid} ${securityIcon}
+                <div class="connection-details">
+                    <span>Signal: ${signalStrength}</span>
+                    <span>Rate: ${connectionInfo.rate}</span>
+                </div>
+            </div>
+        `;
+    } else if (connectionInfo.status === 'not_connected') {
+        element.innerHTML = `
+            <div class="connection-status disconnected">
+                <strong>Not connected to any network</strong>
+            </div>
+        `;
+    } else if (connectionInfo.error) {
+        element.innerHTML = `
+            <div class="connection-status error">
+                <strong>Error:</strong> ${connectionInfo.error}
+            </div>
+        `;
     }
 } 

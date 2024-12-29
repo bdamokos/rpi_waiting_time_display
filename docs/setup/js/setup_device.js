@@ -152,6 +152,9 @@ class SetupDevice {
                                 } else if (data.saved_networks) {
                                     console.log('Updating saved networks with:', data.saved_networks);
                                     this.updateSavedNetworks(data.saved_networks);
+                                } else if (data.status === 'connected' || data.status === 'not_connected') {
+                                    console.log('Updating current connection with:', data);
+                                    window.updateCurrentConnection(data);
                                 } else if (data.error) {
                                     showError(data.error);
                                 } else if (data.settings) {
@@ -195,6 +198,12 @@ class SetupDevice {
                 </div>
             `).join('');
             console.log('Network list HTML updated');  // Debug log
+            
+            // After updating network list, get current connection status
+            console.log('Requesting current connection status');
+            this.send(JSON.stringify({
+                command: 'wifi_current'
+            }));
         } else {
             console.error('Network list element not found');  // Debug log
         }

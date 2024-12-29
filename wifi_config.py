@@ -130,6 +130,67 @@ class WiFiConfig:
         except Exception as e:
             logger.error(f"Error removing network: {e}")
             return {"error": str(e)}
+    
+    def get_current_connection(self):
+        """Get information about the currently connected WiFi network"""
+        if not self.nmcli_available:
+            return {"error": "nmcli not available"}
+        
+        try:
+            env = os.environ.copy()
+            env['LC_ALL'] = 'C'
+            
+            # Get active connection info
+            result = subprocess.run(
+                ['sudo', 'nmcli', '-t', '-f', 'NAME,TYPE,DEVICE', 'connection', 'show', '--active'],
+                capture_output=True,
+                text=True,
+                env=env
+            )
+            
+            # Find WiFi connection
+            wifi_conn = None
+            for line in result.stdout.splitlines():
+                name, conn_type, device = line.split(':')
+                if conn_type == '802-11-wireless':
+                    wifi_conn = name
+                    break
+            
+            if not wifi_conn:
+                return {"status": "not_connected"}
+            
+            # Get signal strength and other details
+            result = subprocess.run(
+                ['sudo', 'nmcli', '-t', '-f', 'SSID,SIGNAL,RATE,SECURITY', 'dev', 'wifi', 'list'],
+                capture_output=True,
+                text=True,
+                env=env
+            )
+            
+            for line in result.stdout.splitlines():
+                if line:
+                    ssid, signal, rate, security = line.split(':')
+                    if ssid == wifi_conn:
+                        return {
+                            "status": "connected",
+                            "ssid": ssid,
+                            "signal": int(signal) if signal.isdigit() else 0,
+                            "rate": rate,
+                            "security": security != ''
+                        }
+            
+            # If we get here, we found the connection but not the details
+            return {
+                "status": "connected",
+                "ssid": wifi_conn,
+                "signal": 0,
+                "rate": "unknown",
+                "security": True
+            }
+                
+        except Exception as e:
+            logger.error(f"Error getting current connection: {e}")
+            return {"error": str(e)}
 
 # Command handlers for WebUSB server
 def handle_wifi_command(command, data=None):
@@ -157,6 +218,9 @@ def handle_wifi_command(command, data=None):
                 return json.dumps({"error": "No network UUID provided"})
             network_data = json.loads(data)
             return json.dumps(wifi.forget_network(network_data.get('uuid')))
+            
+        elif command == 0x14:  # GET_CURRENT_CONNECTION
+            return json.dumps(wifi.get_current_connection())
             
         else:
             return json.dumps({"error": f"Unknown WiFi command: {command}"})

@@ -93,6 +93,7 @@ code {
             <ul>
                 <li><code>{"command": "wifi_scan"}</code> - Scan for available WiFi networks</li>
                 <li><code>{"command": "wifi_saved"}</code> - List saved WiFi networks</li>
+                <li><code>{"command": "wifi_current"}</code> - Get current WiFi connection</li>
                 <li><code>{"command": "wifi_connect", "ssid": "network_name", "password": "pass"}</code> - Connect to a network</li>
                 <li><code>{"command": "wifi_forget", "uuid": "network_uuid"}</code> - Forget a saved network</li>
             </ul>
@@ -143,6 +144,9 @@ const PRESET_COMMANDS = {
     },
     wifi_saved: {
         command: 'wifi_saved'
+    },
+    wifi_current: {
+        command: 'wifi_current'
     },
     config_read_verbose: {
         command: 'config_read',

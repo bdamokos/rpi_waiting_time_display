@@ -974,3 +974,39 @@ input:checked + .slider:before {
 .api-card.status-info {
     border-color: #bbdefb;
 }
+
+.button svg {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
+    vertical-align: middle;
+    margin-right: 8px;
+}
+.button-group {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+.button-group .button {
+    flex: 1;
+    max-width: 200px;
+}
+.final-instructions {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 20px;
+    margin-top: 20px;
+}
+.final-instructions code {
+    background: #e9ecef;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: monospace;
+}
+.final-instructions a {
+    color: var(--accent-color);
+    text-decoration: none;
+}
+.final-instructions a:hover {
+    text-decoration: underline;
+}

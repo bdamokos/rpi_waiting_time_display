@@ -1,5 +1,10 @@
+---
+layout: default
+title: E-Paper Display Setup
+---
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>E-Paper Display Setup</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -11,6 +16,7 @@
         }
     </script>
 </head>
+
 <body>
     <div class="container">
         <div id="error-message" style="display: none; color: red; padding: 10px;"></div>
@@ -29,7 +35,7 @@
                 <p>Configure your WiFi networks.</p>
                 <div id="wifi-setup">
                     <button onclick="startWiFiSetup()" class="button">Configure WiFi</button>
-                    
+
                     <div id="wifi-networks" style="display: none;">
                         <h3>Available Networks</h3>
                         <div id="wifi-networks-list" class="network-list">
@@ -71,16 +77,79 @@
                 <h2>Step 5: API Keys</h2>
                 <p>Configure API keys for enabled services.</p>
                 <div id="api-setup" style="display: none;">
-                    <!-- API setup interface will be rendered here -->
+                    <!-- API setup content will be dynamically inserted here -->
                 </div>
                 <button id="api-setup-button" class="button">Configure API Keys</button>
             </div>
 
-            <div class="step">
-                <h2>Step 6: Review & Finish</h2>
-                <p>Review your configuration and start the display service.</p>
-                <button onclick="startReview()" class="button">Review & Finish</button>
+            <div id="location-setup" class="step">
+                <h2>Step 6: Location Configuration</h2>
+                <p>Set up your location to display transit and weather information.</p>
+                <!-- Location setup content will be dynamically inserted here -->
+
+                <button id="location-setup-button" class="button">
+                    <svg xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 384 512"><!--!Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2024 Fonticons, Inc.-->
+                        <path
+                            d="M215.7 499.2C267 435 384 279.4 384 192C384 86 298 0 192 0S0 86 0 192c0 87.4 117 243 168.3 307.2c12.3 15.3 35.1 15.3 47.4 0zM192 128a64 64 0 1 1 0 128 64 64 0 1 1 0-128z" />
+                    </svg>
+                    Configure Location
+                </button>
             </div>
+
+            <div id="transit-setup" class="step">
+                <h2>Step 7: Transit Configuration</h2>
+                <p>Set up your transit information.</p>
+                <button id="transit-setup-button" class="button">
+                    <svg xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 512 512"><!--!Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2024 Fonticons, Inc.-->
+                        <path
+                            d="M256 0C390.4 0 480 35.2 480 80V96l0 32c17.7 0 32 14.3 32 32v64c0 17.7-14.3 32-32 32l0 160c0 17.7-14.3 32-32 32v32c0 17.7-14.3 32-32 32H384c-17.7 0-32-14.3-32-32V448H160v32c0 17.7-14.3 32-32 32H96c-17.7 0-32-14.3-32-32V448c-17.7 0-32-14.3-32-32l0-160c-17.7 0-32-14.3-32-32V160c0-17.7 14.3-32 32-32V96 80C32 35.2 121.6 0 256 0zM96 160v96c0 17.7 14.3 32 32 32H240c17.7 0 32-14.3 32-32V160c0-17.7-14.3-32-32-32H128c-17.7 0-32 14.3-32 32zM272 288H384c17.7 0 32-14.3 32-32V160c0-17.7-14.3-32-32-32H272c-17.7 0-32 14.3-32 32v96c0 17.7 14.3 32 32 32zM112 400a32 32 0 1 0 0-64 32 32 0 1 0 0 64zm288 0a32 32 0 1 0 0-64 32 32 0 1 0 0 64z" />
+                    </svg>
+                    Configure Transit Monitoring
+                </button>
+                <!-- Transit setup content will be dynamically inserted here -->
+            </div>
+
+
+
+
+
+
+            <div class="step">
+                <div class="button-group">
+                    <button id="restart-button" class="button">
+                        <svg xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 512 512"><!--!Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2024 Fonticons, Inc.-->
+                            <path
+                                d="M463.5 224H472c13.3 0 24-10.7 24-24V72c0-9.7-5.8-18.5-14.8-22.2s-19.3-1.7-26.2 5.2L413.4 96.6c-87.6-86.5-228.7-86.2-315.8 1c-87.5 87.5-87.5 229.3 0 316.8s229.3 87.5 316.8 0c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0c-62.5 62.5-163.8 62.5-226.3 0s-62.5-163.8 0-226.3c62.2-62.2 162.7-62.5 225.3-1L327 183c-6.9 6.9-8.9 17.2-5.2 26.2s12.5 14.8 22.2 14.8H463.5z" />
+                        </svg>
+                        Restart Display
+                    </button>
+                    <button id="debug-button" class="button">
+                        <svg xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 640 512"><!--!Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2024 Fonticons, Inc.-->
+                            <path
+                                d="M392.8 1.2c-17-4.9-34.7 5-39.6 22l-128 448c-4.9 17 5 34.7 22 39.6s34.7-5 39.6-22l128-448c4.9-17-5-34.7-22-39.6zm80.6 120.1c-12.5 12.5-12.5 32.8 0 45.3L562.7 256l-89.4 89.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0l112-112c12.5-12.5 12.5-32.8 0-45.3l-112-112c-12.5-12.5-32.8-12.5-45.3 0zm-306.7 0c-12.5-12.5-32.8-12.5-45.3 0l-112 112c-12.5 12.5-12.5 32.8 0 45.3l112 112c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L77.3 256l89.4-89.4c12.5-12.5 12.5-32.8 0-45.3z" />
+                        </svg>
+                        Debug Server
+                    </button>
+                </div>
+                <div class="final-instructions">
+                    <p>Restart the display for your changes to take effect. If necessary, come back to this page to
+                        change the settings later.</p>
+                    <p>You can visit the debug server to see the logs of the display service (if it successfully
+                        started) and to change any of the settings not included in this setup wizard.</p>
+                    <p>If your display fails to start, you can try to SSH into the device and use the command
+                        <code>sudo systemctl restart display</code> to restart the display service or
+                        <code>journalctl -u display.service -f</code> to see the logs.</p>
+                    <p>If all else fails, you can reinstall the display using the instructions on <a
+                            href="https://bdamokos.github.io/rpi_waiting_time_display">GitHub</a>.</p>
+                </div>
+            </div>
+
+
+
         </div>
     </div>
 
@@ -100,7 +169,7 @@
                 showError('Failed to set configuration: ' + error.message);
             }
         }
-        
+
         // Function to start the review process
         async function startReview() {
             const command = {
@@ -115,7 +184,7 @@
                 showError('Failed to read configuration: ' + error.message);
             }
         }
-        
+
         // Utility function to show informational messages
         function showMessage(message) {
             const errorDiv = document.getElementById('error-message');
@@ -134,4 +203,5 @@
     <script src="js/service_setup.js" type="module"></script>
     <script src="js/setup_device.js" type="module"></script>
 </body>
-</html> 
+
+</html>

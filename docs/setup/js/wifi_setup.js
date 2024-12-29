@@ -15,11 +15,13 @@ window.startWiFiSetup = async function() {
         wifiNetworks.style.display = 'block';
 
         // Request network scan
+        console.log('Requesting network scan');
         await window.setupDevice.send(JSON.stringify({
             command: 'wifi_scan'
         }));
 
         // Request saved networks
+        console.log('Requesting saved networks');
         await window.setupDevice.send(JSON.stringify({
             command: 'wifi_saved'
         }));

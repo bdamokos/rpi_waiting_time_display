@@ -1010,3 +1010,134 @@ input:checked + .slider:before {
 .final-instructions a:hover {
     text-decoration: underline;
 }
+
+.settings-group {
+    background: #f5f5f5;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.settings-group h3 {
+    margin: 0 0 10px 0;
+    color: #333;
+}
+
+.settings-group p {
+    color: #666;
+    margin-bottom: 15px;
+}
+
+.setting-item {
+    background: white;
+    padding: 15px;
+    margin-bottom: 10px;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.setting-item label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 5px;
+    color: #333;
+}
+
+.setting-item input[type="text"],
+.setting-item input[type="number"],
+.setting-item input[type="password"],
+.setting-item select {
+    width: calc(100% - 40px);
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin-bottom: 5px;
+}
+
+.setting-item input[type="checkbox"] {
+    margin-right: 10px;
+}
+
+.setting-description {
+    font-size: 0.9em;
+    color: #666;
+    margin-top: 5px;
+}
+
+#advanced-settings-form button {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 20px;
+}
+
+#advanced-settings-form button:hover {
+    background-color: #0056b3;
+}
+
+.setting-item button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 5px;
+    margin-left: 5px;
+}
+
+/* Warning for wizard-configured settings */
+.wizard-setting {
+    position: relative;
+}
+
+.wizard-setting::before {
+    content: "⚠️ This setting is also configurable through the setup wizard";
+    display: block;
+    color: #856404;
+    background-color: #fff3cd;
+    border: 1px solid #ffeeba;
+    padding: 8px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+    font-size: 0.9em;
+}
+
+.advanced-button {
+    background-color: #f0f0f0 !important;
+    color: #666 !important;
+    border: 1px solid #ddd !important;
+}
+
+.advanced-button:hover {
+    background-color: #e0e0e0 !important;
+    border-color: #ccc !important;
+}
+
+.advanced-button svg {
+    width: 16px;
+    height: 16px;
+    margin-right: 8px;
+    fill: currentColor;
+    vertical-align: text-bottom;
+}
+
+.setting-item button svg {
+    width: 16px;
+    height: 16px;
+    fill: currentColor;
+    vertical-align: middle;
+}
+
+.setting-item button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 5px;
+    margin-left: 5px;
+    color: #666;
+}
+
+.setting-item button:hover {
+    color: #333;
+}

@@ -847,16 +847,21 @@ input:checked + .slider:before {
 
 .api-input button {
     padding: 8px;
-    background: var(--accent-color);
-    color: white;
+    background: none;
     border: none;
-    border-radius: 4px;
     cursor: pointer;
-    transition: background 0.3s;
+    color: #666;
 }
 
 .api-input button:hover {
-    background: var(--accent-hover);
+    color: #333;
+}
+
+.api-input button svg {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
+    vertical-align: middle;
 }
 
 .next-button {
@@ -912,4 +917,60 @@ input:checked + .slider:before {
         gap: 10px;
         text-align: center;
     }
+}
+
+.api-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.api-status {
+    font-size: 1.2em;
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+.status-error .api-status {
+    background-color: #ffebee;
+    color: #c62828;
+}
+
+.status-warning .api-status {
+    background-color: #fff3e0;
+    color: #ef6c00;
+}
+
+.status-success .api-status {
+    background-color: #e8f5e9;
+    color: #2e7d32;
+}
+
+.status-info .api-status {
+    background-color: #e3f2fd;
+    color: #1565c0;
+}
+
+.api-card {
+    border: 1px solid #ddd;
+    padding: 15px;
+    margin: 10px 0;
+    border-radius: 4px;
+}
+
+.api-card.status-error {
+    border-color: #ffcdd2;
+}
+
+.api-card.status-warning {
+    border-color: #ffe0b2;
+}
+
+.api-card.status-success {
+    border-color: #c8e6c9;
+}
+
+.api-card.status-info {
+    border-color: #bbdefb;
 }

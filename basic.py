@@ -20,6 +20,7 @@ import threading
 import math
 from flights import check_flights, gather_flights_within_radius, update_display_with_flights, enhance_flight_data
 from threading import Lock, Event
+from PIL import Image
 
 logger = logging.getLogger(__name__)
 # Set logging level for PIL.PngImagePlugin and urllib3.connectionpool to warning
@@ -432,6 +433,20 @@ class DisplayManager:
                     if any(time and time != "--" and time != "" for time in bus["times"])
                 ]
                 
+                # Initialize partial mode if supported
+                if hasattr(self.epd, 'displayPartial'):
+                    logger.info("Display supports partial updates, initializing partial mode")
+                    self.epd.init()
+                    if hasattr(self.epd, 'displayPartBaseImage'):
+                        logger.debug("Setting base image for partial updates")
+                        # Create a blank base image
+                        if self.epd.is_bw_display:
+                            base_image = Image.new('1', (self.epd.height, self.epd.width), 1)
+                        else:
+                            base_image = Image.new('RGB', (self.epd.height, self.epd.width), 'white')
+                        base_image = base_image.rotate(DISPLAY_SCREEN_ROTATION, expand=True)
+                        self.epd.displayPartBaseImage(self.epd.getbuffer(base_image))
+                
                 # Check if we have any bus data at all
                 if not bus_data and not error_message and weather_enabled and weather_data:
                     logger.info("Initial display: no bus data available, showing weather data")
@@ -560,7 +575,20 @@ class DisplayManager:
             logger.info("Performing hourly full refresh...")
             display_full_refresh(self.epd)
             self.update_count = 0
-            
+            # Reinitialize partial mode if supported
+            if hasattr(self.epd, 'displayPartial'):
+                logger.info("Reinitializing partial mode after full refresh")
+                self.epd.init()
+                if hasattr(self.epd, 'displayPartBaseImage'):
+                    logger.debug("Setting base image for partial updates")
+                    # Create a blank base image
+                    if self.epd.is_bw_display:
+                        base_image = Image.new('1', (self.epd.height, self.epd.width), 1)
+                    else:
+                        base_image = Image.new('RGB', (self.epd.height, self.epd.width), 'white')
+                    base_image = base_image.rotate(DISPLAY_SCREEN_ROTATION, expand=True)
+                    self.epd.displayPartBaseImage(self.epd.getbuffer(base_image))
+
     def get_next_update_message(self, wait_time):
         if self.in_weather_mode:
             return f"weather update in {wait_time} seconds"

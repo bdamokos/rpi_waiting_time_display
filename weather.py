@@ -515,4 +515,9 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
     with display_lock:
         # Display the image
         buffer = epd.getbuffer(Himage)
-        epd.display(buffer)
+        if hasattr(epd, 'displayPartial'):
+            logger.debug("Using partial display update for weather info")
+            epd.displayPartial(buffer)
+        else:
+            logger.debug("Using full display update for weather info")
+            epd.display(buffer)

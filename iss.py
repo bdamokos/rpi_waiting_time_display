@@ -435,7 +435,12 @@ def display_iss_info(epd, iss_info, satellite_name="ISS (ZARYA)"):
     Himage = Himage.rotate(display_rotation, expand=True)
     with display_lock:
         buffer = epd.getbuffer(Himage)
-        epd.display(buffer)
+        if hasattr(epd, 'displayPartial'):
+            logger.debug("Using partial display update for ISS info")
+            epd.displayPartial(buffer)
+        else:
+            logger.debug("Using full display update for ISS info")
+            epd.display(buffer)
 
 
 # Example usage

@@ -748,4 +748,9 @@ def update_display(epd, weather_data=None, bus_data=None, error_message=None, st
 
         # Add debug log before display command
         logger.debug("About to call epd.display() with new buffer")
-        epd.display(buffer)
+        if hasattr(epd, 'displayPartial'):
+            logger.debug("Using partial display update")
+            epd.displayPartial(buffer)
+        else:
+            logger.debug("Using full display update")
+            epd.display(buffer)

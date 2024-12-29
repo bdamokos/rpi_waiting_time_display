@@ -627,7 +627,12 @@ def update_display_with_flights(epd, flights):
     # Display the image
     with display_lock:
         buffer = epd.getbuffer(Himage)
-        epd.display(buffer)
+        if hasattr(epd, 'displayPartial'):
+            logger.debug("Using partial display update for flight info")
+            epd.displayPartial(buffer)
+        else:
+            logger.debug("Using full display update for flight info")
+            epd.display(buffer)
 
 
 def check_flights(epd, get_flights, flight_check_interval=10):

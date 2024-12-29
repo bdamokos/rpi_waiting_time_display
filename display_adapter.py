@@ -78,6 +78,14 @@ class MockDisplay:
         DisplayAdapter.save_debug_image(image)
         return image
 
+    def displayPartial(self, image):
+        logger.debug("Mock: displayPartial() called")
+        DisplayAdapter.save_debug_image(image)
+
+    def displayPartBaseImage(self, image):
+        logger.debug("Mock: displayPartBaseImage() called")
+        DisplayAdapter.save_debug_image(image)
+
 class DisplayAdapter:
     @staticmethod
     def save_debug_image(image):
@@ -242,6 +250,36 @@ class DisplayAdapter:
                             raise
                     epd.init_Fast = init_Fast
             
+            # Add displayPartial support if available
+            if hasattr(epd, 'displayPartial'):
+                original_displayPartial = epd.displayPartial
+                def displayPartial_wrapper(image):
+                    try:
+                        logger.debug("Using native displayPartial mode")
+                        if epd.is_bw_display:
+                            image = image.convert('1')
+                        DisplayAdapter.save_debug_image(image)
+                        return original_displayPartial(epd.getbuffer(image))
+                    except Exception as e:
+                        logger.error(f"Error in displayPartial: {str(e)}\n{traceback.format_exc()}")
+                        raise
+                epd.displayPartial = displayPartial_wrapper
+                
+                # Also wrap displayPartBaseImage if available
+                if hasattr(epd, 'displayPartBaseImage'):
+                    original_displayPartBaseImage = epd.displayPartBaseImage
+                    def displayPartBaseImage_wrapper(image):
+                        try:
+                            logger.debug("Using native displayPartBaseImage mode")
+                            if epd.is_bw_display:
+                                image = image.convert('1')
+                            DisplayAdapter.save_debug_image(image)
+                            return original_displayPartBaseImage(epd.getbuffer(image))
+                        except Exception as e:
+                            logger.error(f"Error in displayPartBaseImage: {str(e)}\n{traceback.format_exc()}")
+                            raise
+                    epd.displayPartBaseImage = displayPartBaseImage_wrapper
+            
             return epd
             
         except ImportError as e:
@@ -301,3 +339,26 @@ def display_cleanup(epd):
         epd.sleep()
         epd.epdconfig.module_exit(cleanup=True)
         logger.info("Display cleanup completed")
+
+def display_partial_init(epd, base_image=None):
+    """Initialize the display for partial updates.
+    
+    Args:
+        epd: The display instance
+        base_image: Optional PIL Image to use as the base image for partial updates
+    """
+    with display_lock:
+        if not hasattr(epd, 'displayPartial'):
+            logger.warning("Display does not support partial updates, falling back to normal mode")
+            epd.init()
+            return False
+            
+        try:
+            epd.init()
+            if base_image is not None and hasattr(epd, 'displayPartBaseImage'):
+                logger.debug("Setting base image for partial updates")
+                epd.displayPartBaseImage(base_image)
+            return True
+        except Exception as e:
+            logger.error(f"Error initializing partial mode: {str(e)}\n{traceback.format_exc()}")
+            return False

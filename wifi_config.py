@@ -150,27 +150,43 @@ class WiFiConfig:
             
             # Find WiFi connection
             wifi_conn = None
+            wifi_device = None
             for line in result.stdout.splitlines():
                 name, conn_type, device = line.split(':')
                 if conn_type == '802-11-wireless':
                     wifi_conn = name
+                    wifi_device = device
                     break
             
             if not wifi_conn:
                 return {"status": "not_connected"}
             
-            # Get signal strength and other details
+            # Get the actual SSID and signal strength from the device
             result = subprocess.run(
-                ['sudo', 'nmcli', '-t', '-f', 'SSID,SIGNAL,RATE,SECURITY', 'dev', 'wifi', 'list'],
+                ['sudo', 'nmcli', '-t', '-f', 'SSID,SIGNAL,RATE,SECURITY', 'dev', 'wifi', 'list', 'ifname', wifi_device],
                 capture_output=True,
                 text=True,
                 env=env
             )
             
+            # Get the active SSID from the device
+            result_active = subprocess.run(
+                ['sudo', 'nmcli', '-t', '-f', 'GENERAL.CONNECTION,GENERAL.HWADDR', 'dev', 'show', wifi_device],
+                capture_output=True,
+                text=True,
+                env=env
+            )
+            
+            active_mac = None
+            for line in result_active.stdout.splitlines():
+                if line.startswith('GENERAL.HWADDR:'):
+                    active_mac = line.split(':')[1].strip()
+                    break
+            
             for line in result.stdout.splitlines():
                 if line:
                     ssid, signal, rate, security = line.split(':')
-                    if ssid == wifi_conn:
+                    if ssid:  # Skip empty SSIDs
                         return {
                             "status": "connected",
                             "ssid": ssid,

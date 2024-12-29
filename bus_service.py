@@ -52,7 +52,9 @@ bus_provider = os.getenv("Provider", "stib")
 logging.debug(f"Bus provider: {bus_provider}. Base URL: {bus_api_base_url}. Monitoring lines: {Lines} and stop: {Stop}")
 
 DISPLAY_SCREEN_ROTATION = int(os.getenv('screen_rotation', 90))
-weather_enabled = True if os.getenv("OPENWEATHER_API_KEY") else False
+weather_enabled = True if os.getenv("weather_enabled", "true").lower() == "true" else False
+if not os.getenv("OPENWEATHER_API_KEY"):
+    weather_enabled = False
 display_lock = return_display_lock() # Global lock for display operations
 # Define our available colors and their RGB values
 DISPLAY_COLORS = {

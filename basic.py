@@ -35,7 +35,9 @@ DISPLAY_REFRESH_FULL_INTERVAL = int(os.getenv("refresh_full_interval", 3600))
 WEATHER_UPDATE_INTERVAL = int(os.getenv("refresh_weather_interval", 600))
 BUS_DATA_MAX_AGE = max(90, DISPLAY_REFRESH_INTERVAL)  # Ensure bus data doesn't become stale before next refresh
 
-weather_enabled = True if os.getenv("OPENWEATHER_API_KEY") else False
+weather_enabled = True if os.getenv("weather_enabled", "true").lower() == "true" else False
+if not os.getenv("OPENWEATHER_API_KEY"):
+    weather_enabled = False
 
 HOTSPOT_ENABLED = os.getenv('hotspot_enabled', 'true').lower() == 'true'
 hostname = get_hostname()

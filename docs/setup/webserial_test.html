@@ -94,6 +94,7 @@ code {
                 <li><code>{"command": "wifi_scan"}</code> - Scan for available WiFi networks</li>
                 <li><code>{"command": "wifi_saved"}</code> - List saved WiFi networks</li>
                 <li><code>{"command": "wifi_current"}</code> - Get current WiFi connection</li>
+                <li><code>{"command": "get_ip"}</code> - Get local IP address</li>
                 <li><code>{"command": "wifi_connect", "ssid": "network_name", "password": "pass"}</code> - Connect to a network</li>
                 <li><code>{"command": "wifi_forget", "uuid": "network_uuid"}</code> - Forget a saved network</li>
             </ul>
@@ -123,6 +124,7 @@ code {
     <div class="preset-commands">
         <button class="preset-button" onclick="setPresetCommand('wifi_scan')">Scan WiFi</button>
         <button class="preset-button" onclick="setPresetCommand('wifi_saved')">Saved Networks</button>
+        <button class="preset-button" onclick="setPresetCommand('get_ip')">Get IP</button>
         <button class="preset-button" onclick="setPresetCommand('config_read_verbose')">Read Config (Verbose)</button>
         <button class="preset-button" onclick="setPresetCommand('config_read_simple')">Read Config (Simple)</button>
     </div>
@@ -147,6 +149,9 @@ const PRESET_COMMANDS = {
     },
     wifi_current: {
         command: 'wifi_current'
+    },
+    get_ip: {
+        command: 'get_ip'
     },
     config_read_verbose: {
         command: 'config_read',

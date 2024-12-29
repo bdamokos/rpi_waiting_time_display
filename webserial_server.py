@@ -20,6 +20,7 @@ import log_config
 from config_manager import ConfigManager
 import os
 import threading
+import socket
 
 # Set up logging
 logging.basicConfig(
@@ -94,6 +95,19 @@ class WebSerialServer:
             logger.error(f"Failed to setup serial ports: {e}")
             raise
 
+    def get_local_ip(self):
+        """Get the local IP address of the device"""
+        try:
+            # Create a socket and connect to a remote host (doesn't actually establish a connection)
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(('8.8.8.8', 80))
+            ip = s.getsockname()[0]
+            s.close()
+            return {'status': 'success', 'ip': ip}
+        except Exception as e:
+            logger.error(f"Error getting local IP: {e}")
+            return {'status': 'error', 'message': str(e)}
+
     def handle_message(self, message):
         """Handle incoming messages"""
         try:
@@ -114,6 +128,8 @@ class WebSerialServer:
                 response = self.wifi.forget_network(data.get('uuid'))
             elif command == 'wifi_current':
                 response = self.wifi.get_current_connection()
+            elif command == 'get_ip':
+                response = self.get_local_ip()
             elif command == 'config_get':
                 value = self.config.get_value(
                     data.get('config_type'),

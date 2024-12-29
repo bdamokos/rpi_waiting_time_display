@@ -340,25 +340,28 @@ def display_cleanup(epd):
         epd.epdconfig.module_exit(cleanup=True)
         logger.info("Display cleanup completed")
 
-def display_partial_init(epd, base_image=None):
-    """Initialize the display for partial updates.
+def init_partial_mode(epd, base_image):
+    """Initialize partial mode with a base image.
     
     Args:
         epd: The display instance
-        base_image: Optional PIL Image to use as the base image for partial updates
+        base_image: PIL Image to use as the base image
     """
     with display_lock:
         if not hasattr(epd, 'displayPartial'):
-            logger.warning("Display does not support partial updates, falling back to normal mode")
-            epd.init()
+            logger.warning("Display does not support partial updates")
             return False
             
         try:
             epd.init()
-            if base_image is not None and hasattr(epd, 'displayPartBaseImage'):
+            if hasattr(epd, 'displayPartBaseImage'):
                 logger.debug("Setting base image for partial updates")
-                epd.displayPartBaseImage(base_image)
-            return True
+                base_buffer = epd.getbuffer(base_image)
+                epd.displayPartBaseImage(base_buffer)
+                return True
+            else:
+                logger.warning("Display does not support base image for partial updates")
+                return False
         except Exception as e:
-            logger.error(f"Error initializing partial mode: {str(e)}\n{traceback.format_exc()}")
+            logger.error(f"Error initializing partial mode: {e}")
             return False

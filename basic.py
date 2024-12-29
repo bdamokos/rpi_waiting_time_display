@@ -433,34 +433,32 @@ class DisplayManager:
                     if any(time and time != "--" and time != "" for time in bus["times"])
                 ]
                 
-                # Initialize partial mode if supported
-                if hasattr(self.epd, 'displayPartial'):
-                    logger.info("Display supports partial updates, initializing partial mode")
-                    self.epd.init()
-                    if hasattr(self.epd, 'displayPartBaseImage'):
-                        logger.debug("Setting base image for partial updates")
-                        # Create a blank base image
-                        if self.epd.is_bw_display:
-                            base_image = Image.new('1', (self.epd.height, self.epd.width), 1)
-                        else:
-                            base_image = Image.new('RGB', (self.epd.height, self.epd.width), 'white')
-                        base_image = base_image.rotate(DISPLAY_SCREEN_ROTATION, expand=True)
-                        self.epd.displayPartBaseImage(self.epd.getbuffer(base_image))
-                
                 # Check if we have any bus data at all
                 if not bus_data and not error_message and weather_enabled and weather_data:
                     logger.info("Initial display: no bus data available, showing weather data")
-                    draw_weather_display(self.epd, weather_data)
-                    self.in_weather_mode = True
+                    if not self.in_weather_mode:
+                        # We're switching to weather mode, disable partial updates until base image is set
+                        self.in_weather_mode = True
+                        draw_weather_display(self.epd, weather_data, set_base_image=True)
+                    else:
+                        draw_weather_display(self.epd, weather_data)
                 elif valid_bus_data and not error_message:
                     logger.info(f"Initial display: showing bus data ({len(valid_bus_data)} entries)")
                     current_weather = weather_data['current'] if weather_data else None
-                    update_display(self.epd, current_weather, valid_bus_data, error_message, stop_name)
-                    self.in_weather_mode = False
+                    if self.in_weather_mode:
+                        # We're switching from weather mode, disable partial updates until base image is set
+                        self.in_weather_mode = False
+                        update_display(self.epd, current_weather, valid_bus_data, error_message, stop_name, set_base_image=True)
+                    else:
+                        update_display(self.epd, current_weather, valid_bus_data, error_message, stop_name)
                 elif weather_enabled and weather_data:
                     logger.info("Initial display: showing weather data")
-                    draw_weather_display(self.epd, weather_data)
-                    self.in_weather_mode = True
+                    if not self.in_weather_mode:
+                        # We're switching to weather mode, disable partial updates until base image is set
+                        self.in_weather_mode = True
+                        draw_weather_display(self.epd, weather_data, set_base_image=True)
+                    else:
+                        draw_weather_display(self.epd, weather_data)
                 else:
                     logger.warning("No valid data for initial display")
                 

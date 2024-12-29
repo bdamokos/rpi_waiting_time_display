@@ -473,7 +473,7 @@ if __name__ == "__main__":
     print(bus_service.get_waiting_times()) 
 
 
-def update_display(epd, weather_data=None, bus_data=None, error_message=None, stop_name=None, first_run=False):
+def update_display(epd, weather_data=None, bus_data=None, error_message=None, stop_name=None, first_run=False, set_base_image=False):
     """Update the display with new weather and waiting timesdata"""
     MARGIN = 8
 
@@ -749,8 +749,13 @@ def update_display(epd, weather_data=None, bus_data=None, error_message=None, st
         # Add debug log before display command
         logger.debug("About to call epd.display() with new buffer")
         if hasattr(epd, 'displayPartial'):
-            logger.debug("Using partial display update")
-            epd.displayPartial(buffer)
+            if set_base_image:
+                logger.debug("Setting base image for bus display mode")
+                epd.init()
+                epd.displayPartBaseImage(buffer)
+            else:
+                logger.debug("Using partial display update")
+                epd.displayPartial(buffer)
         else:
             logger.debug("Using full display update")
             epd.display(buffer)

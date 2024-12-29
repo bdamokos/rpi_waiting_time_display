@@ -364,9 +364,9 @@ WEATHER_ICONS = {
 }
 
 
-def draw_weather_display(epd, weather_data, last_weather_data=None):
+def draw_weather_display(epd, weather_data, last_weather_data=None, set_base_image=False):
     """Draw a weather-focused display when no bus times are available"""
-        # Handle different color definitions
+    # Handle different color definitions
     BLACK = epd.BLACK
     WHITE = epd.WHITE
     RED = getattr(epd, 'RED', BLACK)  # Fall back to BLACK if RED not available
@@ -378,7 +378,7 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
     else:
         Himage = Image.new('RGB', (epd.height, epd.width), WHITE)
 
- # 250x120 width x height
+    # 250x120 width x height
     draw = ImageDraw.Draw(Himage)
     font_paths = get_font_paths()
     try:
@@ -516,8 +516,13 @@ def draw_weather_display(epd, weather_data, last_weather_data=None):
         # Display the image
         buffer = epd.getbuffer(Himage)
         if hasattr(epd, 'displayPartial'):
-            logger.debug("Using partial display update for weather info")
-            epd.displayPartial(buffer)
+            if set_base_image:
+                logger.debug("Setting base image for weather display mode")
+                epd.init()
+                epd.displayPartBaseImage(buffer)
+            else:
+                logger.debug("Using partial display update for weather info")
+                epd.displayPartial(buffer)
         else:
             logger.debug("Using full display update for weather info")
             epd.display(buffer)

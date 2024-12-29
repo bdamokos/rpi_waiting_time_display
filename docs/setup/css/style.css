@@ -383,23 +383,28 @@ img {
 
 .input-group {
     display: flex;
-    gap: 10px;
+    align-items: center;
+    gap: 8px;
 }
 
 .input-group input {
     flex: 1;
-    padding: 8px;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
 }
 
 .input-group button {
-    padding: 8px 16px;
-    background: var(--primary-color);
-    color: white;
+    background: none;
     border: none;
-    border-radius: 4px;
+    padding: 8px;
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.input-group button svg {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
 }
 
 .input-group button:hover {
@@ -834,8 +839,9 @@ input:checked + .slider:before {
 
 .api-input {
     display: flex;
+    align-items: center;
     gap: 10px;
-    margin-top: 10px;
+    margin-top: 0;
 }
 
 .api-input input {
@@ -851,6 +857,9 @@ input:checked + .slider:before {
     border: none;
     cursor: pointer;
     color: #666;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .api-input button:hover {
@@ -861,7 +870,6 @@ input:checked + .slider:before {
     width: 20px;
     height: 20px;
     fill: currentColor;
-    vertical-align: middle;
 }
 
 .next-button {
@@ -1045,13 +1053,18 @@ input:checked + .slider:before {
 
 .setting-item input[type="text"],
 .setting-item input[type="number"],
-.setting-item input[type="password"],
 .setting-item select {
-    width: calc(100% - 40px);
+    width: 100%;
     padding: 8px;
     border: 1px solid #ddd;
     border-radius: 4px;
     margin-bottom: 5px;
+}
+
+.setting-item .api-input input[type="password"],
+.setting-item .api-input input[type="text"] {
+    width: auto;
+    margin-bottom: 0;
 }
 
 .setting-item input[type="checkbox"] {
@@ -1140,4 +1153,42 @@ input:checked + .slider:before {
 
 .setting-item button:hover {
     color: #333;
+}
+
+#advanced-settings-form .api-input button {
+    background: none !important;
+    border: none !important;
+    padding: 8px !important;
+    margin: 0 !important;
+    cursor: pointer !important;
+    color: #666 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+#advanced-settings-form .api-input button:hover {
+    color: #333 !important;
+    background: none !important;
+}
+
+#advanced-settings-form .api-input button svg {
+    width: 20px !important;
+    height: 20px !important;
+    fill: currentColor !important;
+}
+
+/* Keep the submit button blue */
+#advanced-settings-form button[type="submit"] {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 20px;
+}
+
+#advanced-settings-form button[type="submit"]:hover {
+    background-color: #0056b3;
 }

@@ -144,11 +144,20 @@ class SetupDevice {
                                 if (data.networks) {
                                     console.log('Updating network list with:', data.networks);
                                     this.updateNetworkList(data.networks);
+                                    // After receiving networks, request saved networks
+                                    console.log('Requesting saved networks');
+                                    this.send(JSON.stringify({
+                                        command: 'wifi_saved'
+                                    }));
                                 } else if (data.saved_networks) {
                                     console.log('Updating saved networks with:', data.saved_networks);
                                     this.updateSavedNetworks(data.saved_networks);
                                 } else if (data.error) {
                                     showError(data.error);
+                                } else if (data.settings) {
+                                    // Handle config_list response
+                                    console.log('Received settings:', data.settings);
+                                    this.handleResponse(data);
                                 } else {
                                     // Handle general response
                                     console.log('Received:', data);

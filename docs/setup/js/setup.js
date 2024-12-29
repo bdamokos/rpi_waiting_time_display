@@ -1,6 +1,3 @@
-import { device } from './setup_device.js';
-import { startAdvancedSetup } from './advanced_setup.js';
-
 // Initialize all event listeners when the DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     // Advanced setup button

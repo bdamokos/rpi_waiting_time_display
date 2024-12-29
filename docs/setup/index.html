@@ -127,7 +127,7 @@ title: E-Paper Display Setup
 
             <div class="step">
                 <div class="button-group">
-                    <button id="restart-button" class="button">
+                    <button id="restart-button" class="button" onclick="restartDisplay()">
                         <svg xmlns="http://www.w3.org/2000/svg"
                             viewBox="0 0 512 512"><!--!Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2024 Fonticons, Inc.-->
                             <path
@@ -191,6 +191,34 @@ title: E-Paper Display Setup
                 showMessage('Sent config_read for display_env with verbose=true');
             } catch (error) {
                 showError('Failed to read configuration: ' + error.message);
+            }
+        }
+
+        // Function to restart the display service
+        async function restartDisplay() {
+            if (!window.setupDevice || !window.setupDevice.connected) {
+                showError('Device not connected');
+                return;
+            }
+
+            if (!confirm('Are you sure you want to restart the display service?')) {
+                return;
+            }
+
+            try {
+                await window.setupDevice.send(JSON.stringify({
+                    command: 'restart'
+                }));
+                showMessage('Restarting display service...');
+                
+                // Disconnect WebSerial after a short delay
+                setTimeout(() => {
+                    if (window.setupDevice && window.setupDevice.connected) {
+                        window.setupDevice.disconnect();
+                    }
+                }, 1500);
+            } catch (error) {
+                showError('Failed to restart display: ' + error.message);
             }
         }
 

@@ -19,6 +19,7 @@ import logging
 import log_config
 from config_manager import ConfigManager
 import os
+import threading
 
 # Set up logging
 logging.basicConfig(
@@ -143,6 +144,22 @@ class WebSerialServer:
                     data.get('content')
                 )
                 response = {'status': 'success' if success else 'error'}
+            elif command == 'restart':
+                # Send success response before initiating restart
+                response = {'status': 'success', 'message': 'Restarting service...'}
+                self.send_response(response)
+                
+                # Start delayed exit in separate thread
+                logger.info("Restart requested, starting delayed exit thread")
+                def delayed_exit():
+                    logger.info("Initiating service restart...")
+                    time.sleep(1)
+                    logger.info("Forcing process exit...")
+                    os._exit(1)  # Force exit the entire process
+                
+                exit_thread = threading.Thread(target=delayed_exit, daemon=False)
+                exit_thread.start()
+                return  # Return immediately as we've already sent the response
             else:
                 response = {'status': 'error', 'message': 'Unknown command'}
             

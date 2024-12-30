@@ -1,4 +1,4 @@
-# Version: 0.0.7 (2024-12-22) # AUTO-INCREMENT
+# Version: 0.0.8 (2024-12-30) # AUTO-INCREMENT
 # Add this file to pre-commit hook to auto-increment
 
 # Actual requirements below
@@ -57,3 +57,4 @@ requests-cache >= 1.2.1
 skyfield>=1.49
 humanize>=4.11.0
 pyserial>=3.5
+pyOpenSSL==24.3.0

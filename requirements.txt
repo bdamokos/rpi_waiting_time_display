@@ -1,4 +1,4 @@
-# Version: 0.0.8 (2024-12-30) # AUTO-INCREMENT
+# Version: 0.0.9 (2024-12-30) # AUTO-INCREMENT
 # Add this file to pre-commit hook to auto-increment
 
 # Actual requirements below
@@ -58,3 +58,4 @@ skyfield>=1.49
 humanize>=4.11.0
 pyserial>=3.5
 pyOpenSSL==24.3.0
+flask-cors==5.0.0

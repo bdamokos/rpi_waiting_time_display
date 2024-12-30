@@ -156,4 +156,50 @@ async function openDebugServer() {
         window.showError('Failed to open debug server: ' + error.message);
     }
 }
+
+// Function to update connection status
+function updateConnectionStatus(status, message) {
+    const statusElement = document.getElementById('serial-support');
+    const connectButton = document.getElementById('connect-button');
+    const errorElement = document.getElementById('connection-error');
+
+    // Remove all status classes
+    statusElement.classList.remove('initial', 'success', 'error');
+    connectButton.classList.remove('initial', 'success', 'error');
+    errorElement.classList.remove('visible');
+
+    // Add appropriate class based on status
+    statusElement.classList.add(status);
+    connectButton.classList.add(status);
+    statusElement.textContent = message;
+
+    if (status === 'error') {
+        errorElement.textContent = message;
+        errorElement.classList.add('visible');
+    }
+}
+
+// Check WebSerial support when page loads
+if ('serial' in navigator) {
+    updateConnectionStatus('success', 'WebSerial is supported. Click Connect to begin.');
+} else {
+    updateConnectionStatus('error', 'WebSerial is not supported in your browser. Please use Chrome or Edge.');
+}
+
+// Handle connection button click
+document.getElementById('connect-button').addEventListener('click', async () => {
+    try {
+        // Your existing connection code here
+        // When connection starts:
+        updateConnectionStatus('initial', 'Connecting to device...');
+        
+        // On successful connection:
+        updateConnectionStatus('success', 'Connected successfully!');
+        
+        // On connection error:
+        // updateConnectionStatus('error', 'Failed to connect: ' + error.message);
+    } catch (error) {
+        updateConnectionStatus('error', 'Failed to connect: ' + error.message);
+    }
+});
  

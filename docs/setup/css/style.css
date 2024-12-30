@@ -12,6 +12,8 @@
     --warning-border: #ffeeba;
     --success-bg: #f1f8e9;
     --light-border: #eee;
+    --error-color: #dc3545;
+    --pale-green: #a5d6a7;
 }
 
 body {
@@ -1441,4 +1443,55 @@ input:checked + .slider:before {
     gap: 20px;
     font-size: 0.9em;
     color: #666;
+}
+
+/* Connection status styles */
+.connection-status {
+    text-align: center;
+    margin: 1em 0;
+    padding: 0.5em;
+    border-radius: 4px;
+    transition: all 0.3s ease;
+}
+
+.connection-status.initial {
+    color: var(--text-color);
+}
+
+.connection-status.success {
+    color: var(--primary-color);
+    background-color: var(--success-bg);
+}
+
+.connection-status.error {
+    color: var(--error-color);
+    background-color: #fef2f2;
+}
+
+/* Button states */
+.button.initial {
+    background-color: var(--pale-green);
+}
+
+.button.success {
+    background-color: var(--primary-color);
+}
+
+.button.error {
+    background-color: var(--error-color);
+}
+
+/* Error message */
+.error-message {
+    color: var(--error-color);
+    text-align: center;
+    margin-top: 1em;
+    padding: 0.5em;
+    border-radius: 4px;
+    background-color: #fef2f2;
+    display: none;
+}
+
+.error-message.visible {
+    display: block;
 }

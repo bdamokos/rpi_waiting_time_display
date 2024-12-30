@@ -22,11 +22,24 @@ title: E-Paper Display Setup
         <div id="error-message" style="display: none; color: red; padding: 10px;"></div>
         <div id="connect-prompt">
             <h1>Connect Your Display</h1>
-            <p id="serial-support">Checking WebSerial support...</p>
-            <button id="connect-button" class="button">Connect Device</button>
-            <p>In the window that opens, select Pi Zero Serial and click Connect.</p>
+            <div class="connection-status initial" id="serial-support">Checking WebSerial support...</div>
+            <div class="main-actions" style="text-align: center; margin: 2em 0;">
+                <button id="connect-button" class="button initial">Connect Device</button>
+                <div class="error-message" id="connection-error"></div>
+            </div>
+            <p style="text-align: center;">In the window that opens, select Pi Zero Serial and click Connect.</p>
+            
+            <details class="help-section" style="margin-top: 2em; padding: 1em; background: #f5f5f5; border-radius: 4px;">
+                <summary style="cursor: pointer; padding: 0.5em 0;">Need help connecting? Click here</summary>
+                <div class="setup-image">
+                    <img src="../images/webserial_selection.png" alt="WebSerial device selection dialog showing Pi Zero Serial option" style="max-width: 100%; margin: 20px 0; border: 1px solid #ccc; border-radius: 4px;">
+                    <p>Select "Pi Zero Serial" from the list. If you don't see your device, keep this window open and try unplugging and replugging your device - it should appear in the list after a few seconds.</p>
+                </div>
+                <div class="debug-links" style="margin-top: 1em; padding-top: 1em; border-top: 1px solid #ddd;">
+                    <p><a href="webserial_test.html">🔧 Test serial communication manually</a></p>
+                </div>
+            </details>
         </div>
-
         <div id="setup-interface" style="display: none;">
             <h1>E-Paper Display Setup Wizard</h1>
 
@@ -162,7 +175,6 @@ title: E-Paper Display Setup
         </div>
     </div>
 
-    <p style="font-size: 0.8em; margin-top: 20px;"><a href="webserial_test.html">Manually test the serial communication with your device</a></p>
     <script>
         // Function to send config_set commands
         async function sendConfigSet(configType) {

@@ -15,12 +15,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // Add other event listeners here as needed
 });
 
-async function openDebugServer() {
-    if (!window.setupDevice || !window.setupDevice.connected) {
-        window.showError('Device not connected');
+let preparedDebugUrl = null;
+let isPreparingDebugUrl = false;
+
+// Function to prepare debug URL in the background
+async function prepareDebugUrl() {
+    if (!window.setupDevice?.connected || isPreparingDebugUrl) {
         return;
     }
 
+    isPreparingDebugUrl = true;
     try {
         // Get debug server settings
         const debugPortResponse = await window.setupDevice.send(JSON.stringify({
@@ -39,26 +43,79 @@ async function openDebugServer() {
             command: 'get_ip'
         }));
 
-        console.log('Debug responses:', { debugPortResponse, debugEnabledResponse, ipResponse });
+        console.log('Background debug preparation:', { debugPortResponse, debugEnabledResponse, ipResponse });
 
-        // Check if debug server is enabled
-        if (debugEnabledResponse.status === 'success' && debugEnabledResponse.value.toLowerCase() !== 'true') {
-            window.showError('Debug server is not enabled. Please enable it in the advanced settings.');
-            return;
+        if (debugEnabledResponse.status === 'success' && debugEnabledResponse.value.toLowerCase() === 'true') {
+            const port = debugPortResponse.status === 'success' ? debugPortResponse.value : '5002';
+            const ip = ipResponse.status === 'success' ? ipResponse.ip : null;
+            
+            if (ip) {
+                preparedDebugUrl = `http://${ip}:${port}/debug`;
+                console.log('Debug URL prepared:', preparedDebugUrl);
+            }
         }
+    } catch (error) {
+        console.log('Failed to prepare debug URL:', error);
+    } finally {
+        isPreparingDebugUrl = false;
+    }
+}
 
-        // Construct and open URL
-        const port = debugPortResponse.status === 'success' ? debugPortResponse.value : '5002';  // Default to 5002 if not set
-        const ip = ipResponse.status === 'success' ? ipResponse.ip : null;
+// Schedule background preparation when idle
+function scheduleDebugUrlPreparation() {
+    if ('requestIdleCallback' in window) {
+        requestIdleCallback(() => {
+            prepareDebugUrl();
+        }, { timeout: 2000 });  // 2 second timeout
+    } else {
+        // Fallback for browsers that don't support requestIdleCallback
+        setTimeout(prepareDebugUrl, 2000);
+    }
+}
+
+// Modify the openDebugServer function to use prepared URL
+async function openDebugServer() {
+    if (!window.setupDevice || !window.setupDevice.connected) {
+        window.showError('Device not connected');
+        return;
+    }
+
+    try {
+        let httpUrl = preparedDebugUrl;
         
-        if (!ip) {
-            window.showError('Could not get device IP address');
-            return;
-        }
+        // If URL wasn't prepared, get it now
+        if (!httpUrl) {
+            // Get debug server settings
+            const debugPortResponse = await window.setupDevice.send(JSON.stringify({
+                command: 'config_get',
+                config_type: 'display_env',
+                key: 'debug_port'
+            }));
+            const debugEnabledResponse = await window.setupDevice.send(JSON.stringify({
+                command: 'config_get',
+                config_type: 'display_env',
+                key: 'debug_port_enabled'
+            }));
 
-        // Construct URL
-        const httpUrl = `http://${ip}:${port}/debug`;
-        console.log('Debug server URL:', httpUrl);
+            // Check if debug server is enabled
+            if (debugEnabledResponse.status === 'success' && debugEnabledResponse.value.toLowerCase() !== 'true') {
+                window.showError('Debug server is not enabled. Please enable it in the advanced settings.');
+                return;
+            }
+
+            // Get local IP
+            const ipResponse = await window.setupDevice.send(JSON.stringify({
+                command: 'get_ip'
+            }));
+
+            if (!ipResponse.status === 'success' || !ipResponse.ip) {
+                window.showError('Could not get device IP address');
+                return;
+            }
+
+            const port = debugPortResponse.status === 'success' ? debugPortResponse.value : '5002';
+            httpUrl = `http://${ipResponse.ip}:${port}/debug`;
+        }
 
         // Check if using Chrome
         const isChrome = /Chrome/.test(navigator.userAgent) && !/Edge/.test(navigator.userAgent);
@@ -68,16 +125,18 @@ async function openDebugServer() {
             try {
                 const response = await fetch(httpUrl, {
                     method: 'GET',
-                    mode: 'cors',
+                    mode: 'no-cors',
                     credentials: 'include',
                 });
-                if (response.ok) {
-                    window.open(httpUrl, '_blank');
-                    return;
-                }
+                window.open(httpUrl, '_blank');
+                return;
             } catch (error) {
                 console.log('Fetch test failed:', error);
             }
+
+            // Extract port from URL for the modal
+            const portMatch = httpUrl.match(/:(\d+)\//);
+            const port = portMatch ? portMatch[1] : '5002';
 
             // If fetch failed, show the modal with alternative options
             const modal = document.createElement('div');
@@ -195,4 +254,16 @@ document.getElementById('connect-button').addEventListener('click', async () => 
         updateConnectionStatus('error', 'Failed to connect: ' + error.message);
     }
 });
+
+// Add event listener for successful connection to prepare debug URL
+document.addEventListener('webserial_connected', () => {
+    scheduleDebugUrlPreparation();
+});
+
+// Prepare debug URL periodically when device is connected
+setInterval(() => {
+    if (window.setupDevice?.connected) {
+        scheduleDebugUrlPreparation();
+    }
+}, 30000);  // Check every 30 seconds
  

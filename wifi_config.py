@@ -148,7 +148,12 @@ class WiFiConfig:
                 env=env
             )
             
-            # Find WiFi connection
+            debug_output = {
+                "active_connections": result.stdout.strip(),
+                "active_connections_error": result.stderr.strip() if result.stderr else None
+            }
+            
+            # Find WiFi connection and device
             wifi_conn = None
             wifi_device = None
             for line in result.stdout.splitlines():
@@ -158,55 +163,73 @@ class WiFiConfig:
                     wifi_device = device
                     break
             
-            if not wifi_conn:
-                return {"status": "not_connected"}
-            
-            # Get the actual SSID and signal strength from the device
-            result = subprocess.run(
-                ['sudo', 'nmcli', '-t', '-f', 'SSID,SIGNAL,RATE,SECURITY', 'dev', 'wifi', 'list', 'ifname', wifi_device],
+            if not wifi_conn or not wifi_device:
+                return {"status": "not_connected", "debug": debug_output}
+
+            # Get the actual SSID from the active connection
+            result_conn = subprocess.run(
+                ['sudo', 'nmcli', '-t', '-f', '802-11-wireless.ssid', 'connection', 'show', wifi_conn],
                 capture_output=True,
                 text=True,
                 env=env
             )
             
-            # Get the active SSID from the device
-            result_active = subprocess.run(
-                ['sudo', 'nmcli', '-t', '-f', 'GENERAL.CONNECTION,GENERAL.HWADDR', 'dev', 'show', wifi_device],
-                capture_output=True,
-                text=True,
-                env=env
-            )
+            debug_output["connection_details"] = result_conn.stdout.strip()
+            debug_output["connection_details_error"] = result_conn.stderr.strip() if result_conn.stderr else None
             
-            active_mac = None
-            for line in result_active.stdout.splitlines():
-                if line.startswith('GENERAL.HWADDR:'):
-                    active_mac = line.split(':')[1].strip()
+            actual_ssid = None
+            for line in result_conn.stdout.splitlines():
+                if line.startswith('802-11-wireless.ssid:'):
+                    actual_ssid = line.split(':')[1]
                     break
+
+            if not actual_ssid:
+                return {
+                    "status": "connected",
+                    "ssid": wifi_conn,
+                    "signal": 0,
+                    "rate": "unknown",
+                    "security": True,
+                    "debug": debug_output
+                }
+
+            # Get signal strength and other details for this SSID
+            result = subprocess.run(
+                ['sudo', 'nmcli', '-t', '-f', 'SSID,SIGNAL,RATE,SECURITY', 'dev', 'wifi', 'list'],
+                capture_output=True,
+                text=True,
+                env=env
+            )
+            
+            debug_output["wifi_list"] = result.stdout.strip()
+            debug_output["wifi_list_error"] = result.stderr.strip() if result.stderr else None
             
             for line in result.stdout.splitlines():
                 if line:
                     ssid, signal, rate, security = line.split(':')
-                    if ssid:  # Skip empty SSIDs
+                    if ssid == actual_ssid:
                         return {
                             "status": "connected",
-                            "ssid": ssid,
+                            "ssid": actual_ssid,
                             "signal": int(signal) if signal.isdigit() else 0,
                             "rate": rate,
-                            "security": security != ''
+                            "security": security != '',
+                            "debug": debug_output
                         }
             
-            # If we get here, we found the connection but not the details
+            # If we can't get the signal details, return what we know
             return {
                 "status": "connected",
-                "ssid": wifi_conn,
+                "ssid": actual_ssid,
                 "signal": 0,
                 "rate": "unknown",
-                "security": True
+                "security": True,
+                "debug": debug_output
             }
                 
         except Exception as e:
             logger.error(f"Error getting current connection: {e}")
-            return {"error": str(e)}
+            return {"error": str(e), "debug": debug_output if 'debug_output' in locals() else None}
 
 # Command handlers for WebUSB server
 def handle_wifi_command(command, data=None):

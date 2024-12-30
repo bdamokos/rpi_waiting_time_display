@@ -149,7 +149,7 @@ async function loadCurrentSettings() {
                         config_type: 'display_env',
                         key: key
                     }));
-                    
+
                     if (response.status === 'success') {
                         currentSettings[key] = response.value !== undefined ? response.value : setting.default;
                     } else {
@@ -170,32 +170,32 @@ async function loadCurrentSettings() {
 function createSettingElement(key, setting, value) {
     const container = document.createElement('div');
     container.className = 'setting-item';
-    
+
     const label = document.createElement('label');
     label.htmlFor = key;
     label.textContent = setting.label;
     container.appendChild(label);
-    
+
     let input;
-    
+
     switch (setting.type) {
         case 'boolean':
             input = document.createElement('input');
             input.type = 'checkbox';
             input.checked = value === true || value === "true";
             break;
-            
+
         case 'password':
             const inputGroup = document.createElement('div');
             inputGroup.className = 'api-input';
-            
+
             input = document.createElement('input');
             input.type = 'password';
             input.value = value || '';
             input.id = key;
             input.name = key;
             inputGroup.appendChild(input);
-            
+
             const toggleBtn = document.createElement('button');
             toggleBtn.type = 'button';
             // Eye open SVG when password is hidden (will show on click)
@@ -219,7 +219,7 @@ function createSettingElement(key, setting, value) {
             inputGroup.appendChild(toggleBtn);
             container.appendChild(inputGroup);
             return container;
-            
+
         case 'select':
             input = document.createElement('select');
             setting.options.forEach(option => {
@@ -230,28 +230,28 @@ function createSettingElement(key, setting, value) {
                 input.appendChild(opt);
             });
             break;
-            
+
         default:
             input = document.createElement('input');
             input.type = setting.type || 'text';
             input.value = value || '';
     }
-    
+
     if (setting.type !== 'password') {
         input.id = key;
         input.name = key;
         container.appendChild(input);
     }
-    
+
     const description = document.createElement('div');
     description.className = 'setting-description';
     description.textContent = setting.description;
     container.appendChild(description);
-    
+
     return container;
 }
 
-window.startAdvancedSetup = async function() {
+window.startAdvancedSetup = async function () {
     try {
         const container = document.getElementById('advanced-setup-container');
         if (!container) {
@@ -268,35 +268,35 @@ window.startAdvancedSetup = async function() {
         // Create form
         const form = document.createElement('form');
         form.id = 'advanced-settings-form';
-        
+
         // Add groups
         for (const [groupKey, group] of Object.entries(SETTING_GROUPS)) {
             const groupContainer = document.createElement('div');
             groupContainer.className = 'settings-group';
-            
+
             const groupTitle = document.createElement('h3');
             groupTitle.textContent = group.title;
             groupContainer.appendChild(groupTitle);
-            
+
             const groupDescription = document.createElement('p');
             groupDescription.textContent = group.description;
             groupContainer.appendChild(groupDescription);
-            
+
             for (const [key, setting] of Object.entries(group.settings)) {
                 const settingElement = createSettingElement(key, setting, currentSettings[key]);
                 groupContainer.appendChild(settingElement);
             }
-            
+
             form.appendChild(groupContainer);
         }
-        
+
         // Add save button
         const saveButton = document.createElement('button');
         saveButton.type = 'submit';
         saveButton.textContent = 'Save Settings';
         saveButton.className = 'button';
         form.appendChild(saveButton);
-        
+
         form.onsubmit = saveAdvancedSettings;
         container.appendChild(form);
 
@@ -306,13 +306,13 @@ window.startAdvancedSetup = async function() {
     }
 }
 
-window.saveAdvancedSettings = async function(event) {
+window.saveAdvancedSettings = async function (event) {
     if (event) event.preventDefault();
-    
+
     try {
         const form = document.getElementById('advanced-settings-form');
         const savePromises = [];
-        
+
         for (const group of Object.values(SETTING_GROUPS)) {
             for (const [key, setting] of Object.entries(group.settings)) {
                 const input = document.getElementById(key);
@@ -329,7 +329,7 @@ window.saveAdvancedSettings = async function(event) {
                     default:
                         value = input.value;
                 }
-                
+
                 if (currentSettings[key] !== value) {
                     savePromises.push(
                         window.setupDevice.send(JSON.stringify({
@@ -342,7 +342,7 @@ window.saveAdvancedSettings = async function(event) {
                 }
             }
         }
-        
+
         if (savePromises.length > 0) {
             await Promise.all(savePromises);
             window.showMessage('Settings saved successfully');

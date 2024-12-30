@@ -334,7 +334,7 @@ window.saveAdvancedSettings = async function(event) {
                     savePromises.push(
                         window.setupDevice.send(JSON.stringify({
                             command: 'config_set',
-                            config_type: 'env',
+                            config_type: 'display_env',
                             key: key,
                             value: value
                         }))

@@ -56,10 +56,9 @@ async function openDebugServer() {
             return;
         }
 
-        // Construct URLs
+        // Construct URL
         const httpUrl = `http://${ip}:${port}/debug`;
-        const httpsUrl = `https://${ip}:${port}/debug`;
-        console.log('Debug server URLs:', { httpUrl, httpsUrl });
+        console.log('Debug server URL:', httpUrl);
 
         // Check if using Chrome
         const isChrome = /Chrome/.test(navigator.userAgent) && !/Edge/.test(navigator.userAgent);
@@ -111,22 +110,19 @@ async function openDebugServer() {
                 <h3 style="margin-top: 0;">Debug Server Access</h3>
                 <p>Chrome's security policies are preventing direct access. Here are your options:</p>
                 
-                <div style="background: #fff3cd; padding: 10px; border-radius: 4px; margin: 10px 0;">
+                <div style="background: #fff3cd; padding: 15px; border-radius: 4px; margin: 10px 0;">
                     <strong>Option 1: Enable Insecure Private Network Access</strong>
-                    <ol style="margin-top: 5px;">
-                        <li>Open a new tab and go to: <code>chrome://flags/#block-insecure-private-network-requests</code></li>
-                        <li>Set "Block insecure private network requests" to <strong>Disabled</strong></li>
-                        <li>Click "Relaunch" at the bottom</li>
-                        <li>Try the debug server button again</li>
-                        <li>Don't forget to set it back to "Enabled" after you're done</li>
+                    <ol style="margin: 10px 0 5px 25px; padding-right: 10px;">
+                        <li style="margin-bottom: 8px;">Open a new tab and go to: <code>chrome://flags/#block-insecure-private-network-requests</code></li>
+                        <li style="margin-bottom: 8px;">Set "Block insecure private network requests" to <strong>Disabled</strong></li>
+                        <li style="margin-bottom: 8px;">Click "Relaunch" at the bottom</li>
+                        <li style="margin-bottom: 8px;">Try the debug server button again</li>
+                        <li style="margin-bottom: 0;">Don't forget to set it back to "Enabled" after you're done</li>
                     </ol>
                 </div>
 
-                <p><strong>Option 2: Try these URLs manually:</strong></p>
-                <p>HTTP URL:</p>
+                <p><strong>Option 2: Try this URL manually:</strong></p>
                 <pre style="background: #f5f5f5; padding: 10px; border-radius: 4px; user-select: text; overflow-x: auto;">${httpUrl}</pre>
-                <p>HTTPS URL (will show certificate warning):</p>
-                <pre style="background: #f5f5f5; padding: 10px; border-radius: 4px; user-select: text; overflow-x: auto;">${httpsUrl}</pre>
 
                 <p><strong>Option 3: Use Firefox or Safari</strong></p>
 
@@ -137,18 +133,15 @@ async function openDebugServer() {
                     <li>Try accessing the debug server from another device on the network</li>
                 </ul>
                 <button onclick="this.parentElement.remove(); document.querySelector('#debug-overlay').remove();" style="padding: 8px 16px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer;">Close</button>
-                <div style="display: flex; gap: 10px; margin-top: 10px;">
-                    <button onclick="navigator.clipboard.writeText('${httpUrl}').then(() => window.showMessage('HTTP URL copied to clipboard'));" style="padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">Copy HTTP URL</button>
-                    <button onclick="navigator.clipboard.writeText('${httpsUrl}').then(() => window.showMessage('HTTPS URL copied to clipboard'));" style="padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">Copy HTTPS URL</button>
-                </div>
+                <button onclick="navigator.clipboard.writeText('${httpUrl}').then(() => window.showMessage('URL copied to clipboard'));" style="padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; margin-left: 10px; cursor: pointer;">Copy URL</button>
             `;
 
             overlay.id = 'debug-overlay';
             document.body.appendChild(overlay);
             document.body.appendChild(modal);
         } else {
-            // For other browsers, try HTTPS first
-            window.open(httpsUrl, '_blank');
+            // For other browsers, open directly
+            window.open(httpUrl, '_blank');
         }
 
     } catch (error) {

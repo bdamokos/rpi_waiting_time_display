@@ -8,7 +8,7 @@ certifi==2024.12.14
     # via
     #   -r requirements.in
     #   requests
-charset-normalizer==3.4.0
+charset-normalizer==3.4.1
     # via
     #   -r requirements.in
     #   requests

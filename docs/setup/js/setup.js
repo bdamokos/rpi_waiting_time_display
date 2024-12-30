@@ -56,8 +56,10 @@ async function openDebugServer() {
             return;
         }
 
-        const url = `http://${ip}:${port}/debug`;
-        console.log('Opening debug server at:', url);
+        // Construct URLs
+        const httpUrl = `http://${ip}:${port}/debug`;
+        const httpsUrl = `https://${ip}:${port}/debug`;
+        console.log('Debug server URLs:', { httpUrl, httpsUrl });
 
         // Check if using Chrome
         const isChrome = /Chrome/.test(navigator.userAgent) && !/Edge/.test(navigator.userAgent);
@@ -92,26 +94,36 @@ async function openDebugServer() {
 
             modal.innerHTML = `
                 <h3 style="margin-top: 0;">Debug Server Access</h3>
-                <p>Due to Chrome's security policies, you'll need to access the debug server in one of these ways:</p>
-                <p><strong>Option 1:</strong> Copy and paste this URL in a new tab:</p>
-                <pre style="background: #f5f5f5; padding: 10px; border-radius: 4px; user-select: text; overflow-x: auto;">${url}</pre>
-                <p><strong>Option 2:</strong> Use Firefox or Safari instead, where the button will work directly.</p>
+                <p>Due to Chrome's security policies, you might need to access the debug server in one of these ways:</p>
+                <p><strong>HTTP URL:</strong></p>
+                <pre style="background: #f5f5f5; padding: 10px; border-radius: 4px; user-select: text; overflow-x: auto;">${httpUrl}</pre>
+                <p><strong>HTTPS URL (might show certificate warning):</strong></p>
+                <pre style="background: #f5f5f5; padding: 10px; border-radius: 4px; user-select: text; overflow-x: auto;">${httpsUrl}</pre>
+                <p><strong>Note:</strong> If using HTTPS, you'll need to accept the self-signed certificate warning.</p>
                 <p><strong>Troubleshooting:</strong></p>
                 <ul style="margin-bottom: 20px;">
                     <li>Make sure you're on the same network as the device</li>
                     <li>Check if port ${port} is not blocked by your firewall</li>
                     <li>Try accessing the debug server from another device on the network</li>
+                    <li>Try both HTTP and HTTPS URLs</li>
                 </ul>
                 <button onclick="this.parentElement.remove(); document.querySelector('#debug-overlay').remove();" style="padding: 8px 16px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer;">Close</button>
-                <button onclick="navigator.clipboard.writeText('${url}').then(() => window.showMessage('URL copied to clipboard'));" style="padding: 8px 16px; margin-left: 10px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">Copy URL</button>
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <button onclick="navigator.clipboard.writeText('${httpUrl}').then(() => window.showMessage('HTTP URL copied to clipboard'));" style="padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">Copy HTTP URL</button>
+                    <button onclick="navigator.clipboard.writeText('${httpsUrl}').then(() => window.showMessage('HTTPS URL copied to clipboard'));" style="padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">Copy HTTPS URL</button>
+                </div>
             `;
 
             overlay.id = 'debug-overlay';
             document.body.appendChild(overlay);
             document.body.appendChild(modal);
+
+            // Try opening both URLs
+            window.open(httpsUrl, '_blank');
+            setTimeout(() => window.open(httpUrl, '_blank'), 100);
         } else {
-            // For other browsers, open directly
-            window.open(url, '_blank');
+            // For other browsers, try HTTPS first, then HTTP
+            window.open(httpsUrl, '_blank');
         }
 
     } catch (error) {

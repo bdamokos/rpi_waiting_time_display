@@ -10,6 +10,7 @@ from werkzeug.utils import secure_filename
 import shutil
 from datetime import datetime, timedelta
 from config_manager import ConfigManager
+from flask_cors import CORS
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,31 @@ DEBUG_ENABLED = os.getenv("debug_port_enabled", "false").lower() == "true"
 FIRST_RUN = os.getenv("first_run", "false").lower() == "true"
 
 app = Flask(__name__)
+
+# Enable CORS with specific settings
+CORS(app, resources={
+    r"/debug/*": {
+        "origins": "*",  # In production, you might want to restrict this
+        "allow_headers": ["*"],
+        "expose_headers": ["*"],
+        "supports_credentials": True
+    }
+})
+
+# Add Private Network Access headers for all responses
+@app.after_request
+def add_pna_headers(response):
+    # Allow private network access
+    response.headers['Access-Control-Allow-Private-Network'] = 'true'
+    
+    # If this is a preflight request (OPTIONS), add necessary headers
+    if request.method == 'OPTIONS':
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = '*'
+        response.headers['Access-Control-Max-Age'] = '3600'  # Cache preflight for 1 hour
+    
+    return response
+
 config_manager = ConfigManager()
 
 def is_local_request():
@@ -179,8 +205,61 @@ def start_debug_server():
         # Additional security settings
         app.config['MAX_CONTENT_LENGTH'] = 16 * 1024  # Limit request size to 16KB
         app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
-        app.run(host='0.0.0.0', port=DEBUG_PORT, 
-               debug=False, use_reloader=False)  
+
+        # Check for SSL certificate and key
+        cert_path = os.path.join(os.path.dirname(__file__), 'ssl', 'cert.pem')
+        key_path = os.path.join(os.path.dirname(__file__), 'ssl', 'key.pem')
+
+        if not os.path.exists('ssl'):
+            os.makedirs('ssl', exist_ok=True)
+
+        # Generate self-signed certificate if it doesn't exist
+        if not (os.path.exists(cert_path) and os.path.exists(key_path)):
+            logger.info("Generating self-signed SSL certificate...")
+            try:
+                from OpenSSL import crypto
+                # Generate key
+                k = crypto.PKey()
+                k.generate_key(crypto.TYPE_RSA, 2048)
+                
+                # Generate certificate
+                cert = crypto.X509()
+                cert.get_subject().C = "BE"
+                cert.get_subject().ST = "Brussels"
+                cert.get_subject().L = "Brussels"
+                cert.get_subject().O = "Display Debug Server"
+                cert.get_subject().OU = "Debug"
+                cert.get_subject().CN = "localhost"
+                cert.set_serial_number(1000)
+                cert.gmtime_adj_notBefore(0)
+                cert.gmtime_adj_notAfter(10*365*24*60*60)  # 10 years
+                cert.set_issuer(cert.get_subject())
+                cert.set_pubkey(k)
+                cert.sign(k, 'sha256')
+                
+                # Save certificate
+                with open(cert_path, "wb") as f:
+                    f.write(crypto.dump_certificate(crypto.FILETYPE_PEM, cert))
+                with open(key_path, "wb") as f:
+                    f.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, k))
+                
+                logger.info("SSL certificate generated successfully")
+            except Exception as e:
+                logger.error(f"Failed to generate SSL certificate: {e}")
+                logger.info("Falling back to HTTP")
+                app.run(host='0.0.0.0', port=DEBUG_PORT, debug=False, use_reloader=False)
+                return
+
+        try:
+            app.run(host='0.0.0.0', 
+                   port=DEBUG_PORT,
+                   debug=False,
+                   use_reloader=False,
+                   ssl_context=(cert_path, key_path))
+        except Exception as e:
+            logger.error(f"Failed to start HTTPS server: {e}")
+            logger.info("Falling back to HTTP")
+            app.run(host='0.0.0.0', port=DEBUG_PORT, debug=False, use_reloader=False)
 
     server_thread = threading.Thread(target=run_server, daemon=True)
     server_thread.start()

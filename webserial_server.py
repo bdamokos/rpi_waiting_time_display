@@ -21,6 +21,7 @@ from config_manager import ConfigManager
 import os
 import threading
 import socket
+import subprocess
 
 # Set up logging
 logging.basicConfig(
@@ -98,12 +99,29 @@ class WebSerialServer:
     def get_local_ip(self):
         """Get the local IP address of the device"""
         try:
-            # Create a socket and connect to a remote host (doesn't actually establish a connection)
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(('8.8.8.8', 80))
-            ip = s.getsockname()[0]
-            s.close()
-            return {'status': 'success', 'ip': ip}
+            # Get all network interfaces
+            result = subprocess.run(
+                ['ip', '-o', '-4', 'addr', 'list'],
+                capture_output=True,
+                text=True
+            )
+            
+            # Look for wlan0 first (WiFi interface)
+            for line in result.stdout.splitlines():
+                if 'wlan0' in line:
+                    # Extract IP address using string manipulation
+                    # Format: 2: wlan0    inet 192.168.1.100/24 ...
+                    ip = line.split()[3].split('/')[0]
+                    return {'status': 'success', 'ip': ip}
+            
+            # If no WiFi, look for eth0 (Ethernet interface)
+            for line in result.stdout.splitlines():
+                if 'eth0' in line:
+                    ip = line.split()[3].split('/')[0]
+                    return {'status': 'success', 'ip': ip}
+            
+            return {'status': 'error', 'message': 'No suitable network interface found'}
+            
         except Exception as e:
             logger.error(f"Error getting local IP: {e}")
             return {'status': 'error', 'message': str(e)}

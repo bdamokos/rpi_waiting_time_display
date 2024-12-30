@@ -37,13 +37,30 @@ CORS(app, resources={
 def add_pna_headers(response):
     # Allow private network access
     response.headers['Access-Control-Allow-Private-Network'] = 'true'
+    response.headers['Access-Control-Request-Private-Network'] = 'true'
+    
+    # Add CORS headers
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Credentials'] = 'true'
     
     # If this is a preflight request (OPTIONS), add necessary headers
     if request.method == 'OPTIONS':
         response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
         response.headers['Access-Control-Allow-Headers'] = '*'
         response.headers['Access-Control-Max-Age'] = '3600'  # Cache preflight for 1 hour
+        # Additional PNA headers for preflight
+        response.headers['Access-Control-Allow-Private-Network'] = 'true'
+        response.headers['Access-Control-Request-Private-Network'] = 'true'
     
+    return response
+
+# Add a specific handler for OPTIONS requests
+@app.route('/debug', methods=['OPTIONS'])
+@app.route('/debug/', methods=['OPTIONS'])
+@app.route('/debug/<path:path>', methods=['OPTIONS'])
+def handle_options(path=None):
+    response = app.make_default_options_response()
+    add_pna_headers(response)
     return response
 
 config_manager = ConfigManager()

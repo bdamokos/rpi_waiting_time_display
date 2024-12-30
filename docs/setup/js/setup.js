@@ -65,7 +65,22 @@ async function openDebugServer() {
         const isChrome = /Chrome/.test(navigator.userAgent) && !/Edge/.test(navigator.userAgent);
         
         if (isChrome) {
-            // Create and show a custom modal
+            // Try to fetch the debug page first to test connectivity
+            try {
+                const response = await fetch(httpUrl, {
+                    method: 'GET',
+                    mode: 'cors',
+                    credentials: 'include',
+                });
+                if (response.ok) {
+                    window.open(httpUrl, '_blank');
+                    return;
+                }
+            } catch (error) {
+                console.log('Fetch test failed:', error);
+            }
+
+            // If fetch failed, show the modal with alternative options
             const modal = document.createElement('div');
             modal.style.cssText = `
                 position: fixed;
@@ -77,7 +92,7 @@ async function openDebugServer() {
                 border-radius: 8px;
                 box-shadow: 0 2px 10px rgba(0,0,0,0.1);
                 z-index: 1000;
-                max-width: 500px;
+                max-width: 600px;
                 width: 90%;
             `;
 
@@ -94,18 +109,32 @@ async function openDebugServer() {
 
             modal.innerHTML = `
                 <h3 style="margin-top: 0;">Debug Server Access</h3>
-                <p>Due to Chrome's security policies, you might need to access the debug server in one of these ways:</p>
-                <p><strong>HTTP URL:</strong></p>
+                <p>Chrome's security policies are preventing direct access. Here are your options:</p>
+                
+                <div style="background: #fff3cd; padding: 10px; border-radius: 4px; margin: 10px 0;">
+                    <strong>Option 1: Enable Insecure Private Network Access</strong>
+                    <ol style="margin-top: 5px;">
+                        <li>Open a new tab and go to: <code>chrome://flags/#block-insecure-private-network-requests</code></li>
+                        <li>Set "Block insecure private network requests" to <strong>Disabled</strong></li>
+                        <li>Click "Relaunch" at the bottom</li>
+                        <li>Try the debug server button again</li>
+                        <li>Don't forget to set it back to "Enabled" after you're done</li>
+                    </ol>
+                </div>
+
+                <p><strong>Option 2: Try these URLs manually:</strong></p>
+                <p>HTTP URL:</p>
                 <pre style="background: #f5f5f5; padding: 10px; border-radius: 4px; user-select: text; overflow-x: auto;">${httpUrl}</pre>
-                <p><strong>HTTPS URL (might show certificate warning):</strong></p>
+                <p>HTTPS URL (will show certificate warning):</p>
                 <pre style="background: #f5f5f5; padding: 10px; border-radius: 4px; user-select: text; overflow-x: auto;">${httpsUrl}</pre>
-                <p><strong>Note:</strong> If using HTTPS, you'll need to accept the self-signed certificate warning.</p>
+
+                <p><strong>Option 3: Use Firefox or Safari</strong></p>
+
                 <p><strong>Troubleshooting:</strong></p>
                 <ul style="margin-bottom: 20px;">
                     <li>Make sure you're on the same network as the device</li>
                     <li>Check if port ${port} is not blocked by your firewall</li>
                     <li>Try accessing the debug server from another device on the network</li>
-                    <li>Try both HTTP and HTTPS URLs</li>
                 </ul>
                 <button onclick="this.parentElement.remove(); document.querySelector('#debug-overlay').remove();" style="padding: 8px 16px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer;">Close</button>
                 <div style="display: flex; gap: 10px; margin-top: 10px;">
@@ -117,12 +146,8 @@ async function openDebugServer() {
             overlay.id = 'debug-overlay';
             document.body.appendChild(overlay);
             document.body.appendChild(modal);
-
-            // Try opening both URLs
-            window.open(httpsUrl, '_blank');
-            setTimeout(() => window.open(httpUrl, '_blank'), 100);
         } else {
-            // For other browsers, try HTTPS first, then HTTP
+            // For other browsers, try HTTPS first
             window.open(httpsUrl, '_blank');
         }
 

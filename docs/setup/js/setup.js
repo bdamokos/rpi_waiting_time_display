@@ -187,7 +187,7 @@ document.getElementById('connect-button').addEventListener('click', async () => 
         updateConnectionStatus('initial', 'Connecting to device...');
         
         // On successful connection:
-        updateConnectionStatus('success', 'Connected successfully!');
+        updateConnectionStatus('success', 'WebSerial connected successfully, click the Connect button and select your device in the list!');
         
         // On connection error:
         // updateConnectionStatus('error', 'Failed to connect: ' + error.message);

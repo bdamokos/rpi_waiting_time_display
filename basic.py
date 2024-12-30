@@ -622,6 +622,15 @@ class DisplayManager:
         self.weather_manager.stop()
         logger.info("Display manager cleanup completed")
 
+    def exit_flight_mode(self):
+        """Handle exiting flight mode and trigger a display update."""
+        logger.info("Exiting flight mode")
+        self.in_flight_mode = False
+        self.flight_mode_start = None
+        self.last_flight_mode_end = datetime.now()
+        # Force an immediate update to normal display
+        self._force_display_update()
+
 def main():
     epd = None
     display_manager = None

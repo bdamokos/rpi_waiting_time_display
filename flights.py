@@ -680,7 +680,7 @@ def check_flights(epd, get_flights, flight_check_interval=10):
                     should_update = False
                     if current_flight_data is None:
                         should_update = True
-                        # First display, set as base image if partial updates supported
+                        # First display, set base image if partial updates supported
                         if hasattr(epd, 'displayPartial'):
                             update_display_with_flights(epd, [enhanced_flight], set_base_image=True)
                         else:
@@ -691,6 +691,15 @@ def check_flights(epd, get_flights, flight_check_interval=10):
 
                     if should_update:
                         current_flight_data = enhanced_flight
+                        last_display_update = current_time
+            else:
+                # No flights detected
+                if current_flight_data is not None:  # We were tracking a flight
+                    if (current_time - last_display_update) >= refresh_minimal_time:
+                        logger.info("No flights detected and minimal refresh time passed, exiting flight mode")
+                        current_flight_data = None
+                        if hasattr(epd, 'exit_flight_mode'):
+                            epd.exit_flight_mode()
                         last_display_update = current_time
 
             # Sleep for the shorter of the two intervals

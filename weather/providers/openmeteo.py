@@ -132,6 +132,14 @@ class OpenMeteoProvider(WeatherProvider):
         
         logger.debug(f"OpenMeteo: Raw temperature from API: {temp}°")
         
+        # Convert temperatures if needed (OpenMeteo always returns Celsius)
+        if self.unit == TemperatureUnit.FAHRENHEIT:
+            temp = TemperatureUnit.celsius_to_fahrenheit(temp)
+            feels_like = TemperatureUnit.celsius_to_fahrenheit(feels_like)
+        elif self.unit == TemperatureUnit.KELVIN:
+            temp = TemperatureUnit.celsius_to_kelvin(temp)
+            feels_like = TemperatureUnit.celsius_to_kelvin(feels_like)
+        
         current = CurrentWeather(
             temperature=temp,
             feels_like=feels_like,
@@ -152,6 +160,14 @@ class OpenMeteoProvider(WeatherProvider):
         for i in range(len(data['daily']['time'])):
             min_temp = data['daily']['temperature_2m_min'][i]
             max_temp = data['daily']['temperature_2m_max'][i]
+            
+            # Convert min/max temperatures if needed
+            if self.unit == TemperatureUnit.FAHRENHEIT:
+                min_temp = TemperatureUnit.celsius_to_fahrenheit(min_temp)
+                max_temp = TemperatureUnit.celsius_to_fahrenheit(max_temp)
+            elif self.unit == TemperatureUnit.KELVIN:
+                min_temp = TemperatureUnit.celsius_to_kelvin(min_temp)
+                max_temp = TemperatureUnit.celsius_to_kelvin(max_temp)
             
             # Log sunshine duration for debugging
             sunshine_seconds = data['daily']['sunshine_duration'][i]

@@ -20,6 +20,7 @@ from weather.icons import WEATHER_ICONS, ICONS_DIR
 import cairosvg
 from typing import Tuple
 from functools import lru_cache
+from weather.models import TemperatureUnit
 
 logger = logging.getLogger(__name__)
 
@@ -319,9 +320,10 @@ def draw_weather_display(epd, weather_data, last_weather_data=None, set_base_ima
         font_large = font_medium = font_small = font_tiny = font_emoji = font_xl
 
     # Top row: Large temperature and weather icon
-    temp_text = f"{weather_data.current.temperature:.1f}°C"  # Show one decimal place
+    unit_symbol = "°F" if weather_data.current.unit == TemperatureUnit.FAHRENHEIT else "°K" if weather_data.current.unit == TemperatureUnit.KELVIN else "°C"
+    temp_text = f"{weather_data.current.temperature:.1f}{unit_symbol}"  # Show one decimal place
 
-    # Calculate available space for temperature and icon
+    # Calculate available space for temperature and icon using actual temperature text
     temp_bbox = draw.textbbox((0, 0), temp_text, font=font_xl)
     temp_width = temp_bbox[2] - temp_bbox[0]
     temp_height = temp_bbox[3] - temp_bbox[1]
@@ -386,7 +388,8 @@ def draw_weather_display(epd, weather_data, last_weather_data=None, set_base_ima
 
     for idx, forecast in enumerate(forecasts):
         # Calculate text size - round temperatures to whole numbers
-        forecast_text = f"{round(forecast.min_temp)}-{round(forecast.max_temp)}°"
+        unit_symbol = "°F" if forecast.unit == TemperatureUnit.FAHRENHEIT else "°K" if forecast.unit == TemperatureUnit.KELVIN else "°C"
+        forecast_text = f"{round(forecast.min_temp)}-{round(forecast.max_temp)}{unit_symbol}"
         text_bbox = draw.textbbox((0, 0), forecast_text, font=font_medium)
         text_width = text_bbox[2] - text_bbox[0]
         text_height = text_bbox[3] - text_bbox[1]

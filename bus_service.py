@@ -15,7 +15,7 @@ from functools import lru_cache
 from threading import Event
 from backoff import ExponentialBackoff
 from weather.display import load_svg_icon
-from weather.models import WeatherData
+from weather.models import WeatherData, TemperatureUnit
 from weather.icons import ICONS_DIR
 import traceback
 
@@ -525,8 +525,9 @@ def draw_weather_info(draw, Himage, weather_data: WeatherData, font_paths, epd, 
         # Load fonts
         font_medium = ImageFont.truetype(font_paths['dejavu'], 16)
         
-        # Format temperature text
-        temp_text = f"{weather_data.current.temperature:.1f}°"
+        # Format temperature text with correct unit
+        unit_symbol = "°F" if weather_data.current.unit == TemperatureUnit.FAHRENHEIT else "°K" if weather_data.current.unit == TemperatureUnit.KELVIN else "°C"
+        temp_text = f"{weather_data.current.temperature:.1f}{unit_symbol}"
         
         # Get weather icon
         icon_name = weather_data.current.condition.icon

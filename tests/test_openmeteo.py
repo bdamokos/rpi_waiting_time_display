@@ -77,8 +77,8 @@ def test_fetch_weather(provider, sample_response):
     weather_data = provider.get_weather()
     
     # Test current weather
-    assert weather_data.current.temperature == 15
-    assert weather_data.current.feels_like == 15
+    assert weather_data.current.temperature == 15.3
+    assert weather_data.current.feels_like == 14.8
     assert weather_data.current.humidity == 65
     assert weather_data.current.pressure == 1015.0
     assert weather_data.current.condition.description == "Mainly clear"
@@ -87,8 +87,8 @@ def test_fetch_weather(provider, sample_response):
     # Test forecast
     assert len(weather_data.daily_forecast) == 3
     first_day = weather_data.daily_forecast[0]
-    assert first_day.min_temp == 8
-    assert first_day.max_temp == 16
+    assert first_day.min_temp == 8.1
+    assert first_day.max_temp == 16.2
     assert first_day.condition.description == "Mainly clear"
     assert first_day.precipitation_amount == 0.0
     assert first_day.precipitation_probability == 0
@@ -100,7 +100,7 @@ def test_fetch_weather(provider, sample_response):
     assert weather_data.is_day == True
     
     # Test attribution
-    assert weather_data.attribution == "Weather data by Open-Meteo"
+    assert weather_data.attribution == "Weather data provided by Open-Meteo.com"
 
 @responses.activate
 def test_error_handling(provider):
@@ -149,10 +149,10 @@ def test_temperature_units(provider, sample_response):
             'temperature_2m',
             'relative_humidity_2m',
             'apparent_temperature',
+            'is_day',
             'precipitation',
             'weather_code',
-            'pressure_msl',
-            'is_day'
+            'pressure_msl'
         ],
         'daily': [
             'weather_code',

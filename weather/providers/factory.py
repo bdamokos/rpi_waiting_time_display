@@ -38,7 +38,7 @@ def create_weather_provider(
     provider_name = provider_name.lower()
     if provider_name == "openmeteo":
         return OpenMeteoProvider(lat=lat, lon=lon, unit=unit)
-    elif provider_name == "openweather":
+    elif provider_name == "openweather" or provider_name == "openweathermap":
         api_key = os.getenv('OPENWEATHER_API_KEY')
         if not api_key:
             logger.warning("OPENWEATHER_API_KEY environment variable is missing, falling back to OpenMeteo")

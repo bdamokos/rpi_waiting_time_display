@@ -319,7 +319,7 @@ def draw_weather_display(epd, weather_data, last_weather_data=None, set_base_ima
         font_large = font_medium = font_small = font_tiny = font_emoji = font_xl
 
     # Top row: Large temperature and weather icon
-    temp_text = f"{weather_data['current']['temperature']:.1f}°C"  # Show one decimal place
+    temp_text = f"{weather_data.current.temperature:.1f}°C"  # Show one decimal place
 
     # Calculate available space for temperature and icon
     temp_bbox = draw.textbbox((0, 0), temp_text, font=font_xl)
@@ -331,7 +331,7 @@ def draw_weather_display(epd, weather_data, last_weather_data=None, set_base_ima
     icon_height = temp_height
 
     # Get weather icon
-    icon_name = weather_data['current']['icon']
+    icon_name = weather_data.current.condition.icon
     icon_path = ICONS_DIR / f"{icon_name}.svg"
     logger.debug(f"Loading icon: {icon_name} from {icon_path}")
     if not icon_path.exists():
@@ -354,11 +354,11 @@ def draw_weather_display(epd, weather_data, last_weather_data=None, set_base_ima
     y_pos = 55
 
     # Show either sunrise or sunset based on time of day
-    if weather_data['is_daytime']:
-        sun_text = f" {weather_data['sunset']} "
+    if weather_data.is_day:
+        sun_text = f" {weather_data.sunset.strftime('%H:%M')} "
         sun_icon = "☀"
     else:
-        sun_text = f" {weather_data['sunrise']} "
+        sun_text = f" {weather_data.sunrise.strftime('%H:%M')} "
         sun_icon = "☀"
     moon_phase = get_moon_phase()
     moon_phase_emoji = moon_phase['emoji']
@@ -376,8 +376,8 @@ def draw_weather_display(epd, weather_data, last_weather_data=None, set_base_ima
 
     # Bottom row: Three day forecast (today + next 2 days)
     forecast_y_pos = 85
-    logger.debug(f"Forecasts: {weather_data['forecasts']}")
-    forecasts = weather_data['forecasts'][:3]
+    logger.debug(f"Forecasts: {weather_data.daily_forecast}")
+    forecasts = weather_data.daily_forecast[:3]
     logger.debug(f"Forecasts: {forecasts}")
 
     # Calculate available width for each forecast block
@@ -386,7 +386,7 @@ def draw_weather_display(epd, weather_data, last_weather_data=None, set_base_ima
 
     for idx, forecast in enumerate(forecasts):
         # Calculate text size - round temperatures to whole numbers
-        forecast_text = f"{round(forecast['min'])}-{round(forecast['max'])}°"
+        forecast_text = f"{round(forecast.min_temp)}-{round(forecast.max_temp)}°"
         text_bbox = draw.textbbox((0, 0), forecast_text, font=font_medium)
         text_width = text_bbox[2] - text_bbox[0]
         text_height = text_bbox[3] - text_bbox[1]
@@ -396,7 +396,7 @@ def draw_weather_display(epd, weather_data, last_weather_data=None, set_base_ima
         icon_height = icon_width
 
         # Load and resize forecast icon
-        icon_name = forecast['icon']
+        icon_name = forecast.condition.icon
         icon_path = ICONS_DIR / f"{icon_name}.svg"
         if not icon_path.exists():
             logger.warning(f"Forecast icon not found: {icon_path}")

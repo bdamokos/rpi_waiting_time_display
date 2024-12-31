@@ -1,4 +1,4 @@
-# Version: 0.0.9 (2024-12-30) # AUTO-INCREMENT
+# Version: 0.0.10 (2024-12-31) # AUTO-INCREMENT
 # Add this file to pre-commit hook to auto-increment
 
 # Actual requirements below
@@ -59,3 +59,4 @@ humanize>=4.11.0
 pyserial>=3.5
 pyOpenSSL==24.3.0
 flask-cors==5.0.0
+pydantic==2.10.4

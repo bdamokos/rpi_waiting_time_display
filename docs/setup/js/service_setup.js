@@ -41,24 +41,77 @@ const services = {
             ],
             default: 'openmeteo'
         }],
-        api_key_name: 'OPENWEATHER_API_KEY',
-        api_info: {
-            name: 'OpenWeatherMap API Key',
-            url: 'https://openweathermap.org/api',
-            instructions: 'Sign up for a free account at OpenWeatherMap and get your API key from the "API keys" tab.',
-            conditional: {
-                field: 'WEATHER_PROVIDER',
-                value: 'openweather'
+        api_keys: [
+            {
+                name: 'OPENWEATHER_API_KEY',
+                label: 'OpenWeatherMap API Key',
+                description: 'Required for using OpenWeatherMap as weather provider',
+                url: 'https://openweathermap.org/api',
+                instructions: 'Sign up for a free account at OpenWeatherMap and get your API key from the "API keys" tab. The display is using the legacy free plan, not the One Call API (which is a separate paid plan with a free quota).',
+                optional: true,
+                conditional: {
+                    field: 'WEATHER_PROVIDER',
+                    value: 'openweather'
+                }
             }
-        }
+        ]
     },
     transit: {
         name: 'Transit Information',
         description: 'Display transit schedules and delays',
-        config_type: 'display_env',
-        requires_api_key: false,
+        config_type: 'transit_env',
+        requires_api_key: true,
         always_enabled: true,
-        config_fields: ['Provider', 'Stops', 'Lines']
+        api_keys: [
+            {
+                name: 'STIB_API_KEY',
+                label: 'STIB API Key',
+                description: 'Required for real-time STIB waiting times',
+                url: 'https://opendata.stib-mivb.be/',
+                instructions: 'Sign up for a free account at STIB Open Data Portal and get your API key.',
+                optional: true
+            },
+            {
+                name: 'DELIJN_API_KEY',
+                label: 'De Lijn API Key',
+                description: 'Required for De Lijn functionality',
+                url: 'https://data.delijn.be/',
+                instructions: 'Sign up for a free account at De Lijn Open Data Portal and get your API key.',
+                optional: true
+            },
+            {
+                name: 'DELIJN_GTFS_STATIC_API_KEY',
+                label: 'De Lijn GTFS Static API Key',
+                description: 'Required for De Lijn GTFS static data',
+                url: 'https://data.delijn.be/',
+                instructions: 'Sign up for a free account at De Lijn Open Data Portal and get your GTFS static API key.',
+                optional: true
+            },
+            {
+                name: 'DELIJN_GTFS_REALTIME_API_KEY',
+                label: 'De Lijn GTFS Realtime API Key',
+                description: 'Required for De Lijn GTFS realtime data',
+                url: 'https://data.delijn.be/',
+                instructions: 'Sign up for a free account at De Lijn Open Data Portal and get your GTFS realtime API key.',
+                optional: true
+            },
+            {
+                name: 'BKK_API_KEY',
+                label: 'BKK API Key',
+                description: 'Required for Budapest Public Transport',
+                url: 'https://opendata.bkk.hu/',
+                instructions: 'Sign up for a free account at BKK Open Data Portal and get your API key.',
+                optional: true
+            },
+            {
+                name: 'MOBILITY_API_REFRESH_TOKEN',
+                label: 'Mobility Database Refresh Token',
+                description: 'Required for accessing schedule data from Mobility Database providers',
+                url: 'https://database.mobilitydata.org/',
+                instructions: 'Sign up for a free account at Mobility Database and get your refresh token.',
+                optional: true
+            }
+        ]
     },
     flight: {
         name: 'Flight Tracking',
@@ -266,8 +319,19 @@ window.startApiSetup = async function() {
                 serviceStates[id] = response.status === 'success' && 
                     (response.value === 'true' || response.value === true);
 
-                // Get API key if service has one
-                if (service.requires_api_key && service.api_key_name) {
+                // Get API keys for services with multiple keys
+                if (service.api_keys) {
+                    for (const apiKey of service.api_keys) {
+                        const keyResponse = await window.setupDevice.send(JSON.stringify({
+                            command: 'config_get',
+                            config_type: service.config_type,
+                            key: apiKey.name
+                        }));
+                        apiKeyStates[apiKey.name] = keyResponse.status === 'success' ? keyResponse.value : '';
+                    }
+                }
+                // Get single API key if service has one
+                else if (service.requires_api_key && service.api_key_name) {
                     const keyResponse = await window.setupDevice.send(JSON.stringify({
                         command: 'config_get',
                         config_type: service.config_type,
@@ -277,7 +341,7 @@ window.startApiSetup = async function() {
                 }
 
                 // Get optional API key if service has one
-                if (service.optional_api?.api_key_name) {
+                else if (service.optional_api?.api_key_name) {
                     const optKeyResponse = await window.setupDevice.send(JSON.stringify({
                         command: 'config_get',
                         config_type: service.config_type,
@@ -310,12 +374,12 @@ window.startApiSetup = async function() {
         apiSetup.innerHTML = `
             <div class="api-setup-container">
                 <h3>API Configuration</h3>
-                <p>Configure API keys for available services:</p>
+                
                 
                 <div class="api-grid">
                     ${Object.entries(services).map(([id, service]) => {
                         // Skip services without any API keys
-                        if (!service.requires_api_key && !service.optional_api) {
+                        if (!service.requires_api_key && !service.optional_api && !service.api_keys) {
                             return '';
                         }
 
@@ -324,7 +388,21 @@ window.startApiSetup = async function() {
                         let statusClass = '';
                         let statusText = '';
                         
-                        if (service.requires_api_key) {
+                        // Handle services with multiple API keys
+                        if (service.api_keys) {
+                            const hasAnyKey = service.api_keys.some(key => apiKeyStates[key.name]);
+                            if (hasAnyKey) {
+                                statusIcon = '✓';
+                                statusClass = 'status-success';
+                                statusText = 'Some API keys configured';
+                            } else {
+                                statusIcon = 'ℹ️';
+                                statusClass = 'status-info';
+                                statusText = 'Optional API keys available';
+                            }
+                        }
+                        // Handle services with single API key
+                        else if (service.requires_api_key) {
                             const hasKey = apiKeyStates[service.api_key_name];
                             const needsKey = configStates[id]?.WEATHER_PROVIDER === 'openweather';
                             
@@ -340,7 +418,9 @@ window.startApiSetup = async function() {
                                 statusClass = '';  // Default white state
                                 statusText = 'API key not required for current provider';
                             }
-                        } else if (service.optional_api) {
+                        }
+                        // Handle services with optional API
+                        else if (service.optional_api) {
                             const isEnabled = serviceStates[id];
                             const hasKey = apiKeyStates[service.optional_api.api_key_name];
                             if (hasKey) {
@@ -366,7 +446,33 @@ window.startApiSetup = async function() {
                                         ${statusIcon}
                                     </div>
                                 </div>
-                                ${service.requires_api_key ? `
+                                
+                                ${service.api_keys ? `
+                                    <!-- Multiple API keys -->
+                                    ${service.api_keys.map(apiKey => `
+                                        <div class="api-key-section">
+                                            <h5>${apiKey.label}</h5>
+                                            <p>${apiKey.description}</p>
+                                            <a href="${apiKey.url}" target="_blank" class="api-link">
+                                                Get API Key ↗
+                                            </a>
+                                            <p class="api-instructions">${apiKey.instructions}</p>
+                                            <div class="api-input">
+                                                <input type="password" 
+                                                       id="api-${id}-${apiKey.name}"
+                                                       placeholder="${apiKey.optional ? 'Optional - Enter API key' : 'Enter API key'}"
+                                                       value="${apiKeyStates[apiKey.name] || ''}"
+                                                       data-service="${id}"
+                                                       data-key="${apiKey.name}"
+                                                       onchange="updateApiKey('${id}', '${apiKey.name}', this.value)">
+                                                <button onclick="toggleVisibility('api-${id}-${apiKey.name}')">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--!Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2024 Fonticons, Inc.--><path d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM144 256a144 144 0 1 1 288 0 144 144 0 1 1 -288 0zm144-64c0 35.3-28.7 64-64 64c-7.1 0-13.9-1.2-20.3-3.3c-5.5-1.8-11.9 1.6-11.7 7.4c.3 6.9 1.3 13.8 3.2 20.7c13.7 51.2 66.4 81.6 117.6 67.9s81.6-66.4 67.9-117.6c-11.1-41.5-47.8-69.4-88.6-71.1c-5.8-.2-9.2 6.1-7.4 11.7c2.1 6.4 3.3 13.2 3.3 20.3z"/></svg>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                ` : service.requires_api_key && service.api_info ? `
+                                    <!-- Single required API key -->
                                     <p>${service.api_info.instructions}</p>
                                     <a href="${service.api_info.url}" target="_blank" class="api-link">
                                         Get API Key ↗
@@ -382,6 +488,7 @@ window.startApiSetup = async function() {
                                         </button>
                                     </div>
                                 ` : service.optional_api ? `
+                                    <!-- Optional API key -->
                                     <p>${service.optional_api.instructions}</p>
                                     <a href="${service.optional_api.url}" target="_blank" class="api-link">
                                         Get API Key ↗
@@ -402,8 +509,23 @@ window.startApiSetup = async function() {
                     }).join('')}
                 </div>
 
-             
+                <div class="button-group">
+                    <button onclick="startLocationSetup()" class="next-button">
+                        Continue to Location Setup →
+                    </button>
+                </div>
+            </div>
         `;
+
+        // Add event listeners for API key inputs
+        document.querySelectorAll('.api-input input').forEach(input => {
+            input.addEventListener('change', async function() {
+                const serviceId = this.dataset.service;
+                const keyName = this.dataset.key;
+                const value = this.value;
+                await updateApiKey(serviceId, keyName, value);
+            });
+        });
 
     } catch (error) {
         console.error('Failed to start API setup:', error);
@@ -454,33 +576,59 @@ window.toggleService = async function(serviceId, enabled) {
     }
 }
 
-window.updateApiKey = async function(serviceId, value) {
+window.updateApiKey = async function(serviceId, keyName, value) {
     const service = services[serviceId];
     if (!service) return;
 
     try {
-        const apiKeyName = service.api_key_name || 
-                          (service.optional_api && service.optional_api.api_key_name);
-        
-        if (!apiKeyName) {
-            throw new Error('No API key configuration found');
+        // Handle multiple API keys
+        if (service.api_keys) {
+            const apiKey = service.api_keys.find(k => k.name === keyName);
+            if (!apiKey) {
+                throw new Error('API key configuration not found');
+            }
+
+            const response = await window.setupDevice.send(JSON.stringify({
+                command: 'config_set',
+                config_type: service.config_type,
+                key: keyName,
+                value: value
+            }));
+
+            if (response.status === 'success') {
+                window.showMessage(`Updated ${apiKey.label}`);
+                return true;
+            } else {
+                throw new Error(response.message || 'Failed to update API key');
+            }
         }
+        // Handle single API key
+        else {
+            const apiKeyName = service.api_key_name || 
+                            (service.optional_api && service.optional_api.api_key_name);
+            
+            if (!apiKeyName) {
+                throw new Error('No API key configuration found');
+            }
 
-        const response = await window.setupDevice.send(JSON.stringify({
-            command: 'config_set',
-            config_type: 'display_env',
-            key: apiKeyName,
-            value: value
-        }));
+            const response = await window.setupDevice.send(JSON.stringify({
+                command: 'config_set',
+                config_type: service.config_type,
+                key: apiKeyName,
+                value: value
+            }));
 
-        if (response.status === 'success') {
-            window.showMessage(`Updated API key for ${service.name}`);
-        } else {
-            throw new Error(response.message || 'Failed to update API key');
+            if (response.status === 'success') {
+                window.showMessage(`Updated API key for ${service.name}`);
+                return true;
+            } else {
+                throw new Error(response.message || 'Failed to update API key');
+            }
         }
     } catch (error) {
         console.error(`Failed to update API key:`, error);
         window.showError(`Failed to update API key: ${error.message}`);
+        return false;
     }
 }
 

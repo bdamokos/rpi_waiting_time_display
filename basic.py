@@ -60,19 +60,21 @@ if not weather_enabled:
 class WeatherManager:
     def __init__(self):
         self.weather_service = WeatherService() if weather_enabled else None
-        self.weather_data = {
-            'current': {
-                'temperature': '--',
-                'description': 'Unknown',
-                'humidity': '--',
-                'time': datetime.now().strftime('%H:%M'),
-                'icon': 'unknown'
-            },
-            'forecast': [],
-            'is_daytime': True,
-            'sunrise': '--:--',
-            'sunset': '--:--'
-        }
+        # Initialize with a default WeatherData object
+        from weather.models import WeatherData, CurrentWeather, WeatherCondition
+        self.weather_data = WeatherData(
+            current=CurrentWeather(
+                temperature=0.0,
+                feels_like=0.0,
+                humidity=0,
+                pressure=0.0,
+                condition=WeatherCondition(
+                    description="Unknown",
+                    icon="unknown"
+                )
+            ),
+            is_day=True
+        )
         self.last_update = None
         self._lock = threading.Lock()
         self._thread = None
@@ -96,15 +98,26 @@ class WeatherManager:
         try:
             if self.weather_service:
                 logger.debug("Fetching new weather data...")
-                new_data = self.weather_service.get_detailed_weather()
+                new_data = self.weather_service.get_weather_data()
                 logger.debug(f"Received weather data: {new_data}")
+                
+                # Add detailed logging for sunshine hours
+                if new_data and new_data.daily_forecast:
+                    logger.info(f"Number of daily forecasts: {len(new_data.daily_forecast)}")
+                    for i, forecast in enumerate(new_data.daily_forecast):
+                        logger.info(f"Day {i} sunshine duration: {forecast.sunshine_duration}")
+                else:
+                    logger.warning("No daily forecast data available")
                 
                 with self._lock:
                     if new_data:  # Only update if we got valid data
                         self.weather_data = new_data
                         self.last_update = datetime.now()
                         logger.info(f"Weather data updated at {self.last_update.strftime('%H:%M:%S')}")
-                        logger.debug(f"Current temperature: {new_data['current']['temperature']}°C")
+                        logger.debug(f"Current temperature: {new_data.current.temperature}°C")
+                        # Log the state after update
+                        if self.weather_data.daily_forecast:
+                            logger.info(f"Stored sunshine duration: {self.weather_data.daily_forecast[0].sunshine_duration}")
                     else:
                         logger.warning("Received empty weather data")
         except Exception as e:

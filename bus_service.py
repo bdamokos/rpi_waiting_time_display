@@ -599,14 +599,8 @@ def update_display(epd, weather_data: WeatherData = None, bus_data=None, error_m
         logger.warning("Weather is not enabled, weather data will not be displayed. Do not forget to set OPENWEATHER_API_KEY in .env to enable it.")
     if weather_enabled and weather_data:
         # Get weather icon and temperature
-        if isinstance(weather_data, dict):
-            # Handle dictionary format
-            icon_name = weather_data.get('current', {}).get('condition', {}).get('icon', 'cloud')
-            temperature = weather_data.get('current', {}).get('temperature', 0)
-        else:
-            # Handle object format
-            icon_name = weather_data.current.condition.icon
-            temperature = weather_data.current.temperature
+        icon_name = weather_data.current.condition.icon
+        temperature = weather_data.current.temperature
 
         icon_path = ICONS_DIR / f"{icon_name}.svg"
         if not icon_path.exists():
@@ -639,6 +633,9 @@ def update_display(epd, weather_data: WeatherData = None, bus_data=None, error_m
             draw.text((Himage.width - text_width - MARGIN, MARGIN), 
                      temp_text, font=font_small, fill=BLACK)
             weather_width = text_width + MARGIN
+
+          
+
     stop_name_height = 0
     if stop_name:
         stop_name_bbox = draw.textbbox((0, 0), stop_name, font=font_small)
@@ -842,6 +839,29 @@ def update_display(epd, weather_data: WeatherData = None, bus_data=None, error_m
 
     draw.text((Himage.width - time_width - MARGIN, time_y),
               current_time, font=font_small, fill=BLACK)
+    
+    # If sunshine hours are available and enabled, draw them in the bottom left
+    show_sunshine = os.getenv('show_sunshine_hours', 'true').lower() == 'true'
+    logger.info(f"Show sunshine hours setting: {show_sunshine}")
+    if (show_sunshine and 
+            weather_enabled and 
+            weather_data and 
+            weather_data.daily_forecast):
+            
+        try:
+            # Get sunshine duration from the first day's forecast
+            sunshine_duration = weather_data.daily_forecast[0].sunshine_duration
+            sunshine_hours = sunshine_duration.total_seconds() / 3600
+            
+            logger.info(f"Sunshine duration for today: {sunshine_duration} ({sunshine_hours:.1f}h)")
+            sunshine_text = f"Sunshine: {sunshine_hours:.1f}h"
+            draw.text((MARGIN, Himage.height - time_height - MARGIN), sunshine_text, font=font_small, fill=0)
+            logger.info(f"Drew sunshine text: {sunshine_text}")
+            
+        except Exception as e:
+            logger.warning(f"Could not display sunshine hours: {e}")
+            logger.debug(traceback.format_exc())
+
 
     # Draw error message if present
     if error_message:

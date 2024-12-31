@@ -82,24 +82,24 @@ class OpenMeteoProvider(WeatherProvider):
         return WeatherCondition(description=weather_info["description"], icon=icon)
 
     def _fetch_weather(self) -> WeatherData:
-        """Fetch weather data from Open-Meteo API."""
+        """Fetch weather data from OpenMeteo API."""
         if not (self.lat and self.lon):
             raise ValueError("Coordinates must be provided")
             
         logger.debug(f"OpenMeteo: Fetching weather with unit={self.unit}")
-            
-        # Build parameters
+        
+        # Build API parameters
         params = {
-            'latitude': str(self.lat),
-            'longitude': str(self.lon),
+            'latitude': self.lat,
+            'longitude': self.lon,
             'current': [
                 'temperature_2m',
                 'relative_humidity_2m',
                 'apparent_temperature',
+                'is_day',
                 'precipitation',
                 'weather_code',
-                'pressure_msl',
-                'is_day'
+                'pressure_msl'
             ],
             'daily': [
                 'weather_code',
@@ -109,21 +109,23 @@ class OpenMeteoProvider(WeatherProvider):
                 'sunset',
                 'precipitation_sum',
                 'precipitation_probability_max',
-                'sunshine_duration'
+                'sunshine_duration'  # Make sure this is included
             ],
             'timezone': 'auto'
         }
         
-        # Add temperature unit if not using Celsius
-        unit_param = self._get_temperature_unit_param()
-        if unit_param:
-            params['temperature_unit'] = unit_param
-            logger.debug(f"OpenMeteo: Using API unit parameter: {unit_param}")
-            
+        logger.debug(f"OpenMeteo: API parameters: {params}")
+        
         response = requests.get(self.base_url, params=params)
         response.raise_for_status()
         data = response.json()
         
+        # Log raw sunshine duration data
+        if 'daily' in data and 'sunshine_duration' in data['daily']:
+            logger.info(f"Raw sunshine duration data: {data['daily']['sunshine_duration']}")
+        else:
+            logger.warning("No sunshine duration data in API response")
+            
         # Process current weather
         temp = data['current']['temperature_2m']
         feels_like = data['current']['apparent_temperature']
@@ -166,16 +168,24 @@ class OpenMeteoProvider(WeatherProvider):
                     ),
                     precipitation_amount=data['daily']['precipitation_sum'][i],
                     precipitation_probability=data['daily']['precipitation_probability_max'][i],
-                    sunshine_duration=timedelta(seconds=data['daily']['sunshine_duration'][i]),
+                    sunshine_duration=timedelta(seconds=sunshine_seconds),
                     unit=self.unit
                 )
             )
             
-        return WeatherData(
+        # Create WeatherData object
+        weather_data = WeatherData(
             current=current,
             daily_forecast=daily_forecasts,
             sunrise=datetime.fromisoformat(data['daily']['sunrise'][0]),
             sunset=datetime.fromisoformat(data['daily']['sunset'][0]),
             is_day=bool(data['current']['is_day']),
-            attribution="Weather data by Open-Meteo"
+            attribution="Weather data provided by Open-Meteo.com"
         )
+        
+        # Log final weather data
+        logger.info(f"Created WeatherData object with {len(weather_data.daily_forecast)} days of forecast")
+        if weather_data.daily_forecast:
+            logger.info(f"First day sunshine duration: {weather_data.daily_forecast[0].sunshine_duration}")
+            
+        return weather_data

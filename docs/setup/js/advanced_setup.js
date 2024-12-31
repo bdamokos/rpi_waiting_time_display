@@ -48,6 +48,13 @@ const SETTING_GROUPS = {
                 label: "Show Precipitation",
                 description: "Show today's precipitation when available",
                 default: true
+            },
+            weather_unit: {
+                type: "select",
+                label: "Temperature Unit",
+                description: "Unit to display temperatures in",
+                options: ["celsius", "fahrenheit", "kelvin"],
+                default: "celsius"
             }
         }
     },

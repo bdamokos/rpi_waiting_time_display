@@ -19,9 +19,11 @@ from weather.providers.factory import create_weather_provider
 from weather.icons import WEATHER_ICONS, ICONS_DIR
 import cairosvg
 from typing import Tuple
+from functools import lru_cache
 
 logger = logging.getLogger(__name__)
 
+@lru_cache(maxsize=1000)
 def load_svg_icon(svg_path: Path, size: Tuple[int, int], epd) -> Image.Image:
     """Load and resize an SVG icon."""
     try:
@@ -320,9 +322,9 @@ def draw_weather_display(epd, weather_data, last_weather_data=None, set_base_ima
     temp_width = temp_bbox[2] - temp_bbox[0]
     temp_height = temp_bbox[3] - temp_bbox[1]
 
-    # Calculate icon size based on available space - make it about 85% of text height
-    icon_width = int(temp_height * 0.85)  # Increased from previous size
-    icon_height = icon_width
+    # Calculate icon size based on available space
+    icon_width = Himage.width - temp_width - MARGIN-MARGIN-QR_SIZE
+    icon_height = temp_height
 
     # Get weather icon
     icon_name = weather_data['current']['icon']
@@ -339,8 +341,8 @@ def draw_weather_display(epd, weather_data, last_weather_data=None, set_base_ima
     draw.text((MARGIN, MARGIN), temp_text, font=font_xl, fill=BLACK, align="left")
     if icon:
         # Center icon vertically with text
-        icon_y = MARGIN + (temp_height - icon_height) // 2
-        icon_x = MARGIN + temp_width + 10
+        icon_y = MARGIN + (temp_height - icon_height) // 2 +3 # visually centre
+        icon_x = Himage.width - MARGIN- QR_SIZE - icon_width
         logger.debug(f"Pasting icon at ({icon_x}, {icon_y})")
         Himage.paste(icon, (icon_x, icon_y))
 

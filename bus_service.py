@@ -563,8 +563,8 @@ def update_display(epd, weather_data: WeatherData = None, bus_data=None, error_m
     MARGIN = 8
 
     # Handle different color definitions
-    BLACK = epd.BLACK
-    WHITE = epd.WHITE
+    BLACK = epd.BLACK if not epd.is_bw_display else 0
+    WHITE = epd.WHITE if not epd.is_bw_display else 1
     RED = getattr(epd, 'RED', BLACK)  # Fall back to BLACK if RED not available
     YELLOW = getattr(epd, 'YELLOW', BLACK)  # Fall back to BLACK if YELLOW not available
 
@@ -715,6 +715,7 @@ def update_display(epd, weather_data: WeatherData = None, bus_data=None, error_m
 
         # Draw dithered box with line number
         colors_with_ratios = bus['colors']
+        
         line_text_length = len(bus['line'])
         line_text_width = 35 + (line_text_length * 9)
         stop_name_bbox = draw_multicolor_dither_with_text(
@@ -851,7 +852,7 @@ def update_display(epd, weather_data: WeatherData = None, bus_data=None, error_m
         draw.text((error_x, error_y), error_message, font=font_small, fill=RED)
 
     # Draw a border around the display
-    border_color = getattr(epd, 'RED', epd.BLACK)  # Fall back to BLACK if RED not available
+    border_color = getattr(epd, 'RED', 0)  # Fall back to BLACK if RED not available
     draw.rectangle([(0, 0), (Himage.width-1, Himage.height-1)], outline=border_color)
 
     # Rotate the image 90 degrees

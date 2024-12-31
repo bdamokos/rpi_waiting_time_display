@@ -71,8 +71,8 @@ class TemperatureUnit(str, Enum):
             return TemperatureUnit.celsius_to_fahrenheit(value)
         elif self == TemperatureUnit.KELVIN:
             return TemperatureUnit.celsius_to_kelvin(value)
-            
-        return value  # Already in Celsius
+        else:  # CELSIUS
+            return value
 
 class WeatherCondition(BaseModel):
     description: str

@@ -54,3 +54,18 @@ def test_weather_unit_from_env():
                 
                 assert abs(weather_data.current.temperature - expected_temp) < 0.01, \
                     f"Expected {expected_temp} {unit_str}, got {weather_data.current.temperature}" 
+
+def test_temperature_conversions():
+    # Test all conversion combinations
+    test_cases = [
+        (0, TemperatureUnit.CELSIUS, TemperatureUnit.KELVIN, 273.15),
+        (273.15, TemperatureUnit.KELVIN, TemperatureUnit.CELSIUS, 0),
+        (32, TemperatureUnit.FAHRENHEIT, TemperatureUnit.CELSIUS, 0),
+        (0, TemperatureUnit.CELSIUS, TemperatureUnit.FAHRENHEIT, 32),
+        (0, TemperatureUnit.KELVIN, TemperatureUnit.FAHRENHEIT, -459.67),
+        (100, TemperatureUnit.CELSIUS, TemperatureUnit.CELSIUS, 100),
+    ]
+    
+    for value, from_unit, to_unit, expected in test_cases:
+        result = to_unit.convert_from(value, from_unit)
+        assert abs(result - expected) < 0.01, f"Converting {value} from {from_unit} to {to_unit}" 

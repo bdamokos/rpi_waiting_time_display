@@ -33,6 +33,31 @@ const SETTING_GROUPS = {
             }
         }
     },
+    weather: {
+        title: "Weather Display Settings",
+        description: "Configure weather display options",
+        settings: {
+            show_sunshine_hours: {
+                type: "boolean",
+                label: "Show Sunshine Hours",
+                description: "Show today's sunshine hours when available (requires Open-Meteo provider)",
+                default: true
+            },
+            show_precipitation: {
+                type: "boolean",
+                label: "Show Precipitation",
+                description: "Show today's precipitation when available",
+                default: true
+            },
+            weather_unit: {
+                type: "select",
+                label: "Temperature Unit",
+                description: "Unit to display temperatures in",
+                options: ["celsius", "fahrenheit", "kelvin"],
+                default: "celsius"
+            }
+        }
+    },
     iss: {
         title: "ISS Tracking Settings",
         description: "Configure International Space Station tracking behavior",

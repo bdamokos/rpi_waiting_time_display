@@ -7,7 +7,7 @@ import logging
 from display_adapter import display_full_refresh, initialize_display, display_cleanup
 import time
 from datetime import datetime, timedelta
-from weather import WeatherService, draw_weather_display
+from weather.display import WeatherService, draw_weather_display
 from bus_service import BusService, update_display
 import importlib
 import log_config
@@ -36,8 +36,6 @@ WEATHER_UPDATE_INTERVAL = int(os.getenv("refresh_weather_interval", 600))
 BUS_DATA_MAX_AGE = max(90, DISPLAY_REFRESH_INTERVAL)  # Ensure bus data doesn't become stale before next refresh
 
 weather_enabled = True if os.getenv("weather_enabled", "true").lower() == "true" else False
-if not os.getenv("OPENWEATHER_API_KEY"):
-    weather_enabled = False
 
 HOTSPOT_ENABLED = os.getenv('hotspot_enabled', 'true').lower() == 'true'
 hostname = get_hostname()
@@ -62,19 +60,21 @@ if not weather_enabled:
 class WeatherManager:
     def __init__(self):
         self.weather_service = WeatherService() if weather_enabled else None
-        self.weather_data = {
-            'current': {
-                'temperature': '--',
-                'description': 'Unknown',
-                'humidity': '--',
-                'time': datetime.now().strftime('%H:%M'),
-                'icon': 'unknown'
-            },
-            'forecast': [],
-            'is_daytime': True,
-            'sunrise': '--:--',
-            'sunset': '--:--'
-        }
+        # Initialize with a default WeatherData object
+        from weather.models import WeatherData, CurrentWeather, WeatherCondition
+        self.weather_data = WeatherData(
+            current=CurrentWeather(
+                temperature=0.0,
+                feels_like=0.0,
+                humidity=0,
+                pressure=0.0,
+                condition=WeatherCondition(
+                    description="Unknown",
+                    icon="unknown"
+                )
+            ),
+            is_day=True
+        )
         self.last_update = None
         self._lock = threading.Lock()
         self._thread = None
@@ -98,15 +98,26 @@ class WeatherManager:
         try:
             if self.weather_service:
                 logger.debug("Fetching new weather data...")
-                new_data = self.weather_service.get_detailed_weather()
+                new_data = self.weather_service.get_weather_data()
                 logger.debug(f"Received weather data: {new_data}")
+                
+                # Add detailed logging for sunshine hours
+                if new_data and new_data.daily_forecast:
+                    logger.info(f"Number of daily forecasts: {len(new_data.daily_forecast)}")
+                    for i, forecast in enumerate(new_data.daily_forecast):
+                        logger.info(f"Day {i} sunshine duration: {forecast.sunshine_duration}")
+                else:
+                    logger.warning("No daily forecast data available")
                 
                 with self._lock:
                     if new_data:  # Only update if we got valid data
                         self.weather_data = new_data
                         self.last_update = datetime.now()
                         logger.info(f"Weather data updated at {self.last_update.strftime('%H:%M:%S')}")
-                        logger.debug(f"Current temperature: {new_data['current']['temperature']}°C")
+                        logger.debug(f"Current temperature: {new_data.current.temperature}°C")
+                        # Log the state after update
+                        if self.weather_data.daily_forecast:
+                            logger.info(f"Stored sunshine duration: {self.weather_data.daily_forecast[0].sunshine_duration}")
                     else:
                         logger.warning("Received empty weather data")
         except Exception as e:
@@ -428,7 +439,7 @@ class DisplayManager:
         try:
             with self._display_lock:
                 bus_data, error_message, stop_name = self.bus_manager.get_bus_data()
-                weather_data = self.weather_manager.get_weather()
+                weather_data = self.weather_manager.get_weather_data() if weather_enabled else None
                 
                 valid_bus_data = [
                     bus for bus in bus_data 
@@ -446,13 +457,12 @@ class DisplayManager:
                         draw_weather_display(self.epd, weather_data)
                 elif valid_bus_data and not error_message:
                     logger.info(f"Initial display: showing bus data ({len(valid_bus_data)} entries)")
-                    current_weather = weather_data['current'] if weather_data else None
                     if self.in_weather_mode:
                         # We're switching from weather mode, set base image for partial updates
                         self.in_weather_mode = False
-                        update_display(self.epd, current_weather, valid_bus_data, error_message, stop_name, set_base_image=True)
+                        update_display(self.epd, weather_data, valid_bus_data, error_message, stop_name, set_base_image=True)
                     else:
-                        update_display(self.epd, current_weather, valid_bus_data, error_message, stop_name)
+                        update_display(self.epd, weather_data, valid_bus_data, error_message, stop_name)
                 elif weather_enabled and weather_data:
                     logger.info("Initial display: showing weather data")
                     if not self.in_weather_mode:
@@ -543,13 +553,13 @@ class DisplayManager:
                             logger.info("Weather display updated successfully")
                         elif valid_bus_data and not error_message:
                             logger.info("Updating bus display...")
-                            current_weather = weather_data['current'] if weather_data else None
+                            # Pass the full weather data object to update_display
                             if self.in_weather_mode:
                                 # We're switching from weather mode, set base image for partial updates
                                 self.in_weather_mode = False
-                                update_display(self.epd, current_weather, valid_bus_data, error_message, stop_name, set_base_image=True)
+                                update_display(self.epd, weather_data, valid_bus_data, error_message, stop_name, set_base_image=True)
                             else:
-                                update_display(self.epd, current_weather, valid_bus_data, error_message, stop_name)
+                                update_display(self.epd, weather_data, valid_bus_data, error_message, stop_name)
                             self.last_display_update = datetime.now()
                             self.update_count += 1
                             logger.info("Bus display updated successfully")

@@ -1495,3 +1495,36 @@ input:checked + .slider:before {
 .error-message.visible {
     display: block;
 }
+
+.service-config {
+    margin-top: 1em;
+    padding: 0.5em;
+    background: #f8f8f8;
+    border-radius: 4px;
+}
+
+.config-field {
+    margin-bottom: 0.5em;
+}
+
+.config-field label {
+    display: block;
+    margin-bottom: 0.3em;
+    font-size: 0.9em;
+    color: #666;
+}
+
+.config-field select {
+    width: 100%;
+    padding: 0.5em;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: white;
+    font-size: 0.9em;
+}
+
+.config-field select:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
+}

@@ -242,6 +242,10 @@ def draw_multicolor_dither(draw, epd, x, y, width, height, colors_with_ratios):
     if hasattr(epd, 'YELLOW'):
         epd_colors['yellow'] = ((255, 255, 0), epd.YELLOW)
 
+    if epd.is_bw_display:
+        epd_colors['white'] = ((255, 255, 255), 1)
+        epd_colors['black'] = ((0, 0, 0), 0)
+
     # Filter out any colors that aren't supported by the display
     valid_colors = [(color, ratio) for color, ratio in colors_with_ratios if color in epd_colors]
 
@@ -318,6 +322,8 @@ def draw_multicolor_dither_with_text(draw, epd, x, y, width, height, text, color
     # Use white text for dark backgrounds, black text for light backgrounds
     primary_color = max(colors_with_ratios, key=lambda x: x[1])[0]
     text_color = epd.WHITE if primary_color == 'black' else epd.BLACK
+    if epd.is_bw_display:
+        text_color = 1 if primary_color == 'black' else 0
 
     draw.text((text_x, text_y), text, font=font, fill=text_color)
     return text_bbox

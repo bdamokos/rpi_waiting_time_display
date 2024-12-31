@@ -31,11 +31,25 @@ const services = {
         description: 'Show current weather and forecast',
         config_type: 'display_env',
         requires_api_key: true,
+        config_fields: [{
+            name: 'WEATHER_PROVIDER',
+            type: 'select',
+            label: 'Weather Provider',
+            options: [
+                { value: 'openmeteo', label: 'Open-Meteo (Free, no API key required)' },
+                { value: 'openweather', label: 'OpenWeatherMap (Requires API key)' }
+            ],
+            default: 'openmeteo'
+        }],
         api_key_name: 'OPENWEATHER_API_KEY',
         api_info: {
             name: 'OpenWeatherMap API Key',
             url: 'https://openweathermap.org/api',
-            instructions: 'Sign up for a free account at OpenWeatherMap and get your API key from the "API keys" tab.'
+            instructions: 'Sign up for a free account at OpenWeatherMap and get your API key from the "API keys" tab.',
+            conditional: {
+                field: 'WEATHER_PROVIDER',
+                value: 'openweather'
+            }
         }
     },
     transit: {
@@ -68,6 +82,38 @@ const services = {
     }
 };
 
+// Make the function globally accessible
+window.updateServiceConfig = async function(serviceId, key, value) {
+    try {
+        const response = await window.setupDevice.send(JSON.stringify({
+            command: 'config_set',
+            config_type: services[serviceId].config_type,
+            key: key,
+            value: value
+        }));
+
+        if (response.status === 'success') {
+            // If this is the weather provider, update the API key requirement visibility
+            if (key === 'WEATHER_PROVIDER') {
+                const apiNote = document.querySelector(`#service-weather .api-note`);
+                if (apiNote) {
+                    if (value === 'openweather') {
+                        apiNote.innerHTML = '<small>⚠️ Requires API key</small>';
+                        apiNote.style.display = 'block';
+                    } else {
+                        apiNote.style.display = 'none';
+                    }
+                }
+            }
+            window.showMessage(`Updated ${key} to ${value}`);
+        } else {
+            throw new Error(response.message || 'Failed to update configuration');
+        }
+    } catch (error) {
+        window.showError(`Failed to update ${key}: ${error.message}`);
+    }
+}
+
 window.startServiceSetup = async function() {
     try {
         const serviceSetup = document.getElementById('service-setup');
@@ -81,10 +127,13 @@ window.startServiceSetup = async function() {
         serviceSetup.style.display = 'block';
         button.style.display = 'none';
 
-        // Get current service states
+        // Get current service states and configuration
         const enabledServices = {};
+        const serviceConfigs = {};
+        
         for (const [id, service] of Object.entries(services)) {
             try {
+                // Get enabled state
                 const enabledKey = service.enabled_key || `${id}_enabled`;
                 const response = await window.setupDevice.send(JSON.stringify({
                     command: 'config_get',
@@ -93,6 +142,23 @@ window.startServiceSetup = async function() {
                 }));
                 if (response.status === 'success') {
                     enabledServices[id] = response.value === 'true' || response.value === true;
+                }
+
+                // Get configuration values
+                if (service.config_fields) {
+                    serviceConfigs[id] = {};
+                    for (const field of service.config_fields) {
+                        if (typeof field === 'object') {
+                            const configResponse = await window.setupDevice.send(JSON.stringify({
+                                command: 'config_get',
+                                config_type: service.config_type,
+                                key: field.name
+                            }));
+                            if (configResponse.status === 'success') {
+                                serviceConfigs[id][field.name] = configResponse.value;
+                            }
+                        }
+                    }
                 }
             } catch (error) {
                 console.error(`Failed to get state for ${id}:`, error);
@@ -122,11 +188,29 @@ window.startServiceSetup = async function() {
                                 `}
                             </div>
                             <p>${service.description}</p>
-                            ${service.requires_api_key ? `
-                                <div class="api-note">
-                                    <small>⚠️ Requires API key</small>
+                            ${service.config_fields ? `
+                                <div class="service-config">
+                                    ${service.config_fields.map(field => {
+                                        if (typeof field === 'object' && field.type === 'select') {
+                                            const currentValue = serviceConfigs[id]?.[field.name] || field.default;
+                                            return `
+                                                <div class="config-field">
+                                                    <label for="${field.name}">${field.label}:</label>
+                                                    <select id="${field.name}" onchange="updateServiceConfig('${id}', '${field.name}', this.value)">
+                                                        ${field.options.map(opt => `
+                                                            <option value="${opt.value}" ${currentValue === opt.value ? 'selected' : ''}>
+                                                                ${opt.label}
+                                                            </option>
+                                                        `).join('')}
+                                                    </select>
+                                                </div>
+                                            `;
+                                        }
+                                        return '';
+                                    }).join('')}
                                 </div>
-                            ` : service.optional_api ? `
+                            ` : ''}
+                            ${service.optional_api ? `
                                 <div class="api-note">
                                     <small>💡 Optional API available</small>
                                 </div>
@@ -162,9 +246,13 @@ window.startApiSetup = async function() {
         apiSetup.style.display = 'block';
         button.style.display = 'none';
 
+        // Scroll to the API setup section
+        apiSetup.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
         // Get current service states and API keys
         const serviceStates = {};
         const apiKeyStates = {};
+        const configStates = {};
         
         for (const [id, service] of Object.entries(services)) {
             try {
@@ -197,6 +285,23 @@ window.startApiSetup = async function() {
                     }));
                     apiKeyStates[service.optional_api.api_key_name] = optKeyResponse.status === 'success' ? optKeyResponse.value : '';
                 }
+
+                // Get weather provider config if it exists
+                if (service.config_fields) {
+                    configStates[id] = {};
+                    for (const field of service.config_fields) {
+                        if (typeof field === 'object') {
+                            const configResponse = await window.setupDevice.send(JSON.stringify({
+                                command: 'config_get',
+                                config_type: service.config_type,
+                                key: field.name
+                            }));
+                            if (configResponse.status === 'success') {
+                                configStates[id][field.name] = configResponse.value;
+                            }
+                        }
+                    }
+                }
             } catch (error) {
                 console.error(`Failed to get state for ${id}:`, error);
             }
@@ -221,14 +326,19 @@ window.startApiSetup = async function() {
                         
                         if (service.requires_api_key) {
                             const hasKey = apiKeyStates[service.api_key_name];
+                            const needsKey = configStates[id]?.WEATHER_PROVIDER === 'openweather';
+                            
                             if (hasKey) {
                                 statusIcon = '✓';
                                 statusClass = 'status-success';
                                 statusText = 'API key set';
-                            } else {
+                            } else if (needsKey) {
                                 statusIcon = '⚠️';
                                 statusClass = 'status-error';
                                 statusText = 'Required API key missing';
+                            } else {
+                                statusClass = '';  // Default white state
+                                statusText = 'API key not required for current provider';
                             }
                         } else if (service.optional_api) {
                             const isEnabled = serviceStates[id];
@@ -292,15 +402,7 @@ window.startApiSetup = async function() {
                     }).join('')}
                 </div>
 
-                <div class="button-group">
-                    <button onclick="startServiceSetup()" class="back-button">
-                        ← Back to Services
-                    </button>
-                    <button onclick="startReview()" class="next-button">
-                        Continue to Review →
-                    </button>
-                </div>
-            </div>
+             
         `;
 
     } catch (error) {

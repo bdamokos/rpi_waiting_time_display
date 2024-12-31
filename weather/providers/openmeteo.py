@@ -137,6 +137,7 @@ class OpenMeteoProvider(WeatherProvider):
             feels_like=feels_like,
             humidity=data['current']['relative_humidity_2m'],
             pressure=data['current']['pressure_msl'],
+            precipitation=data['current']['precipitation'],
             condition=self._get_icon(
                 data['current']['weather_code'],
                 bool(data['current']['is_day'])

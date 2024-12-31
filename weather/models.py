@@ -84,6 +84,7 @@ class CurrentWeather(BaseModel):
     humidity: int
     pressure: float
     condition: WeatherCondition
+    precipitation: float = 0.0  # Current precipitation in mm
     time: datetime = Field(default_factory=datetime.now)
     unit: TemperatureUnit = TemperatureUnit.CELSIUS  # Default to Celsius
 

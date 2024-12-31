@@ -840,26 +840,53 @@ def update_display(epd, weather_data: WeatherData = None, bus_data=None, error_m
     draw.text((Himage.width - time_width - MARGIN, time_y),
               current_time, font=font_small, fill=BLACK)
     
-    # If sunshine hours are available and enabled, draw them in the bottom left
+    # If weather data is available, draw sunshine hours and precipitation in the bottom left
     show_sunshine = os.getenv('show_sunshine_hours', 'true').lower() == 'true'
+    show_precipitation = os.getenv('show_precipitation', 'true').lower() == 'true'
     logger.info(f"Show sunshine hours setting: {show_sunshine}")
-    if (show_sunshine and 
-            weather_enabled and 
-            weather_data and 
-            weather_data.daily_forecast):
-            
+    logger.info(f"Show precipitation setting: {show_precipitation}")
+    
+    if (weather_enabled and weather_data and weather_data.daily_forecast):
         try:
-            # Get sunshine duration from the first day's forecast
-            sunshine_duration = weather_data.daily_forecast[0].sunshine_duration
-            sunshine_hours = sunshine_duration.total_seconds() / 3600
+            # Calculate positions
+            x_pos = MARGIN
+            y_pos = Himage.height - time_height - MARGIN
             
-            logger.info(f"Sunshine duration for today: {sunshine_duration} ({sunshine_hours:.1f}h)")
-            sunshine_text = f"Sunshine: {sunshine_hours:.1f}h"
-            draw.text((MARGIN, Himage.height - time_height - MARGIN), sunshine_text, font=font_small, fill=0)
-            logger.info(f"Drew sunshine text: {sunshine_text}")
+            # Load weather icons if needed
+            sun_icon = None
+            umbrella_icon = None
+            
+            if show_sunshine:
+                sunshine_duration = weather_data.daily_forecast[0].sunshine_duration
+                sunshine_hours = sunshine_duration.total_seconds() / 3600
+                sun_icon = load_svg_icon(ICONS_DIR / "sun.svg", (text_height, text_height + 3), epd)
+                logger.info(f"Sunshine duration for today: {sunshine_duration} ({sunshine_hours:.1f}h)")
+            
+            if show_precipitation:
+                precipitation = weather_data.daily_forecast[0].precipitation_amount
+                umbrella_icon = load_svg_icon(ICONS_DIR / "umbrella.svg", (text_height, text_height + 3), epd)
+                logger.info(f"Precipitation for today: {precipitation:.1f}mm")
+            
+            # Draw sun icon and text if enabled
+            if show_sunshine and sun_icon:
+                sun_text = f"{sunshine_hours:.1f}h"
+                sun_bbox = draw.textbbox((0, 0), sun_text, font=font_small)
+                sun_width = sun_bbox[2] - sun_bbox[0]
+                
+                Himage.paste(sun_icon, (x_pos, y_pos))
+                draw.text((x_pos + text_height + 2, y_pos), sun_text, font=font_small, fill=BLACK)
+                x_pos += text_height + sun_width + 10  # Add spacing after sun info
+            
+            # Draw umbrella icon and text if enabled
+            if show_precipitation and umbrella_icon:
+                rain_text = f"{precipitation:.1f}mm"
+                Himage.paste(umbrella_icon, (x_pos, y_pos))
+                draw.text((x_pos + text_height + 2, y_pos), rain_text, font=font_small, fill=BLACK)
+            
+            logger.info(f"Drew weather info with icons (sunshine: {show_sunshine}, precipitation: {show_precipitation})")
             
         except Exception as e:
-            logger.warning(f"Could not display sunshine hours: {e}")
+            logger.warning(f"Could not display weather info: {e}")
             logger.debug(traceback.format_exc())
 
 

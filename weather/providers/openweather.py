@@ -119,6 +119,7 @@ class OpenWeatherProvider(WeatherProvider):
             feels_like=feels_like,
             humidity=current_data['main']['humidity'],
             pressure=current_data['main']['pressure'],
+            precipitation=current_data.get('rain', {}).get('1h', 0.0) + current_data.get('snow', {}).get('1h', 0.0),  # Combine rain and snow
             condition=self._get_icon(
                 current_data['weather'][0]['main'],
                 self._is_daytime(current_data['dt'], current_data['sys']['sunrise'], current_data['sys']['sunset'])

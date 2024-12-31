@@ -25,7 +25,10 @@ logger = logging.getLogger(__name__)
 
 @lru_cache(maxsize=1000)
 def load_svg_icon(svg_path: Path, size: Tuple[int, int], epd) -> Image.Image:
-    """Load and resize an SVG icon."""
+    """Load and resize an SVG icon.
+    
+    Size is a tuple of (width, height)
+    """
     try:
         # Convert SVG to PNG in memory with transparency
         png_data = cairosvg.svg2png(
@@ -123,7 +126,8 @@ class WeatherService:
                 'time': datetime.now().strftime('%H:%M'),
                 'icon': weather_data.current.condition.icon,
                 'feels_like': weather_data.current.feels_like,
-                'pressure': weather_data.current.pressure
+                'pressure': weather_data.current.pressure,
+                'daily_forecast': weather_data.daily_forecast
             }
 
         except Exception as e:

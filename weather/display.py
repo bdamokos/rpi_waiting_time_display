@@ -358,20 +358,28 @@ def draw_weather_display(epd, weather_data, last_weather_data=None, set_base_ima
     # Show either sunrise or sunset based on time of day
     if weather_data.is_day:
         sun_text = f" {weather_data.sunset.strftime('%H:%M')} "
-        sun_icon = "☀"
+        sun_icon_path = ICONS_DIR / "sun_set.svg"
     else:
         sun_text = f" {weather_data.sunrise.strftime('%H:%M')} "
-        sun_icon = "☀"
+        sun_icon_path = ICONS_DIR / "sun_rise.svg"
+
     moon_phase = get_moon_phase()
     moon_phase_emoji = moon_phase['emoji']
     moon_phase_name = f" {moon_phase['name'].lower()}"
-    sun_icon_width = font_emoji.getbbox(f"{sun_icon}")[2] - font_emoji.getbbox(f"{sun_icon}")[0]
+
+    # Load and resize sun icon to match text height
+    text_bbox = draw.textbbox((0, 0), sun_text, font=font_medium)
+    text_height = text_bbox[3] - text_bbox[1]
+    sun_icon = load_svg_icon(sun_icon_path, (text_height+5, text_height+5), epd)
+    sun_icon_width = text_height if sun_icon else 0
+
     moon_phase_width = font_emoji.getbbox(f"{moon_phase_emoji}")[2] - font_emoji.getbbox(f"{moon_phase_emoji}")[0]
     sun_text_width = font_medium.getbbox(f"{sun_text}")[2] - font_medium.getbbox(f"{sun_text}")[0]
     moon_phase_text_width = font_medium.getbbox(f"{moon_phase_name}")[2] - font_medium.getbbox(f"{moon_phase_name}")[0]
+
     # Draw sun info on left side with smaller font
-    sun_full = f"{sun_icon} {sun_text} {moon_phase_emoji} {moon_phase_name}"
-    draw.text((MARGIN , y_pos), sun_icon, font=font_emoji, fill=BLACK)
+    if sun_icon:
+        Himage.paste(sun_icon, (MARGIN, y_pos))
     draw.text((MARGIN + sun_icon_width, y_pos), sun_text, font=font_medium, fill=BLACK)
     draw.text((MARGIN + sun_icon_width + sun_text_width, y_pos), moon_phase_emoji, font=font_emoji, fill=BLACK)
     draw.text((MARGIN + sun_icon_width + sun_text_width + moon_phase_width, y_pos), moon_phase_name, font=font_medium, fill=BLACK)

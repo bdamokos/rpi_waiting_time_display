@@ -29,25 +29,25 @@
      inkscape:pageopacity="0.0"
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#d1d1d1"
-     inkscape:zoom="0.37983615"
-     inkscape:cx="69.766924"
-     inkscape:cy="625.2696"
+     inkscape:zoom="0.51385506"
+     inkscape:cx="23.352888"
+     inkscape:cy="199.47259"
      inkscape:window-width="1216"
      inkscape:window-height="594"
      inkscape:window-x="0"
-     inkscape:window-y="38"
+     inkscape:window-y="48"
      inkscape:window-maximized="0"
-     inkscape:current-layer="g1" />
-  <!--! Based on Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc. -->
+     inkscape:current-layer="svg1" />
+  <!--! Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc. -->
   <path
      d="m 361.5,220.54314 c 5,2.1 8.6,6.6 9.6,11.9 l 19.9,107.9 107.9,19.8 c 5.3,1 9.8,4.6 11.9,9.6 2.1,5 1.5,10.7 -1.6,15.2 l -62.3,90.4 62.3,90.3 c 3.1,4.5 3.7,10.2 1.6,15.2 -2.1,5 -6.6,8.6 -11.9,9.6 l -107.9,19.9 -19.9,107.9 c -1,5.3 -4.6,9.8 -9.6,11.9 -5,2.1 -10.7,1.5 -15.2,-1.6 l -90.3,-62.3 -90.3,62.3 c -4.5,3.1 -10.2,3.7 -15.2,1.6 -5,-2.1 -8.6,-6.6 -9.6,-11.9 l -19.9,-107.9 -107.9,-19.9 c -5.3,-1 -9.8,-4.6 -11.9,-9.6 -2.1,-5 -1.5,-10.7 1.6,-15.2 l 62.3,-90.3 -62.3,-90.3 c -3.1,-4.5 -3.7,-10.2 -1.6,-15.2 2.1,-5 6.6,-8.6 11.9,-9.6 l 107.9,-19.9 19.9,-107.9 c 1,-5.3 4.6,-9.8 9.6,-11.9 5,-2.1 10.7,-1.5 15.2,1.6 l 90.3,62.3 90.3,-62.3 c 4.5,-3.1 10.2,-3.7 15.2,-1.6 z m -201.5,254.8 c 0,-53.01937 42.98067,-95.99996 96,-95.99996 53.01933,0 96,42.98059 96,95.99996 0,53.01937 -42.98067,95.99996 -96,95.99996 -53.01933,0 -96,-42.98059 -96,-95.99996 z m 224,0 c 0,-70.6925 -57.30755,-127.99994 -128,-127.99994 -70.69245,0 -128,57.30744 -128,127.99994 0,70.6925 57.30755,127.99994 128,127.99994 70.69245,0 128,-57.30744 128,-127.99994 z"
      id="path1"
      sodipodi:nodetypes="scccscccscccscccscccscccscccscccsssssssssss"
-     style="fill:#000000;fill-opacity:1" />
+     style="fill:none;fill-opacity:1;stroke:#000000;stroke-opacity:1;stroke-width:24.6;stroke-dasharray:none;stroke-linejoin:round;stroke-linecap:round" />
   <path
-     d="m 268.675,16.01075 c -12.5,-13.34767 -32.8,-13.34767 -45.3,0 l -102,124.8501 c -11.56975,14.16161 -12.5,35.02427 0,48.37193 12.5,13.34767 32.8,13.34767 45.3,0 l 47.4,-66.65428 v 87.56843 c 0,18.90029 14.3,34.17002 32,34.17002 17.7,0 32,-15.26973 32,-34.17002 v -87.46165 l 45.4,58.44072 c 12.5,13.34767 32.8,13.34767 45.3,0 12.5,-13.34766 11.89016,-34.47826 0,-48.37193 l -100,-116.8501 z"
+     d="m 268.675,16.22245 c -12.5,-13.4601364 -32.8,-13.6427817 -45.3,-0.407578 l -90.43696,87.958468 c -13.05146,12.69378 -12.5,34.9118 0,48.37193 12.5,13.46013 32.8,13.64278 45.3,0.40757 l 37.12174,-41.81693 -1.28478,99.13147 c -0.24493,18.8987 14.3,34.29868 32,34.45793 17.7,0.15925 32,-14.98182 32,-33.88211 l -2.56956,-102.87904 33.83695,42.14703 c 12.5,13.46014 32.8,13.64278 45.3,0.40758 12.5,-13.23519 13.00629,-35.40156 0,-48.37193 L 268.775,16.11657 Z"
      id="path1-7"
-     style="stroke-width:1.03335"
+     style="fill:none;stroke:#000000;stroke-width:20;stroke-dasharray:none;stroke-opacity:1"
      sodipodi:nodetypes="ccssccsssccsscc" />
   <g
      id="g1">

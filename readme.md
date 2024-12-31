@@ -39,6 +39,11 @@ Basic setup (Raspberry Pi Zero 2W + display): **~€60**
 - A video ad STIB made for their mobile app that inspired this project:
   [![The advice of STIB ad](https://img.youtube.com/vi/scZsaJL7S8U/0.jpg)](https://www.youtube.com/watch?v=scZsaJL7S8U)
 - [UK train departure display](https://github.com/chrisys/train-departure-display) - A similar project for UK trains
-- [Font Awesome Free](https://fontawesome.com) - Icons used in the setup interface under the [Font Awesome Free License](https://fontawesome.com/license/free), icons used in the weather display under Creative Commons Attribution 4.0 International License
+- We are grateful to the providers of the APIs we use, listed at [API Features](https://bdamokos.github.io/rpi_waiting_time_display/api-features/). 
+- Certain included data and assets are under a specific license:
+  - [Font Awesome Free](https://fontawesome.com) - Icons used in the setup interface under the [Font Awesome Free License](https://fontawesome.com/license/free), icons used in the display under Creative Commons Attribution 4.0 International License
+  - [Open-Meteo](https://open-meteo.com/) - Weather data under a [Creative Commons Attribution 4.0 International License](https://creativecommons.org/licenses/by/4.0/)
+
+
 
 

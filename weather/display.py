@@ -379,12 +379,103 @@ def draw_weather_display(epd, weather_data, last_weather_data=None, set_base_ima
     # Bottom row: Three day forecast (today + next 2 days)
     forecast_y_pos = 85
     logger.debug(f"Forecasts: {weather_data.daily_forecast}")
-    forecasts = weather_data.daily_forecast[:3]
-    logger.debug(f"Forecasts: {forecasts}")
+    all_forecasts = weather_data.daily_forecast[:3]  # Start with up to 3 days
+    logger.debug(f"Forecasts: {all_forecasts}")
 
-    # Calculate available width for each forecast block
-    available_width = Himage.width - QR_SIZE - (2 * MARGIN)  # Width from left margin to QR code
-    forecast_block_width = available_width // 3
+    # Calculate available width - for forecasts we have full width
+    available_width = Himage.width - (2 * MARGIN)  # Full width minus margins
+
+    # Calculate how many forecasts we can actually fit by measuring each one
+    forecasts = []
+    total_width_needed = 0
+    small_space = 5  # minimum spacing between icon and text
+    big_space = small_space * 2  # spacing between forecast blocks
+
+    for forecast in all_forecasts:
+        # Calculate text width for this forecast
+        unit_symbol = "°F" if forecast.unit == TemperatureUnit.FAHRENHEIT else "°K" if forecast.unit == TemperatureUnit.KELVIN else "°C"
+        forecast_text = f"{round(forecast.min_temp)}-{round(forecast.max_temp)}{unit_symbol}"
+        text_bbox = draw.textbbox((0, 0), forecast_text, font=font_medium)
+        text_width = text_bbox[2] - text_bbox[0]
+        text_height = text_bbox[3] - text_bbox[1]
+        icon_width = int(text_height)  # Keep aspect ratio square
+
+        # Calculate total width needed for this forecast block
+        block_width = icon_width + small_space + text_width
+        
+        # Add big_space if this isn't the first forecast
+        if forecasts:
+            total_width_needed += big_space
+            
+        # Check if adding this forecast would exceed available width
+        if total_width_needed + block_width > available_width:
+            break
+            
+        total_width_needed += block_width
+        forecasts.append(forecast)
+
+    if not forecasts:
+        logger.warning("Not enough space to display any forecasts")
+        return
+
+    logger.debug(f"Can fit {len(forecasts)} forecasts in {available_width}px width (total width needed: {total_width_needed}px)")
+
+    # Calculate positions for all forecasts
+    number_of_forecasts = len(forecasts)
+    available_width = (Himage.width - (2*MARGIN))
+    first_block_x = MARGIN
+    available_width_after_first_block = available_width - MARGIN
+
+    '''
+    
+    MARGIN ICON SPACE TEXT BIG_SPACE ICON SPACE TEXT BIG_SPACE ICON SPACE TEXT MARGIN
+    
+    '''
+    # Calculate total width needed for all forecasts
+    total_width_for_forecasts = 0
+    icon_widths = []
+    text_widths = []
+    for forecast in forecasts:
+        unit_symbol = "°F" if forecast.unit == TemperatureUnit.FAHRENHEIT else "°K" if forecast.unit == TemperatureUnit.KELVIN else "°C"
+        forecast_text = f"{round(forecast.min_temp)}-{round(forecast.max_temp)}{unit_symbol}"
+        text_bbox = draw.textbbox((0, 0), forecast_text, font=font_medium)
+        text_width = text_bbox[2] - text_bbox[0]
+        text_height = text_bbox[3] - text_bbox[1]
+        icon_width = int(text_height)
+        
+        total_width_for_forecasts += icon_width + text_width
+        icon_widths.append(icon_width)
+        text_widths.append(text_width)
+
+    total_width = Himage.width
+    empty_space = total_width-total_width_for_forecasts
+    empty_space_without_margins = empty_space - 2*MARGIN
+    number_of_small_spaces = number_of_forecasts
+    number_of_big_spaces = number_of_forecasts-1
+    small_space = min(5, empty_space_without_margins/(number_of_small_spaces+number_of_big_spaces))
+    big_space= small_space*2
+
+    first_block_x = MARGIN
+    first_icon_x = first_block_x
+    first_text_x = first_icon_x + icon_widths[0] + small_space
+
+    # Pre-calculate all positions
+    block_start_positions = []
+    icon_positions = []
+    text_positions = []
+    for i in range(number_of_forecasts):
+        if i == 0:
+            block_start_x = int(first_block_x)
+            icon_x = int(first_icon_x)
+            text_x = int(first_text_x)
+        else:
+            block_start_x = int(block_start_x + icon_widths[i-1] + text_widths[i-1] + big_space)
+            icon_x = int(block_start_x)
+            text_x = int(icon_x + icon_widths[i] + small_space)
+        
+        block_start_positions.append(block_start_x)
+        icon_positions.append(icon_x)
+        text_positions.append(text_x)
 
     for idx, forecast in enumerate(forecasts):
         # Calculate text size - round temperatures to whole numbers
@@ -395,8 +486,8 @@ def draw_weather_display(epd, weather_data, last_weather_data=None, set_base_ima
         text_height = text_bbox[3] - text_bbox[1]
 
         # Calculate icon size
-        icon_width = min(text_height, 28)  # Keep aspect ratio square and limit size
-        icon_height = icon_width
+        icon_width = int(text_height)  # Keep aspect ratio square and limit size
+        icon_height = int(text_height)
 
         # Load and resize forecast icon
         icon_name = forecast.condition.icon
@@ -407,21 +498,13 @@ def draw_weather_display(epd, weather_data, last_weather_data=None, set_base_ima
         
         icon = load_svg_icon(icon_path, (icon_width, icon_height), epd)
 
-        # Calculate block position - align with left margin and distribute evenly
-        block_start_x = MARGIN + (idx * forecast_block_width)
-        
-        # Center the icon and text within the block
-        content_width = icon_width + 5 + text_width
-        block_center_x = block_start_x + (forecast_block_width - content_width) // 2
-        text_x = block_center_x + icon_width + 5
-
         # Draw icon and text
         if icon:
             # Position icon slightly higher than text
-            icon_y = forecast_y_pos + (text_height - icon_height) // 2 + 4  # Added 4 pixels to move down more
-            Himage.paste(icon, (block_center_x, icon_y))
-            draw.text((text_x, forecast_y_pos), 
-                     forecast_text, font=font_medium, fill=BLACK)
+            icon_y = int(forecast_y_pos + (text_height - icon_height) // 2 + 4)  # Added 4 pixels to move down more
+            Himage.paste(icon, (icon_positions[idx], icon_y))
+            draw.text((text_positions[idx], forecast_y_pos), 
+                    forecast_text, font=font_medium, fill=BLACK)
 
     # Generate and draw QR code (larger size)
     qr = qrcode.QRCode(version=1, box_size=2, border=1)

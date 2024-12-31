@@ -426,7 +426,7 @@ class DisplayManager:
         try:
             with self._display_lock:
                 bus_data, error_message, stop_name = self.bus_manager.get_bus_data()
-                weather_data = self.weather_manager.get_weather()
+                weather_data = self.weather_manager.get_weather_data() if weather_enabled else None
                 
                 valid_bus_data = [
                     bus for bus in bus_data 
@@ -444,13 +444,12 @@ class DisplayManager:
                         draw_weather_display(self.epd, weather_data)
                 elif valid_bus_data and not error_message:
                     logger.info(f"Initial display: showing bus data ({len(valid_bus_data)} entries)")
-                    current_weather = weather_data['current'] if weather_data else None
                     if self.in_weather_mode:
                         # We're switching from weather mode, set base image for partial updates
                         self.in_weather_mode = False
-                        update_display(self.epd, current_weather, valid_bus_data, error_message, stop_name, set_base_image=True)
+                        update_display(self.epd, weather_data, valid_bus_data, error_message, stop_name, set_base_image=True)
                     else:
-                        update_display(self.epd, current_weather, valid_bus_data, error_message, stop_name)
+                        update_display(self.epd, weather_data, valid_bus_data, error_message, stop_name)
                 elif weather_enabled and weather_data:
                     logger.info("Initial display: showing weather data")
                     if not self.in_weather_mode:
@@ -541,13 +540,13 @@ class DisplayManager:
                             logger.info("Weather display updated successfully")
                         elif valid_bus_data and not error_message:
                             logger.info("Updating bus display...")
-                            current_weather = weather_data['current'] if weather_data else None
+                            # Pass the full weather data object to update_display
                             if self.in_weather_mode:
                                 # We're switching from weather mode, set base image for partial updates
                                 self.in_weather_mode = False
-                                update_display(self.epd, current_weather, valid_bus_data, error_message, stop_name, set_base_image=True)
+                                update_display(self.epd, weather_data, valid_bus_data, error_message, stop_name, set_base_image=True)
                             else:
-                                update_display(self.epd, current_weather, valid_bus_data, error_message, stop_name)
+                                update_display(self.epd, weather_data, valid_bus_data, error_message, stop_name)
                             self.last_display_update = datetime.now()
                             self.update_count += 1
                             logger.info("Bus display updated successfully")

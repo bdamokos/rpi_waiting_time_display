@@ -223,6 +223,50 @@ class WeatherService:
         logger.debug(f"Returning error weather data: {error_data}")
         return error_data
 
+    def get_weather_data(self):
+        """Get raw WeatherData object from provider."""
+        if not self._backoff.should_retry():
+            logger.warning(f"Skipping weather request, backing off until {self._backoff.get_retry_time_str()}")
+            # Create error WeatherData object
+            from weather.models import WeatherData, CurrentWeather, WeatherCondition
+            return WeatherData(
+                current=CurrentWeather(
+                    temperature=0.0,
+                    feels_like=0.0,
+                    humidity=0,
+                    pressure=0.0,
+                    condition=WeatherCondition(
+                        description=f"Retry at {self._backoff.get_retry_time_str()}",
+                        icon="unknown"
+                    )
+                ),
+                is_day=True
+            )
+
+        try:
+            weather_data = self.provider.get_weather()
+            self._backoff.update_backoff_state(True)
+            return weather_data
+
+        except Exception as e:
+            self._backoff.update_backoff_state(False)
+            logger.error(f"Error fetching weather: {e}")
+            # Create error WeatherData object
+            from weather.models import WeatherData, CurrentWeather, WeatherCondition
+            return WeatherData(
+                current=CurrentWeather(
+                    temperature=0.0,
+                    feels_like=0.0,
+                    humidity=0,
+                    pressure=0.0,
+                    condition=WeatherCondition(
+                        description="Error",
+                        icon="unknown"
+                    )
+                ),
+                is_day=True
+            )
+
 if __name__ == "__main__":
     # Test the module
     weather = WeatherService()

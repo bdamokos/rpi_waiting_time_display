@@ -14,8 +14,11 @@ from display_adapter import DisplayAdapter, return_display_lock
 from functools import lru_cache
 from threading import Event
 from backoff import ExponentialBackoff
+from weather.display import load_svg_icon
+from weather.models import WeatherData
+from weather.icons import ICONS_DIR
+import traceback
 
-from weather import WEATHER_ICONS
 logger = logging.getLogger(__name__)
 
 dotenv.load_dotenv(override=True)
@@ -458,14 +461,104 @@ class BusService:
             {"line": "99", "times": [""], "colors": [('black', 0.7), ('white', 0.3)]}
         ]
 
-if __name__ == "__main__":
-    # Test the module
-    logging.basicConfig(level=logging.DEBUG)
-    bus_service = BusService()
-    print(bus_service.get_waiting_times()) 
+    def draw_display(self, epd, bus_data=None, weather_data: WeatherData = None, set_base_image=False):
+        """Draw the display with bus times and weather info."""
+        try:
+            # Handle different color definitions
+            BLACK = 0 if epd.is_bw_display else epd.BLACK
+            WHITE = 1 if epd.is_bw_display else epd.WHITE
+            RED = getattr(epd, 'RED', BLACK)  # Fall back to BLACK if RED not available
+            YELLOW = getattr(epd, 'YELLOW', BLACK)  # Fall back to BLACK if YELLOW not available
 
+            # Create a new image with white background
+            if epd.is_bw_display:
+                Himage = Image.new('1', (epd.height, epd.width), WHITE)
+            else:
+                Himage = Image.new('RGB', (epd.height, epd.width), WHITE)
 
-def update_display(epd, weather_data=None, bus_data=None, error_message=None, stop_name=None, first_run=False, set_base_image=False):
+            draw = ImageDraw.Draw(Himage)
+            font_paths = get_font_paths()
+
+            try:
+                font_large = ImageFont.truetype(font_paths['dejavu_bold'], 28)
+                font_medium = ImageFont.truetype(font_paths['dejavu'], 16)
+                font_small = ImageFont.truetype(font_paths['dejavu'], 14)
+                font_tiny = ImageFont.truetype(font_paths['dejavu'], 10)
+            except Exception as e:
+                logger.error(f"Error loading fonts: {e}")
+                font_large = font_medium = font_small = font_tiny = ImageFont.load_default()
+
+            MARGIN = 5
+
+            # Draw weather info if available
+            if weather_data:
+                draw_weather_info(draw, Himage, weather_data, font_paths, epd, MARGIN)
+
+            # Draw bus times if available
+            if bus_data:
+                y_pos = MARGIN
+                for bus in bus_data:
+                    route = bus.get('route', '')
+                    destination = bus.get('destination', '')
+                    due_in = bus.get('due_in', '')
+                    
+                    # Format text
+                    text = f"{route} {destination} {due_in}"
+                    draw.text((MARGIN, y_pos), text, font=font_medium, fill=BLACK)
+                    y_pos += font_medium.getbbox(text)[3] + 5
+
+            # Rotate the image
+            Himage = Himage.rotate(DISPLAY_SCREEN_ROTATION, expand=True)
+
+            return Himage
+
+        except Exception as e:
+            logger.error(f"Error drawing display: {e}")
+            traceback.print_exc()
+            return None
+
+def draw_weather_info(draw, Himage, weather_data: WeatherData, font_paths, epd, MARGIN):
+    """Draw weather information in the top right corner."""
+    try:
+        BLACK = 0 if epd.is_bw_display else epd.BLACK
+        
+        # Load fonts
+        font_medium = ImageFont.truetype(font_paths['dejavu'], 16)
+        
+        # Format temperature text
+        temp_text = f"{weather_data.current.temperature:.1f}°"
+        
+        # Get weather icon
+        icon_name = weather_data.current.condition.icon
+        icon_path = ICONS_DIR / f"{icon_name}.svg"
+        if not icon_path.exists():
+            logger.warning(f"Icon not found: {icon_path}")
+            icon_path = ICONS_DIR / "cloud.svg"  # fallback icon
+            
+        # Calculate text size
+        text_bbox = draw.textbbox((0, 0), temp_text, font=font_medium)
+        text_width = text_bbox[2] - text_bbox[0]
+        text_height = text_bbox[3] - text_bbox[1]
+        
+        # Load and size icon to match text height
+        icon_size = text_height
+        icon = load_svg_icon(icon_path, (icon_size, icon_size), epd)
+        
+        if icon:
+            # Calculate total width and positions
+            total_width = text_width + icon_size + 5  # 5px spacing between icon and text
+            start_x = Himage.width - total_width - MARGIN
+            
+            # Draw icon and text
+            Himage.paste(icon, (start_x, MARGIN))
+            draw.text((start_x + icon_size + 5, MARGIN), 
+                     temp_text, font=font_medium, fill=BLACK)
+            
+    except Exception as e:
+        logger.error(f"Error drawing weather info: {e}")
+        traceback.print_exc()
+
+def update_display(epd, weather_data: WeatherData = None, bus_data=None, error_message=None, stop_name=None, first_run=False, set_base_image=False):
     """Update the display with new weather and waiting timesdata"""
     MARGIN = 8
 
@@ -504,19 +597,48 @@ def update_display(epd, weather_data=None, bus_data=None, error_message=None, st
     if not weather_enabled:
         weather_data = None
         logger.warning("Weather is not enabled, weather data will not be displayed. Do not forget to set OPENWEATHER_API_KEY in .env to enable it.")
-    if weather_enabled:
-        weather_icon = WEATHER_ICONS.get(weather_data['description'], '')
-        logger.debug(f"Weather icon: {weather_icon}, description: {weather_data['description']}, font: {emoji_font.getname()}")
-        temp_text = f"{weather_data['temperature']}°"
+    if weather_enabled and weather_data:
+        # Get weather icon and temperature
+        if isinstance(weather_data, dict):
+            # Handle dictionary format
+            icon_name = weather_data.get('current', {}).get('condition', {}).get('icon', 'cloud')
+            temperature = weather_data.get('current', {}).get('temperature', 0)
+        else:
+            # Handle object format
+            icon_name = weather_data.current.condition.icon
+            temperature = weather_data.current.temperature
 
-        weather_text = f"{temp_text}"
-        weather_icon_bbox = draw.textbbox((0, 0), weather_icon, font=emoji_font)
-        weather_icon_width = weather_icon_bbox[2] - weather_icon_bbox[0]
-        weather_bbox = draw.textbbox((0, 0), weather_text, font=font_small)
-        weather_text_width = weather_bbox[2] - weather_bbox[0]
-        weather_width = weather_text_width + weather_icon_width
-        draw.text((Himage.width - weather_width - weather_icon_width - MARGIN, MARGIN), weather_icon, font=emoji_font, fill=BLACK)
-        draw.text((Himage.width - weather_width - MARGIN, MARGIN), weather_text, font=font_small, fill=BLACK)
+        icon_path = ICONS_DIR / f"{icon_name}.svg"
+        if not icon_path.exists():
+            logger.warning(f"Icon not found: {icon_path}")
+            icon_path = ICONS_DIR / "cloud.svg"  # fallback icon
+            
+        temp_text = f"{temperature:.1f}°"
+        
+        # Calculate text size
+        text_bbox = draw.textbbox((0, 0), temp_text, font=font_small)
+        text_width = text_bbox[2] - text_bbox[0]
+        text_height = text_bbox[3] - text_bbox[1]
+        
+        # Load and size icon to match text height
+        icon_size = text_height
+        icon = load_svg_icon(icon_path, (icon_size, icon_size), epd)
+        
+        if icon:
+            # Calculate total width and positions
+            total_width = text_width + icon_size + 5  # 5px spacing between icon and text
+            start_x = Himage.width - total_width - MARGIN
+            
+            # Draw icon and text
+            Himage.paste(icon, (start_x, MARGIN))
+            draw.text((start_x + icon_size + 5, MARGIN), 
+                     temp_text, font=font_small, fill=BLACK)
+            weather_width = total_width + MARGIN
+        else:
+            # Fallback to just temperature if icon loading fails
+            draw.text((Himage.width - text_width - MARGIN, MARGIN), 
+                     temp_text, font=font_small, fill=BLACK)
+            weather_width = text_width + MARGIN
     stop_name_height = 0
     if stop_name:
         stop_name_bbox = draw.textbbox((0, 0), stop_name, font=font_small)

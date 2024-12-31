@@ -42,6 +42,12 @@ const SETTING_GROUPS = {
                 label: "Show Sunshine Hours",
                 description: "Show today's sunshine hours when available (requires Open-Meteo provider)",
                 default: true
+            },
+            show_precipitation: {
+                type: "boolean",
+                label: "Show Precipitation",
+                description: "Show today's precipitation when available",
+                default: true
             }
         }
     },

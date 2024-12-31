@@ -131,8 +131,8 @@ class OpenMeteoProvider(WeatherProvider):
         logger.debug(f"OpenMeteo: Raw temperature from API: {temp}°")
         
         current = CurrentWeather(
-            temperature=round(temp),
-            feels_like=round(feels_like),
+            temperature=temp,
+            feels_like=feels_like,
             humidity=data['current']['relative_humidity_2m'],
             pressure=data['current']['pressure_msl'],
             condition=self._get_icon(
@@ -158,8 +158,8 @@ class OpenMeteoProvider(WeatherProvider):
             daily_forecasts.append(
                 DailyForecast(
                     date=datetime.fromisoformat(data['daily']['time'][i]),
-                    min_temp=round(min_temp),
-                    max_temp=round(max_temp),
+                    min_temp=min_temp,
+                    max_temp=max_temp,
                     condition=self._get_icon(
                         data['daily']['weather_code'][i],
                         True  # Always use day icons for daily forecast

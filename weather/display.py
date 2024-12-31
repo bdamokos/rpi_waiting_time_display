@@ -269,15 +269,15 @@ def draw_weather_display(epd, weather_data, last_weather_data=None, set_base_ima
         font_large = font_medium = font_small = font_tiny = font_emoji = font_xl
 
     # Top row: Large temperature and weather icon
-    temp_text = f"{weather_data['current']['temperature']}°C"
+    temp_text = f"{weather_data['current']['temperature']:.1f}°C"  # Show one decimal place
 
     # Calculate available space for temperature and icon
     temp_bbox = draw.textbbox((0, 0), temp_text, font=font_xl)
     temp_width = temp_bbox[2] - temp_bbox[0]
     temp_height = temp_bbox[3] - temp_bbox[1]
 
-    # Calculate icon size based on available space
-    icon_width = min(temp_height, 46)  # Keep aspect ratio square and limit size
+    # Calculate icon size based on available space - make it about 85% of text height
+    icon_width = int(temp_height * 0.85)  # Increased from previous size
     icon_height = icon_width
 
     # Get weather icon
@@ -306,36 +306,23 @@ def draw_weather_display(epd, weather_data, last_weather_data=None, set_base_ima
     # Show either sunrise or sunset based on time of day
     if weather_data['is_daytime']:
         sun_text = f" {weather_data['sunset']} "
-        sun_icon_name = "sun"
+        sun_icon = "☀"
     else:
         sun_text = f" {weather_data['sunrise']} "
-        sun_icon_name = "moon"
-
-    # Calculate sun/moon icon size based on text height
-    sun_text_bbox = draw.textbbox((0, 0), sun_text, font=font_medium)
-    sun_text_height = sun_text_bbox[3] - sun_text_bbox[1]
-    sun_icon_size = sun_text_height
-
-    # Load and draw sun/moon icon
-    sun_icon_path = ICONS_DIR / f"{sun_icon_name}.svg"
-    logger.debug(f"Loading sun/moon icon: {sun_icon_name} from {sun_icon_path}")
-    sun_icon = load_svg_icon(sun_icon_path, (sun_icon_size, sun_icon_size), epd)
-
+        sun_icon = "☀"
     moon_phase = get_moon_phase()
+    moon_phase_emoji = moon_phase['emoji']
     moon_phase_name = f" {moon_phase['name'].lower()}"
-
-    # Draw sun info
-    if sun_icon:
-        # Center icon vertically with text
-        sun_icon_y = y_pos + (sun_text_height - sun_icon_size) // 2
-        Himage.paste(sun_icon, (MARGIN, sun_icon_y))
-        sun_icon_width = sun_icon_size
-    else:
-        sun_icon_width = 0
-
-    draw.text((MARGIN + sun_icon_width + 5, y_pos), sun_text, font=font_medium, fill=BLACK)
-    draw.text((MARGIN + sun_icon_width + 5 + font_medium.getbbox(sun_text)[2], y_pos), 
-              moon_phase_name, font=font_medium, fill=BLACK)
+    sun_icon_width = font_emoji.getbbox(f"{sun_icon}")[2] - font_emoji.getbbox(f"{sun_icon}")[0]
+    moon_phase_width = font_emoji.getbbox(f"{moon_phase_emoji}")[2] - font_emoji.getbbox(f"{moon_phase_emoji}")[0]
+    sun_text_width = font_medium.getbbox(f"{sun_text}")[2] - font_medium.getbbox(f"{sun_text}")[0]
+    moon_phase_text_width = font_medium.getbbox(f"{moon_phase_name}")[2] - font_medium.getbbox(f"{moon_phase_name}")[0]
+    # Draw sun info on left side with smaller font
+    sun_full = f"{sun_icon} {sun_text} {moon_phase_emoji} {moon_phase_name}"
+    draw.text((MARGIN , y_pos), sun_icon, font=font_emoji, fill=BLACK)
+    draw.text((MARGIN + sun_icon_width, y_pos), sun_text, font=font_medium, fill=BLACK)
+    draw.text((MARGIN + sun_icon_width + sun_text_width, y_pos), moon_phase_emoji, font=font_emoji, fill=BLACK)
+    draw.text((MARGIN + sun_icon_width + sun_text_width + moon_phase_width, y_pos), moon_phase_name, font=font_medium, fill=BLACK)
 
     # Bottom row: Three day forecast (today + next 2 days)
     forecast_y_pos = 85
@@ -344,12 +331,12 @@ def draw_weather_display(epd, weather_data, last_weather_data=None, set_base_ima
     logger.debug(f"Forecasts: {forecasts}")
 
     # Calculate available width for each forecast block
-    available_width = Himage.width - (2 * MARGIN)
+    available_width = Himage.width - QR_SIZE - (2 * MARGIN)  # Width from left margin to QR code
     forecast_block_width = available_width // 3
 
     for idx, forecast in enumerate(forecasts):
-        # Calculate text size
-        forecast_text = f"{forecast['min']}-{forecast['max']}°"
+        # Calculate text size - round temperatures to whole numbers
+        forecast_text = f"{round(forecast['min'])}-{round(forecast['max'])}°"
         text_bbox = draw.textbbox((0, 0), forecast_text, font=font_medium)
         text_width = text_bbox[2] - text_bbox[0]
         text_height = text_bbox[3] - text_bbox[1]
@@ -367,16 +354,20 @@ def draw_weather_display(epd, weather_data, last_weather_data=None, set_base_ima
         
         icon = load_svg_icon(icon_path, (icon_width, icon_height), epd)
 
-        # Calculate block position
-        current_x = MARGIN + (idx * forecast_block_width)
-        block_center_x = current_x + (forecast_block_width - (icon_width + 5 + text_width)) // 2
+        # Calculate block position - align with left margin and distribute evenly
+        block_start_x = MARGIN + (idx * forecast_block_width)
+        
+        # Center the icon and text within the block
+        content_width = icon_width + 5 + text_width
+        block_center_x = block_start_x + (forecast_block_width - content_width) // 2
+        text_x = block_center_x + icon_width + 5
 
         # Draw icon and text
         if icon:
-            # Center icon vertically with text
-            icon_y = forecast_y_pos + (text_height - icon_height) // 2
+            # Position icon slightly higher than text
+            icon_y = forecast_y_pos + (text_height - icon_height) // 2 + 4  # Added 4 pixels to move down more
             Himage.paste(icon, (block_center_x, icon_y))
-            draw.text((block_center_x + icon_width + 5, forecast_y_pos), 
+            draw.text((text_x, forecast_y_pos), 
                      forecast_text, font=font_medium, fill=BLACK)
 
     # Generate and draw QR code (larger size)

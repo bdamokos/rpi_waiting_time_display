@@ -2,6 +2,7 @@ import pytest
 from datetime import datetime, timedelta
 import responses
 from weather.providers.openmeteo import OpenMeteoProvider, WEATHER_CODES
+from weather.models import TemperatureUnit
 
 @pytest.fixture
 def provider():
@@ -76,22 +77,22 @@ def test_fetch_weather(provider, sample_response):
     weather_data = provider.get_weather()
     
     # Test current weather
-    assert weather_data.current.temperature == 15.3
-    assert weather_data.current.feels_like == 14.8
+    assert weather_data.current.temperature == 15
+    assert weather_data.current.feels_like == 15
     assert weather_data.current.humidity == 65
     assert weather_data.current.pressure == 1015.0
     assert weather_data.current.condition.description == "Mainly clear"
-    assert weather_data.current.condition.icon == "cloud-sun"  # Day icon
+    assert weather_data.current.condition.icon == "cloud-sun"
     
-    # Test daily forecast
+    # Test forecast
     assert len(weather_data.daily_forecast) == 3
     first_day = weather_data.daily_forecast[0]
-    assert first_day.date == datetime.fromisoformat("2024-01-01")
-    assert first_day.min_temp == 8.1
-    assert first_day.max_temp == 16.2
-    assert first_day.precipitation_probability == 0
+    assert first_day.min_temp == 8
+    assert first_day.max_temp == 16
+    assert first_day.condition.description == "Mainly clear"
     assert first_day.precipitation_amount == 0.0
-    assert first_day.sunshine_duration == timedelta(hours=8)  # 28800 seconds = 8 hours
+    assert first_day.precipitation_probability == 0
+    assert first_day.sunshine_duration == timedelta(hours=8)
     
     # Test sun times
     assert weather_data.sunrise == datetime.fromisoformat("2024-01-01T08:45")
@@ -99,7 +100,7 @@ def test_fetch_weather(provider, sample_response):
     assert weather_data.is_day == True
     
     # Test attribution
-    assert weather_data.attribution == "Weather data by Open-Meteo.com"
+    assert weather_data.attribution == "Weather data by Open-Meteo"
 
 @responses.activate
 def test_error_handling(provider):
@@ -134,3 +135,72 @@ def test_icon_mapping():
     
     # Test unknown code
     assert provider._get_icon(999, True).icon == "cloud"  # Unknown code 
+
+@responses.activate
+def test_temperature_units(provider, sample_response):
+    """Test temperature unit handling"""
+    base_url = "https://api.open-meteo.com/v1/forecast"
+    
+    # Common parameters for all requests
+    base_params = {
+        'latitude': '50.8505',
+        'longitude': '4.3488',
+        'current': [
+            'temperature_2m',
+            'relative_humidity_2m',
+            'apparent_temperature',
+            'precipitation',
+            'weather_code',
+            'pressure_msl',
+            'is_day'
+        ],
+        'daily': [
+            'weather_code',
+            'temperature_2m_max',
+            'temperature_2m_min',
+            'sunrise',
+            'sunset',
+            'precipitation_sum',
+            'precipitation_probability_max',
+            'sunshine_duration'
+        ],
+        'timezone': 'auto'
+    }
+    
+    # Test Celsius (default)
+    provider.unit = TemperatureUnit.CELSIUS
+    responses.add(
+        responses.GET,
+        base_url,
+        match=[responses.matchers.query_param_matcher(base_params)],
+        json=sample_response,
+        status=200
+    )
+    weather_data = provider.get_weather()
+    assert weather_data.current.unit == TemperatureUnit.CELSIUS
+    
+    # Test Fahrenheit
+    provider.unit = TemperatureUnit.FAHRENHEIT
+    fahrenheit_params = base_params.copy()
+    fahrenheit_params['temperature_unit'] = 'fahrenheit'
+    responses.add(
+        responses.GET,
+        base_url,
+        match=[responses.matchers.query_param_matcher(fahrenheit_params)],
+        json=sample_response,
+        status=200
+    )
+    weather_data = provider.get_weather()
+    assert weather_data.current.unit == TemperatureUnit.FAHRENHEIT
+    
+    # Test Kelvin (should fall back to Celsius)
+    provider.unit = TemperatureUnit.KELVIN
+    responses.add(
+        responses.GET,
+        base_url,
+        match=[responses.matchers.query_param_matcher(base_params)],
+        json=sample_response,
+        status=200
+    )
+    weather_data = provider.get_weather()
+    assert weather_data.current.unit == TemperatureUnit.KELVIN  # We now handle Kelvin conversion in the model 

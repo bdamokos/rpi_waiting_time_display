@@ -9,6 +9,7 @@ from ..models import (
     WeatherCondition,
     DailyForecast,
     AirQuality,
+    TemperatureUnit,
 )
 
 logger = logging.getLogger(__name__)
@@ -50,10 +51,24 @@ NIGHT_ICON_MAPPING = {
 
 
 class OpenMeteoProvider(WeatherProvider):
+    """Open-Meteo API provider implementation.
+    
+    Supported temperature units:
+    - CELSIUS: default, no conversion needed
+    - FAHRENHEIT: uses temperature_unit=fahrenheit in API calls
+    - KELVIN: converted from Celsius
+    """
+    
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.base_url = "https://api.open-meteo.com/v1/forecast"
-
+        
+    def _get_temperature_unit_param(self) -> Optional[str]:
+        """Get the temperature_unit parameter for API calls."""
+        if self.unit == TemperatureUnit.FAHRENHEIT:
+            return "fahrenheit"
+        return None  # Celsius is default
+        
     def _get_icon(self, code: int, is_day: bool = True) -> WeatherCondition:
         weather_info = WEATHER_CODES.get(
             code, {"description": "Unknown", "icon": "cloud"}
@@ -67,74 +82,100 @@ class OpenMeteoProvider(WeatherProvider):
         return WeatherCondition(description=weather_info["description"], icon=icon)
 
     def _fetch_weather(self) -> WeatherData:
-        if not self.lat or not self.lon:
-            raise ValueError("Latitude and longitude are required for Open-Meteo")
-
+        """Fetch weather data from Open-Meteo API."""
+        if not (self.lat and self.lon):
+            raise ValueError("Coordinates must be provided")
+            
+        logger.debug(f"OpenMeteo: Fetching weather with unit={self.unit}")
+            
+        # Build parameters
         params = {
-            "latitude": self.lat,
-            "longitude": self.lon,
-            "current": [
-                "temperature_2m",
-                "relative_humidity_2m",
-                "apparent_temperature",
-                "precipitation",
-                "weather_code",
-                "pressure_msl",
-                "is_day",
+            'latitude': str(self.lat),
+            'longitude': str(self.lon),
+            'current': [
+                'temperature_2m',
+                'relative_humidity_2m',
+                'apparent_temperature',
+                'precipitation',
+                'weather_code',
+                'pressure_msl',
+                'is_day'
             ],
-            "daily": [
-                "weather_code",
-                "temperature_2m_max",
-                "temperature_2m_min",
-                "sunrise",
-                "sunset",
-                "precipitation_sum",
-                "precipitation_probability_max",
-                "sunshine_duration",
+            'daily': [
+                'weather_code',
+                'temperature_2m_max',
+                'temperature_2m_min',
+                'sunrise',
+                'sunset',
+                'precipitation_sum',
+                'precipitation_probability_max',
+                'sunshine_duration'
             ],
-            "timezone": "auto",
+            'timezone': 'auto'
         }
-
+        
+        # Add temperature unit if not using Celsius
+        unit_param = self._get_temperature_unit_param()
+        if unit_param:
+            params['temperature_unit'] = unit_param
+            logger.debug(f"OpenMeteo: Using API unit parameter: {unit_param}")
+            
         response = requests.get(self.base_url, params=params)
         response.raise_for_status()
         data = response.json()
         
-        logger.debug("Daily sunshine duration values: %s", data["daily"].get("sunshine_duration"))
-
         # Process current weather
+        temp = data['current']['temperature_2m']
+        feels_like = data['current']['apparent_temperature']
+        
+        logger.debug(f"OpenMeteo: Raw temperature from API: {temp}°")
+        
         current = CurrentWeather(
-            temperature=data["current"]["temperature_2m"],
-            feels_like=data["current"]["apparent_temperature"],
-            humidity=data["current"]["relative_humidity_2m"],
-            pressure=data["current"]["pressure_msl"],
+            temperature=round(temp),
+            feels_like=round(feels_like),
+            humidity=data['current']['relative_humidity_2m'],
+            pressure=data['current']['pressure_msl'],
             condition=self._get_icon(
-                data["current"]["weather_code"], bool(data["current"]["is_day"])
+                data['current']['weather_code'],
+                bool(data['current']['is_day'])
             ),
+            time=datetime.fromisoformat(data['current']['time']),
+            unit=self.unit
         )
-
+        logger.debug(f"OpenMeteo: Created CurrentWeather with unit={current.unit}, temp={current.temperature}")
+        
         # Process daily forecasts
         daily_forecasts = []
-        for i in range(len(data["daily"]["time"])):
-            sunshine_seconds = data["daily"]["sunshine_duration"][i]
-            logger.info(f"Day {data['daily']['time'][i]}: sunshine duration = {sunshine_seconds} seconds ({sunshine_seconds/3600:.1f}h)")
+        for i in range(len(data['daily']['time'])):
+            min_temp = data['daily']['temperature_2m_min'][i]
+            max_temp = data['daily']['temperature_2m_max'][i]
+            
+            # Log sunshine duration for debugging
+            sunshine_seconds = data['daily']['sunshine_duration'][i]
+            sunshine_hours = sunshine_seconds / 3600
+            logger.info(f"Day {data['daily']['time'][i]}: sunshine duration = {sunshine_seconds} seconds ({sunshine_hours:.1f}h)")
             
             daily_forecasts.append(
                 DailyForecast(
-                    date=datetime.fromisoformat(data["daily"]["time"][i]),
-                    min_temp=data["daily"]["temperature_2m_min"][i],
-                    max_temp=data["daily"]["temperature_2m_max"][i],
-                    condition=self._get_icon(data["daily"]["weather_code"][i], True),
-                    precipitation_probability=data["daily"]["precipitation_probability_max"][i],
-                    precipitation_amount=data["daily"]["precipitation_sum"][i],
-                    sunshine_duration=timedelta(seconds=sunshine_seconds)  # Always create timedelta, 0 is valid
+                    date=datetime.fromisoformat(data['daily']['time'][i]),
+                    min_temp=round(min_temp),
+                    max_temp=round(max_temp),
+                    condition=self._get_icon(
+                        data['daily']['weather_code'][i],
+                        True  # Always use day icons for daily forecast
+                    ),
+                    precipitation_amount=data['daily']['precipitation_sum'][i],
+                    precipitation_probability=data['daily']['precipitation_probability_max'][i],
+                    sunshine_duration=timedelta(seconds=data['daily']['sunshine_duration'][i]),
+                    unit=self.unit
                 )
             )
-
+            
         return WeatherData(
             current=current,
             daily_forecast=daily_forecasts,
-            sunrise=datetime.fromisoformat(data["daily"]["sunrise"][0]),
-            sunset=datetime.fromisoformat(data["daily"]["sunset"][0]),
-            is_day=bool(data["current"]["is_day"]),
-            attribution="Weather data by Open-Meteo.com",
+            sunrise=datetime.fromisoformat(data['daily']['sunrise'][0]),
+            sunset=datetime.fromisoformat(data['daily']['sunset'][0]),
+            is_day=bool(data['current']['is_day']),
+            attribution="Weather data by Open-Meteo"
         )

@@ -16,11 +16,50 @@ import traceback
 from pathlib import Path
 from backoff import ExponentialBackoff
 from weather.providers.factory import create_weather_provider
+from weather.icons import WEATHER_ICONS, ICONS_DIR
+import cairosvg
+from typing import Tuple
 
 logger = logging.getLogger(__name__)
 
-WEATHER_ICON_URL = "https://openweathermap.org/img/wn/{}@4x.png"
-CACHE_DIR = Path(os.path.dirname(os.path.realpath(__file__))) / "cache" / "icons"
+def load_svg_icon(svg_path: Path, size: Tuple[int, int], epd) -> Image.Image:
+    """Load and resize an SVG icon."""
+    try:
+        # Convert SVG to PNG in memory with transparency
+        png_data = cairosvg.svg2png(
+            url=str(svg_path),
+            output_width=size[0],
+            output_height=size[1],
+            background_color="transparent"
+        )
+        
+        # Create PIL Image from PNG data
+        icon = Image.open(BytesIO(png_data))
+        
+        # Create a white background image
+        if epd.is_bw_display:
+            bg = Image.new('1', icon.size, 1)  # 1 = white
+        else:
+            bg = Image.new('RGB', icon.size, 'white')
+            
+        # Convert icon to RGBA to handle transparency
+        icon = icon.convert('RGBA')
+        
+        # Paste the icon onto the white background using the alpha channel as mask
+        bg.paste(icon, (0, 0), icon.split()[3])
+        
+        # Convert to final mode
+        if epd.is_bw_display:
+            bg = bg.convert('1')
+        else:
+            bg = bg.convert('RGB')
+            
+        logger.debug(f"Loaded SVG with mode: {bg.mode}, size: {bg.size}")
+        return bg
+    except Exception as e:
+        logger.error(f"Error loading SVG icon {svg_path}: {e}")
+        return None
+
 DISPLAY_SCREEN_ROTATION = int(os.getenv('screen_rotation', 90))
 
 CURRENT_ICON_SIZE = (46, 46)  # Size for current weather icon
@@ -190,72 +229,31 @@ if __name__ == "__main__":
     print(weather.get_weather()) 
 
 
-def get_weather_icon(icon_code, size, epd):
-    """Fetch and process weather icon from OpenWeatherMap with caching"""
-    try:
-        # Create cache directory if it doesn't exist
-        CACHE_DIR.mkdir(parents=True, exist_ok=True)
-
-        # Generate cache filename based on icon code and size
-        cache_file = CACHE_DIR / f"icon_{icon_code}_{size[0]}x{size[1]}.png"
-
-        # Check if cached version exists
-        if cache_file.exists():
-            # logger.debug(f"Loading cached icon: {cache_file}")
-            icon = Image.open(cache_file)
-
-            # Process the cached icon
-            processed_icon = process_icon_for_epd(icon, epd)
-            return processed_icon
-
-        # If not in cache, download and process
-        logger.debug(f"Downloading icon: {icon_code}")
-        response = requests.get(WEATHER_ICON_URL.format(icon_code))
-        if response.status_code == 200:
-            icon = Image.open(BytesIO(response.content))
-            icon = icon.resize(size, Image.Resampling.LANCZOS)
-
-            # Save to cache
-            icon.save(cache_file, "PNG")
-            # logger.debug(f"Saved icon to cache: {cache_file}")
-
-            # Process the icon
-            processed_icon = process_icon_for_epd(icon, epd)
-            return processed_icon
-
-    except Exception as e:
-        logger.error(f"Error processing weather icon: {e}\n{traceback.format_exc()}")
-    return None
-
-
-# Weather icon mapping
-WEATHER_ICONS = {
-    'Clear': '☀',
-    'Clouds': '☁',
-    'Rain': '🌧',
-    'Snow': '❄',
-    'Thunderstorm': '⚡',
-    'Drizzle': '🌦',
-    'Mist': '🌫',
-    'Fog': '🌫',
-}
-
+# Constants
+MARGIN = 5
+QR_SIZE = 52  # QR code size in pixels
+ICON_PADDING = 2  # Padding around icons
 
 def draw_weather_display(epd, weather_data, last_weather_data=None, set_base_image=False):
     """Draw a weather-focused display when no bus times are available"""
-    # Handle different color definitions
-    BLACK = epd.BLACK
-    WHITE = epd.WHITE
-    RED = getattr(epd, 'RED', BLACK)  # Fall back to BLACK if RED not available
-    YELLOW = getattr(epd, 'YELLOW', BLACK)  # Fall back to BLACK if YELLOW not available
+    # Handle different color definitions - use simple 0/1 for BW mode
+    if epd.is_bw_display:
+        BLACK = 0
+        WHITE = 1
+        RED = 0
+        YELLOW = 0
+    else:
+        BLACK = epd.BLACK
+        WHITE = epd.WHITE
+        RED = getattr(epd, 'RED', BLACK)
+        YELLOW = getattr(epd, 'YELLOW', BLACK)
 
     # Create a new image with white background
     if epd.is_bw_display:
         Himage = Image.new('1', (epd.height, epd.width), 1)  # 1 is white in 1-bit mode
     else:
         Himage = Image.new('RGB', (epd.height, epd.width), WHITE)
-
-    # 250x120 width x height
+        
     draw = ImageDraw.Draw(Himage)
     font_paths = get_font_paths()
     try:
@@ -265,39 +263,42 @@ def draw_weather_display(epd, weather_data, last_weather_data=None, set_base_ima
         font_emoji = ImageFont.truetype(font_paths['emoji'], 16)
         font_small = ImageFont.truetype(font_paths['dejavu'], 14)
         font_tiny = ImageFont.truetype(font_paths['dejavu'], 10)
-    except:
+    except Exception as e:
+        logger.error(f"Error loading fonts: {e}")
         font_xl = ImageFont.load_default()
-        font_large = font_medium = font_small = font_tiny = font_xl
-
-    MARGIN = 5
+        font_large = font_medium = font_small = font_tiny = font_emoji = font_xl
 
     # Top row: Large temperature and weather icon
     temp_text = f"{weather_data['current']['temperature']}°C"
 
-    # Get and draw weather icon
-    icon = get_weather_icon(weather_data['current']['icon'], CURRENT_ICON_SIZE, epd)
-
-    # Center temperature and icon
+    # Calculate available space for temperature and icon
     temp_bbox = draw.textbbox((0, 0), temp_text, font=font_xl)
     temp_width = temp_bbox[2] - temp_bbox[0]
+    temp_height = temp_bbox[3] - temp_bbox[1]
 
-    total_width = temp_width + CURRENT_ICON_SIZE[0] + 65
-    # start_x = (Himage.width - total_width) // 2
-    start_x = MARGIN
+    # Calculate icon size based on available space
+    icon_width = min(temp_height, 46)  # Keep aspect ratio square and limit size
+    icon_height = icon_width
 
-    # Draw temperature
-    draw.text((start_x, MARGIN), temp_text, font=font_xl, fill=epd.BLACK, align="left")
-
-    # Draw icon
+    # Get weather icon
+    icon_name = weather_data['current']['icon']
+    icon_path = ICONS_DIR / f"{icon_name}.svg"
+    logger.debug(f"Loading icon: {icon_name} from {icon_path}")
+    if not icon_path.exists():
+        logger.warning(f"Icon not found: {icon_path}")
+        icon_path = ICONS_DIR / "cloud.svg"  # fallback icon
+    
+    # Load and resize icon
+    icon = load_svg_icon(icon_path, (icon_width, icon_height), epd)
+    
+    # Draw temperature and icon
+    draw.text((MARGIN, MARGIN), temp_text, font=font_xl, fill=BLACK, align="left")
     if icon:
-        icon_x = start_x + temp_width + 20
-        icon_y = MARGIN
+        # Center icon vertically with text
+        icon_y = MARGIN + (temp_height - icon_height) // 2
+        icon_x = MARGIN + temp_width + 10
+        logger.debug(f"Pasting icon at ({icon_x}, {icon_y})")
         Himage.paste(icon, (icon_x, icon_y))
-    else:
-        # Fallback to text icon if image loading fails
-        weather_icon = WEATHER_ICONS.get(weather_data['current']['description'], '?')
-        draw.text((start_x + temp_width + 20, MARGIN), weather_icon,
-                  font=font_xl, fill=epd.BLACK)
 
     # Middle row: Next sun event (moved left and smaller)
     y_pos = 55
@@ -305,58 +306,78 @@ def draw_weather_display(epd, weather_data, last_weather_data=None, set_base_ima
     # Show either sunrise or sunset based on time of day
     if weather_data['is_daytime']:
         sun_text = f" {weather_data['sunset']} "
-        sun_icon = "☀"
+        sun_icon_name = "sun"
     else:
         sun_text = f" {weather_data['sunrise']} "
-        sun_icon = "☀"
+        sun_icon_name = "moon"
+
+    # Calculate sun/moon icon size based on text height
+    sun_text_bbox = draw.textbbox((0, 0), sun_text, font=font_medium)
+    sun_text_height = sun_text_bbox[3] - sun_text_bbox[1]
+    sun_icon_size = sun_text_height
+
+    # Load and draw sun/moon icon
+    sun_icon_path = ICONS_DIR / f"{sun_icon_name}.svg"
+    logger.debug(f"Loading sun/moon icon: {sun_icon_name} from {sun_icon_path}")
+    sun_icon = load_svg_icon(sun_icon_path, (sun_icon_size, sun_icon_size), epd)
+
     moon_phase = get_moon_phase()
-    moon_phase_emoji = moon_phase['emoji']
     moon_phase_name = f" {moon_phase['name'].lower()}"
-    sun_icon_width = font_emoji.getbbox(f"{sun_icon}")[2] - font_emoji.getbbox(f"{sun_icon}")[0]
-    moon_phase_width = font_emoji.getbbox(f"{moon_phase_emoji}")[2] - font_emoji.getbbox(f"{moon_phase_emoji}")[0]
-    sun_text_width = font_medium.getbbox(f"{sun_text}")[2] - font_medium.getbbox(f"{sun_text}")[0]
-    moon_phase_text_width = font_medium.getbbox(f"{moon_phase_name}")[2] - font_medium.getbbox(f"{moon_phase_name}")[0]
-    # Draw sun info on left side with smaller font
-    sun_full = f"{sun_icon} {sun_text} {moon_phase_emoji} {moon_phase_name}"
-    draw.text((MARGIN , y_pos), sun_icon, font=font_emoji, fill=epd.BLACK)
-    draw.text((MARGIN + sun_icon_width, y_pos), sun_text, font=font_medium, fill=epd.BLACK)
-    draw.text((MARGIN + sun_icon_width + sun_text_width, y_pos), moon_phase_emoji, font=font_emoji, fill=epd.BLACK)
-    draw.text((MARGIN + sun_icon_width + sun_text_width + moon_phase_width, y_pos), moon_phase_name, font=font_medium, fill=epd.BLACK)
+
+    # Draw sun info
+    if sun_icon:
+        # Center icon vertically with text
+        sun_icon_y = y_pos + (sun_text_height - sun_icon_size) // 2
+        Himage.paste(sun_icon, (MARGIN, sun_icon_y))
+        sun_icon_width = sun_icon_size
+    else:
+        sun_icon_width = 0
+
+    draw.text((MARGIN + sun_icon_width + 5, y_pos), sun_text, font=font_medium, fill=BLACK)
+    draw.text((MARGIN + sun_icon_width + 5 + font_medium.getbbox(sun_text)[2], y_pos), 
+              moon_phase_name, font=font_medium, fill=BLACK)
 
     # Bottom row: Three day forecast (today + next 2 days)
-    y_pos = 85
+    forecast_y_pos = 85
     logger.debug(f"Forecasts: {weather_data['forecasts']}")
     forecasts = weather_data['forecasts'][:3]
     logger.debug(f"Forecasts: {forecasts}")
 
-    # Calculate available width
+    # Calculate available width for each forecast block
     available_width = Himage.width - (2 * MARGIN)
-    # Width for each forecast block (icon + temp)
     forecast_block_width = available_width // 3
 
     for idx, forecast in enumerate(forecasts):
-        # Calculate starting x position for this forecast block
+        # Calculate text size
+        forecast_text = f"{forecast['min']}-{forecast['max']}°"
+        text_bbox = draw.textbbox((0, 0), forecast_text, font=font_medium)
+        text_width = text_bbox[2] - text_bbox[0]
+        text_height = text_bbox[3] - text_bbox[1]
+
+        # Calculate icon size
+        icon_width = min(text_height, 28)  # Keep aspect ratio square and limit size
+        icon_height = icon_width
+
+        # Load and resize forecast icon
+        icon_name = forecast['icon']
+        icon_path = ICONS_DIR / f"{icon_name}.svg"
+        if not icon_path.exists():
+            logger.warning(f"Forecast icon not found: {icon_path}")
+            icon_path = ICONS_DIR / "cloud.svg"  # fallback icon
+        
+        icon = load_svg_icon(icon_path, (icon_width, icon_height), epd)
+
+        # Calculate block position
         current_x = MARGIN + (idx * forecast_block_width)
+        block_center_x = current_x + (forecast_block_width - (icon_width + 5 + text_width)) // 2
 
-        # Get and draw icon
-        icon = get_weather_icon(forecast['icon'], FORECAST_ICON_SIZE, epd)
+        # Draw icon and text
         if icon:
-            # Center icon and text within their block
-            forecast_text = f"{forecast['min']}-{forecast['max']}°"
-            text_bbox = draw.textbbox((0, 0), forecast_text, font=font_medium)
-            text_width = text_bbox[2] - text_bbox[0]
-            total_element_width = FORECAST_ICON_SIZE[0] + 5 + text_width
-
-            # Center the whole block
-            block_start_x = current_x + (forecast_block_width - total_element_width) // 2
-
-            # Draw icon and text
-            icon_y = y_pos + (font_medium.size - FORECAST_ICON_SIZE[1]) // 2
-            Himage.paste(icon, (block_start_x, icon_y))
-
-            # Draw temperature
-            text_x = block_start_x + FORECAST_ICON_SIZE[0] + 3
-            draw.text((text_x, y_pos), forecast_text, font=font_medium, fill=epd.BLACK)
+            # Center icon vertically with text
+            icon_y = forecast_y_pos + (text_height - icon_height) // 2
+            Himage.paste(icon, (block_center_x, icon_y))
+            draw.text((block_center_x + icon_width + 5, forecast_y_pos), 
+                     forecast_text, font=font_medium, fill=BLACK)
 
     # Generate and draw QR code (larger size)
     qr = qrcode.QRCode(version=1, box_size=2, border=1)
@@ -366,10 +387,9 @@ def draw_weather_display(epd, weather_data, last_weather_data=None, set_base_ima
     qr_img = qr.make_image(fill_color="black", back_color="white")
     qr_img = qr_img.convert('RGB')
 
-    # Scale QR code to larger size
-    qr_size = 52
-    qr_img = qr_img.resize((qr_size, qr_size))
-    qr_x = Himage.width - qr_size - MARGIN
+    # Scale QR code to defined size
+    qr_img = qr_img.resize((QR_SIZE, QR_SIZE))
+    qr_x = Himage.width - QR_SIZE - MARGIN
     qr_y = MARGIN
     Himage.paste(qr_img, (qr_x, qr_y))
 
@@ -380,7 +400,7 @@ def draw_weather_display(epd, weather_data, last_weather_data=None, set_base_ima
     time_x = Himage.width - time_width - MARGIN
     time_y = Himage.height - time_bbox[3]- (MARGIN // 2)
     draw.text((time_x, time_y),
-              current_time, font=font_tiny, fill=epd.BLACK, align="right")
+              current_time, font=font_tiny, fill=BLACK, align="right")
 
     # Draw a border around the display
     # border_color = getattr(epd, 'RED', epd.BLACK)  # Fall back to BLACK if RED not available

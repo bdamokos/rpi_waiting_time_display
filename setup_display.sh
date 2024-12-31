@@ -2,7 +2,7 @@
 
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.25 (2024-12-21)"  # AUTO-INCREMENT
+echo "Version: 0.0.26 (2024-12-31)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -258,7 +258,7 @@ apt-get update
 check_error "Failed to update package list"
 
 # Install dependencies
-apt-get install -y git gh fonts-dejavu watchdog python3-dev network-manager
+apt-get install -y git gh fonts-dejavu watchdog python3-dev network-manager libcairo2-dev pkg-config python3-dev
 check_error "Failed to install packages"
 
 # Setup watchdog

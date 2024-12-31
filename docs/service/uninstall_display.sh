@@ -2,7 +2,7 @@
 
 echo "----------------------------------------"
 echo "Display Programme Uninstall Script"
-echo "Version: 0.0.2 (2024-12-21)"  # AUTO-INCREMENT
+echo "Version: 0.0.3 (2024-12-31)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -83,7 +83,7 @@ cleanup() {
     
     # Remove installed packages
     if confirm "Would you like to remove installed packages?"; then
-        apt-get remove -y git gh fonts-dejavu watchdog python3-dev network-manager dnsmasq
+        apt-get remove -y git gh fonts-dejavu watchdog python3-dev network-manager dnsmasq libcairo2-dev pkg-config
     fi
     
     # Remove WiFi captive portal setup

@@ -139,42 +139,72 @@
         <h1>API Features Comparison</h1>
         
         <div class="api-section">
-            <h2>☀️ OpenWeatherMap API</h2>
+            <h2>☀️ Weather APIs</h2>
+            <p>The application supports two weather data providers: OpenMeteo (default) and OpenWeatherMap.</p>
             <table class="comparison-table">
                 <tr>
                     <th>Feature</th>
-                    <th>Without API Key</th>
-                    <th>With API Key</th>
+                    <th>OpenMeteo</th>
+                    <th>OpenWeatherMap</th>
                 </tr>
                 <tr>
                     <td>Current Temperature</td>
-                    <td><span class="feature-status unavailable">Not available</span></td>
+                    <td><span class="feature-status available">Available</span></td>
                     <td><span class="feature-status available">Available</span></td>
                 </tr>
                 <tr>
                     <td>Weather Conditions</td>
-                    <td><span class="feature-status unavailable">Not available</span></td>
+                    <td><span class="feature-status available">Available</span></td>
                     <td><span class="feature-status available">Available</span></td>
                 </tr>
                 <tr>
                     <td>3-Day Forecast</td>
-                    <td><span class="feature-status unavailable">Not available</span></td>
+                    <td><span class="feature-status available">Available</span></td>
                     <td><span class="feature-status available">Available</span></td>
                 </tr>
                 <tr>
                     <td>Sunrise/Sunset Times</td>
-                    <td><span class="feature-status unavailable">Not available</span></td>
                     <td><span class="feature-status available">Available</span></td>
+                    <td><span class="feature-status available">Available</span></td>
+                </tr>
+                <tr>
+                    <td>Air Quality</td>
+                    <td><span class="feature-status available">Available</span></td>
+                    <td><span class="feature-status available">Available</span></td>
+                </tr>
+                <tr>
+                    <td>API Key Required</td>
+                    <td><span class="feature-status available">No</span></td>
+                    <td><span class="feature-status unavailable">Yes</span></td>
+                </tr>
+                <tr>
+                    <td>Sunshine hours</td>
+                    <td><span class="feature-status available">Yes</span></td>
+                    <td><span class="feature-status unavailable">No</span></td>
                 </tr>
             </table>
             <div class="api-info">
-                <h3>How to Get an API Key</h3>
-                <p>OpenWeatherMap offers a free tier that is sufficient for this project:</p>
+                <h3>OpenMeteo (Default)</h3>
+                <p>OpenMeteo is the default provider and requires no API key. It offers:</p>
+                <ul>
+                    <li>Free, no registration required</li>
+                    <li>High rate limits</li>
+                    <li>Accurate weather data from multiple sources</li>
+                </ul>
+                <p>To use OpenMeteo, simply set <code>WEATHER_PROVIDER=openmeteo</code> in your .env file (this is the default).</p>
+                
+                <h3>OpenWeatherMap</h3>
+                <p>OpenWeatherMap is an alternative provider that requires an API key:</p>
                 <ol>
                     <li>Sign up at <a href="https://openweathermap.org/appid" target="_blank">OpenWeatherMap</a></li>
                     <li>Generate an API key in your account dashboard</li>
-                    <li>Add the key to your .env file</li>
+                    <li>Add these to your .env file:
+                        <pre>
+WEATHER_PROVIDER=openweather
+OPENWEATHER_API_KEY=your_api_key</pre>
+                    </li>
                 </ol>
+                <p>Note: If OpenWeatherMap is selected but no API key is provided, the application will automatically fall back to OpenMeteo.</p>
             </div>
         </div>
 
@@ -244,9 +274,17 @@
             
             <h3>Weather Data</h3>
             <ul>
+                <li><strong><a href="https://open-meteo.com/" target="_blank">OpenMeteo API</a></strong>
+                    <ul>
+                        <li>Purpose: Default weather data provider</li>
+                        <li>Usage: Temperature, conditions, forecast data, and air quality</li>
+                        <li>Free service, no registration required</li>
+                        <li>Data sources: National weather services (GFS, DWD, MeteoFrance, ECMWF)</li>
+                    </ul>
+                </li>
                 <li><strong><a href="https://openweathermap.org/api" target="_blank">OpenWeatherMap API</a></strong>
                     <ul>
-                        <li>Purpose: Provides local weather data and forecasts</li>
+                        <li>Purpose: Alternative weather data provider</li>
                         <li>Usage: Temperature, conditions, and forecast data</li>
                         <li>Free tier is sufficient for our needs</li>
                         <li>Requires API key</li>

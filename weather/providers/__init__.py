@@ -1,4 +1,11 @@
-from .base import WeatherProvider
-from .openmeteo import OpenMeteoProvider
+"""Weather providers package."""
 
-__all__ = ['WeatherProvider', 'OpenMeteoProvider'] 
+from .openmeteo import OpenMeteoProvider
+from .openweather import OpenWeatherProvider
+from .factory import create_weather_provider
+
+__all__ = [
+    'OpenMeteoProvider',
+    'OpenWeatherProvider',
+    'create_weather_provider'
+] 

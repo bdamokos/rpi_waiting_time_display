@@ -7,7 +7,7 @@ import logging
 from display_adapter import display_full_refresh, initialize_display, display_cleanup
 import time
 from datetime import datetime, timedelta
-from weather import WeatherService, draw_weather_display
+from weather.display import WeatherService, draw_weather_display
 from bus_service import BusService, update_display
 import importlib
 import log_config
@@ -36,8 +36,6 @@ WEATHER_UPDATE_INTERVAL = int(os.getenv("refresh_weather_interval", 600))
 BUS_DATA_MAX_AGE = max(90, DISPLAY_REFRESH_INTERVAL)  # Ensure bus data doesn't become stale before next refresh
 
 weather_enabled = True if os.getenv("weather_enabled", "true").lower() == "true" else False
-if not os.getenv("OPENWEATHER_API_KEY"):
-    weather_enabled = False
 
 HOTSPOT_ENABLED = os.getenv('hotspot_enabled', 'true').lower() == 'true'
 hostname = get_hostname()

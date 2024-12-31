@@ -15,42 +15,27 @@ import json
 import traceback
 from pathlib import Path
 from backoff import ExponentialBackoff
+from weather.providers.factory import create_weather_provider
 
 logger = logging.getLogger(__name__)
 
 WEATHER_ICON_URL = "https://openweathermap.org/img/wn/{}@4x.png"
-CACHE_DIR = Path(os.path.dirname(os.path.realpath(__file__))) / "cache" / "weather_icons"
+CACHE_DIR = Path(os.path.dirname(os.path.realpath(__file__))) / "cache" / "icons"
 DISPLAY_SCREEN_ROTATION = int(os.getenv('screen_rotation', 90))
 
 CURRENT_ICON_SIZE = (46, 46)  # Size for current weather icon
 FORECAST_ICON_SIZE = (28, 28)  # Smaller size for forecast icons
 
 dotenv.load_dotenv(override=True)
-weather_api_key = os.getenv('OPENWEATHER_API_KEY')
-coordinates_lat = os.getenv('Coordinates_LAT')
-coordinates_lng = os.getenv('Coordinates_LNG')
-city = os.getenv('City')
-country = os.getenv('Country')
 
 display_lock = return_display_lock()
 
 class WeatherService:
     def __init__(self):
-        self.api_key = weather_api_key
-        self.lat = coordinates_lat
-        self.lon = coordinates_lng
-        self.city = city
-        self.country = country
-        self.base_url = "http://api.openweathermap.org/data/2.5/weather"
-        self.forecast_url = "http://api.openweathermap.org/data/2.5/forecast"
-        self.air_pollution_url = "http://api.openweathermap.org/data/2.5/air_pollution"
-        self.aqi_labels = {
-            1: "Good",
-            2: "Fair",
-            3: "Moderate",
-            4: "Poor",
-            5: "Very Poor"
-        }
+        # Create weather provider
+        provider_name = os.getenv('WEATHER_PROVIDER', 'openmeteo')
+        self.provider = create_weather_provider(provider_name)
+        logger.info(f"Using weather provider: {provider_name}")
         self._backoff = ExponentialBackoff()
 
     def get_air_quality(self):
@@ -60,28 +45,15 @@ class WeatherService:
             return None
 
         try:
-            if not (self.lat and self.lon):
-                return None
-
-            params = {
-                'lat': self.lat,
-                'lon': self.lon,
-                'appid': self.api_key
-            }
-            
-            response = requests.get(self.air_pollution_url, params=params)
-            response.raise_for_status()
-            data = response.json()
-            
-            aqi = data['list'][0]['main']['aqi']
-            components = data['list'][0]['components']
-            
+            weather_data = self.provider.get_weather()
             self._backoff.update_backoff_state(True)
-            return {
-                'aqi': aqi,
-                'aqi_label': self.aqi_labels.get(aqi, "Unknown"),
-                'components': components
-            }
+            if weather_data.air_quality:
+                return {
+                    'aqi': weather_data.air_quality.aqi,
+                    'aqi_label': weather_data.air_quality.label,
+                    'components': weather_data.air_quality.components
+                }
+            return None
             
         except Exception as e:
             self._backoff.update_backoff_state(False)
@@ -100,37 +72,17 @@ class WeatherService:
             }
 
         try:
-            if self.lat and self.lon:
-                params = {
-                    'lat': self.lat,
-                    'lon': self.lon,
-                    'appid': self.api_key,
-                    'units': 'metric'  # For Celsius
-                }
-            elif self.city and self.country:
-                params = {
-                    'q': f"{self.city},{self.country}",
-                    'appid': self.api_key,
-                    'units': 'metric'  # For Celsius
-                }
-            else:
-                raise ValueError("Either coordinates or city and country must be provided")
-            
-            response = requests.get(self.base_url, params=params)
-            response.raise_for_status()
-            
-            weather_data = response.json()
-            logger.info(f"Weather data: {weather_data}")
-
+            weather_data = self.provider.get_weather()
             self._backoff.update_backoff_state(True)
+            
             return {
-                'temperature': round(weather_data['main']['temp']),
-                'description': weather_data['weather'][0]['main'],
-                'humidity': weather_data['main']['humidity'],
+                'temperature': weather_data.current.temperature,
+                'description': weather_data.current.condition.description,
+                'humidity': weather_data.current.humidity,
                 'time': datetime.now().strftime('%H:%M'),
-                'icon': weather_data['weather'][0]['icon'],
-                'feels_like': round(weather_data['main']['feels_like']),
-                'pressure': weather_data['main']['pressure']
+                'icon': weather_data.current.condition.icon,
+                'feels_like': weather_data.current.feels_like,
+                'pressure': weather_data.current.pressure
             }
 
         except Exception as e:
@@ -151,133 +103,58 @@ class WeatherService:
             return self._get_error_weather_data(f"Retry at {self._backoff.get_retry_time_str()}")
 
         try:
-            # Get current weather with sunrise/sunset
-            if self.lat and self.lon:
-                params = {
-                    'lat': self.lat,
-                    'lon': self.lon,
-                    'appid': self.api_key,
-                    'units': 'metric'
-                }
-            else:
-                params = {
-                    'q': f"{self.city},{self.country}",
-                    'appid': self.api_key,
-                    'units': 'metric'
-                }
+            weather_data = self.provider.get_weather()
+            self._backoff.update_backoff_state(True)
             
-            response = requests.get(self.base_url, params=params)
-            response.raise_for_status()
-            current_data = response.json()
-            
+            # Convert provider data to the format expected by the display
             current = {
-                'temperature': round(current_data['main']['temp']),
-                'description': current_data['weather'][0]['main'],
-                'humidity': current_data['main']['humidity'],
+                'temperature': weather_data.current.temperature,
+                'description': weather_data.current.condition.description,
+                'humidity': weather_data.current.humidity,
                 'time': datetime.now().strftime('%H:%M'),
-                'icon': current_data['weather'][0]['icon'],
-                'sunrise': current_data['sys']['sunrise'],
-                'sunset': current_data['sys']['sunset'],
-                'pressure': current_data['main']['pressure'],
-                'feels_like': round(current_data['main']['feels_like']),
-                'temp_min': round(current_data['main']['temp_min']),
-                'temp_max': round(current_data['main']['temp_max'])
+                'icon': weather_data.current.condition.icon,
+                'sunrise': int(weather_data.sunrise.timestamp()),
+                'sunset': int(weather_data.sunset.timestamp()),
+                'pressure': weather_data.current.pressure,
+                'feels_like': weather_data.current.feels_like,
+                'temp_min': weather_data.daily_forecast[0].min_temp if weather_data.daily_forecast else None,
+                'temp_max': weather_data.daily_forecast[0].max_temp if weather_data.daily_forecast else None
             }
-
-            # Get air quality
-            air_quality = None
-            if self.lat and self.lon:
-                air_quality = self.get_air_quality()
             
-            # Get forecast data for next 3 days using 5 day/3 hour forecast API
-            if self.lat and self.lon:
-                params = {
-                    'lat': self.lat,
-                    'lon': self.lon,
-                    'appid': self.api_key,
-                    'units': 'metric'
-                }
-                url = self.forecast_url
-            else:
-                params = {
-                    'q': f"{self.city},{self.country}",
-                    'appid': self.api_key,
-                    'units': 'metric'
-                }
-                url = self.forecast_url
+            # Convert forecasts
+            forecasts = []
+            for forecast in weather_data.daily_forecast:
+                forecasts.append({
+                    'date': forecast.date.strftime('%Y-%m-%d'),
+                    'min': forecast.min_temp,
+                    'max': forecast.max_temp,
+                    'condition': forecast.condition.description,
+                    'icon': forecast.condition.icon
+                })
             
-            response = requests.get(url, params=params)
-            response.raise_for_status()
-            forecast_data = response.json()
-
-            try:
-                # Get forecasts for next 3 days
-                today = datetime.now().date()
-                forecasts = []
-
-                for day_offset in range(0, 4):  # Next 3 days
-                    target_date = today + timedelta(days=day_offset)
-                    
-                    day_forecasts = [
-                        item for item in forecast_data['list'] 
-                        if datetime.fromtimestamp(item['dt']).date() == target_date
-                    ]
-                    
-                    if day_forecasts:
-                        first_item_dt = datetime.fromtimestamp(day_forecasts[0]['dt'])
-                        last_item_dt = datetime.fromtimestamp(day_forecasts[-1]['dt'])
-                        logger.debug(f"Forecast range for {target_date}: from {first_item_dt.strftime('%H:%M')} to {last_item_dt.strftime('%H:%M')}. {len(day_forecasts)} items.")
-                        min_temp = min(float(item['main']['temp_min']) for item in day_forecasts)
-                        max_temp = max(float(item['main']['temp_max']) for item in day_forecasts)
-                        icon = day_forecasts[0]['weather'][0]['icon']
-                        # Get the most common weather condition for the day
-                        conditions = [item['weather'][0]['main'] for item in day_forecasts]
-                        condition = max(set(conditions), key=conditions.count)
-                        
-                        forecasts.append({
-                            'date': target_date.strftime('%Y-%m-%d'),
-                            'min': round(min_temp),
-                            'max': round(max_temp),
-                            'condition': condition,
-                            'icon': icon
-                        })
-                
-
-
-                # Get sunrise/sunset from current weather data
-                sunrise = datetime.fromtimestamp(current.get('sunrise', 0))
-                sunset = datetime.fromtimestamp(current.get('sunset', 0))
-                current_time = datetime.now()
-                
-                result = {
-                    'current': current,
-                    'humidity': current.get('humidity', '--'),
-                    'wind_speed': round(float(current_data.get('wind', {}).get('speed', 0)) * 3.6),  # Convert m/s to km/h
-                    'sunrise': datetime.fromtimestamp(current['sunrise']).strftime('%H:%M'),
-                    'sunset': datetime.fromtimestamp(current['sunset']).strftime('%H:%M'),
-                    'temp_min': current.get('temp_min', ''),
-                    'temp_max': current.get('temp_max', ''),
-                    'is_daytime': sunrise < current_time < sunset,
-                    'forecasts': forecasts,  # Add the 3-day forecast
-                    'tomorrow': {
-                        'min': forecasts[0]['min'] if forecasts else '',
-                        'icon': forecasts[0]['icon'] if forecasts else '',
-                        'max': forecasts[0]['max'] if forecasts else '',
-                        'air_quality': air_quality
-                    }
+            result = {
+                'current': current,
+                'humidity': current['humidity'],
+                'wind_speed': 0,  # TODO: Add wind speed to provider models
+                'sunrise': weather_data.sunrise.strftime('%H:%M'),
+                'sunset': weather_data.sunset.strftime('%H:%M'),
+                'temp_min': current['temp_min'],
+                'temp_max': current['temp_max'],
+                'is_daytime': weather_data.is_day,
+                'forecasts': forecasts,
+                'tomorrow': {
+                    'min': forecasts[0]['min'] if forecasts else '',
+                    'icon': forecasts[0]['icon'] if forecasts else '',
+                    'max': forecasts[0]['max'] if forecasts else '',
+                    'air_quality': {
+                        'aqi': weather_data.air_quality.aqi,
+                        'aqi_label': weather_data.air_quality.label,
+                        'components': weather_data.air_quality.components
+                    } if weather_data.air_quality else None
                 }
-                # logger.debug(f"Processed weather result: {result}")
-                return result
+            }
+            return result
                 
-            except KeyError as ke:
-                logger.error(f"Missing key in weather data: {ke}")
-                logger.error(f"Weather data structure: {forecast_data}")
-                raise
-                
-        except requests.exceptions.RequestException as e:
-            self._backoff.update_backoff_state(False)
-            logger.error(f"Network error fetching detailed weather: {e}")
-            return self._get_error_weather_data()
         except Exception as e:
             self._backoff.update_backoff_state(False)
             logger.error(f"Error fetching detailed weather: {e}", exc_info=True)

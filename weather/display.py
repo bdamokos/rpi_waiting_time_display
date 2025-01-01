@@ -24,6 +24,10 @@ from weather.models import TemperatureUnit
 
 logger = logging.getLogger(__name__)
 
+
+show_sunshine = os.getenv('show_sunshine_hours', 'true').lower() == 'true'
+show_precipitation = os.getenv('show_precipitation', 'true').lower() == 'true'
+
 @lru_cache(maxsize=1000)
 def load_svg_icon(svg_path: Path, size: Tuple[int, int], epd) -> Image.Image:
     """Load and resize an SVG icon.
@@ -352,9 +356,7 @@ def draw_weather_display(epd, weather_data, last_weather_data=None, set_base_ima
         logger.debug(f"Pasting icon at ({icon_x}, {icon_y})")
         Himage.paste(icon, (icon_x, icon_y))
 
-    # Middle row: Next sun event (moved left and smaller)
-    y_pos = 55
-
+    # Pre-calculate sun and moon info for positioning
     # Show either sunrise or sunset based on time of day
     if weather_data.is_day:
         sun_text = f" {weather_data.sunset.strftime('%H:%M')} "
@@ -377,15 +379,77 @@ def draw_weather_display(epd, weather_data, last_weather_data=None, set_base_ima
     sun_text_width = font_medium.getbbox(f"{sun_text}")[2] - font_medium.getbbox(f"{sun_text}")[0]
     moon_phase_text_width = font_medium.getbbox(f"{moon_phase_name}")[2] - font_medium.getbbox(f"{moon_phase_name}")[0]
 
+
+    # Intermediate row if show_sunshine or show_precipitation
+    
+
+    # Calculate positions
+    show_sunshine_or_precipitation_x_pos = MARGIN
+    show_sunshine_or_precipitation_y_pos = 50
+            
+    # Load weather icons if needed
+    sunshine_hours_icon = None
+    umbrella_icon = None
+            
+    if show_sunshine:
+        sunshine_duration = weather_data.daily_forecast[0].sunshine_duration
+        sunshine_hours = sunshine_duration.total_seconds() / 3600
+        sunshine_hours_icon = load_svg_icon(ICONS_DIR / "sun.svg", (20,20), epd)
+        logger.debug(f"Sunshine duration for today: {sunshine_duration} ({sunshine_hours:.1f}h)")
+            
+        if show_precipitation:
+            precipitation = weather_data.daily_forecast[0].precipitation_amount
+            umbrella_icon = load_svg_icon(ICONS_DIR / "umbrella.svg", (20,20), epd)
+            logger.debug(f"Precipitation for today: {precipitation:.1f}mm")
+        
+        # Calculate total width needed
+        total_width_needed = 0
+        if show_sunshine:
+            sun_text = f"{sunshine_hours:.1f}h"
+            sun_bbox = draw.textbbox((0, 0), sun_text, font=font_medium)
+            sun_width = sun_bbox[2] - sun_bbox[0] + 20 + 2  # icon + text + spacing
+            total_width_needed += sun_width + MARGIN
+            
+        if show_precipitation:
+            rain_text = f"{precipitation:.1f}mm"
+            rain_bbox = draw.textbbox((0, 0), rain_text, font=font_small)
+            rain_width = rain_bbox[2] - rain_bbox[0] + 20 + 2  # icon + text + spacing
+            total_width_needed += rain_width
+        available_width = Himage.width - (2 * MARGIN)
+            # Only draw if we have enough space
+        if total_width_needed < available_width:
+            # Draw sun icon and text if enabled
+            if show_sunshine and sunshine_hours_icon:
+                sun_text = f"{sunshine_hours:.1f}h"
+                sun_bbox = draw.textbbox((0, 0), sun_text, font=font_medium)
+                sun_width = sun_bbox[2] - sun_bbox[0]
+                
+                Himage.paste(sunshine_hours_icon, (show_sunshine_or_precipitation_x_pos, show_sunshine_or_precipitation_y_pos))
+                draw.text((show_sunshine_or_precipitation_x_pos + 20 + 2, show_sunshine_or_precipitation_y_pos), sun_text, font=font_medium, fill=BLACK)
+                sunrise_x_pos = show_sunshine_or_precipitation_x_pos
+                show_sunshine_or_precipitation_x_pos += MARGIN + sun_icon_width + sun_text_width  # Add spacing after sun info
+                
+            # Draw umbrella icon and text if enabled
+            if show_precipitation and umbrella_icon:
+                rain_text = f"{precipitation:.1f}mm"
+                Himage.paste(umbrella_icon, (show_sunshine_or_precipitation_x_pos - 4, show_sunshine_or_precipitation_y_pos))
+                draw.text((show_sunshine_or_precipitation_x_pos + 20 + 2, show_sunshine_or_precipitation_y_pos), rain_text, font=font_medium, fill=BLACK)
+                
+
+    # Middle row: Next sun event (moved left and smaller)
+    y_pos = 75 if show_sunshine or show_precipitation else 55
+
+
+
     # Draw sun info on left side with smaller font
     if sun_icon:
         Himage.paste(sun_icon, (MARGIN, y_pos))
-    draw.text((MARGIN + sun_icon_width, y_pos), sun_text, font=font_medium, fill=BLACK)
+    draw.text((sunrise_x_pos +20 + 2, y_pos), sun_text, font=font_medium, fill=BLACK)
     draw.text((MARGIN + sun_icon_width + sun_text_width, y_pos), moon_phase_emoji, font=font_emoji, fill=BLACK)
     draw.text((MARGIN + sun_icon_width + sun_text_width + moon_phase_width, y_pos), moon_phase_name, font=font_medium, fill=BLACK)
 
     # Bottom row: Three day forecast (today + next 2 days)
-    forecast_y_pos = 85
+    forecast_y_pos = 100 if show_sunshine or show_precipitation else 85
     logger.debug(f"Forecasts: {weather_data.daily_forecast}")
     all_forecasts = weather_data.daily_forecast[:3]  # Start with up to 3 days
     logger.debug(f"Forecasts: {all_forecasts}")

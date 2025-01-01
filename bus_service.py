@@ -1,6 +1,6 @@
 from PIL import Image, ImageDraw, ImageFont
 from datetime import datetime, timedelta
-import requests
+import niquests as requests
 import logging
 from typing import List, Dict, Tuple
 import os

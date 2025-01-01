@@ -816,8 +816,13 @@ def update_display(epd, weather_data: WeatherData = None, bus_data=None, error_m
         # Draw dithered box with line number
         colors_with_ratios = bus['colors']
         
-        line_text_length = len(bus['line'])
-        line_text_width = 35 + (line_text_length * 9)
+        line_text_bbox = draw.textbbox((0, 0), bus['line'], font=font_large)
+      
+        line_text_width = line_text_bbox[2] - line_text_bbox[0]
+
+        line_text_width =  max(min(35 + (line_text_width), line_text_width), 50)
+
+
         stop_name_bbox = draw_multicolor_dither_with_text(
             draw=draw,
             epd=epd,

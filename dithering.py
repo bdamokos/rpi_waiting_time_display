@@ -317,7 +317,7 @@ def draw_multicolor_dither_with_text(draw, epd, x, y, width, height, text, color
     # Add text on top
     text_bbox = draw.textbbox((0, 0), text, font=font)
     text_x = x + (width - (text_bbox[2] - text_bbox[0])) // 2
-    text_y = y + (height - (text_bbox[3] - text_bbox[1])) // 2
+    text_y = y + (height - (text_bbox[3] - text_bbox[1])) // 2 - 5
 
     # Use white text for dark backgrounds, black text for light backgrounds
     primary_color = max(colors_with_ratios, key=lambda x: x[1])[0]

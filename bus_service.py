@@ -47,7 +47,8 @@ def _get_stop_config():
             return env_vars[key]
     
     return None
-
+show_sunshine = os.getenv('show_sunshine_hours', 'true').lower() == 'true'
+show_precipitation = os.getenv('show_precipitation', 'true').lower() == 'true'
 Stop = _get_stop_config()
 Lines = os.getenv("Lines", "")  # Default to empty string instead of None
 bus_api_base_url = os.getenv("BUS_API_BASE_URL", "http://localhost:5001/")
@@ -662,7 +663,7 @@ def select_lines_to_display(bus_data: List[Dict]) -> List[Dict]:
 
 def update_display(epd, weather_data: WeatherData = None, bus_data=None, error_message=None, stop_name=None, first_run=False, set_base_image=False):
     """Update the display with new weather and waiting timesdata"""
-    MARGIN = 8
+    MARGIN = 6
 
     # Handle different color definitions
     BLACK = epd.BLACK if not epd.is_bw_display else 0
@@ -778,19 +779,20 @@ def update_display(epd, weather_data: WeatherData = None, bus_data=None, error_m
 
     HEADER_HEIGHT = stop_name_height + MARGIN
     BOX_HEIGHT = 40
+    if show_sunshine or show_precipitation and len(bus_data) > 1:
+        BOX_HEIGHT = 30
+        
+    else:
+        BOX_HEIGHT = 40
 
     # Select which lines to display if we have more than 2
     if bus_data and len(bus_data) > 2:
         bus_data = select_lines_to_display(bus_data)
-    
-    # Calculate layout
-    HEADER_HEIGHT = stop_name_height + MARGIN
-    BOX_HEIGHT = 40
 
     # Adjust spacing based on number of bus lines
     if len(bus_data) == 1:
         # Center the single bus line vertically
-        first_box_y = MARGIN + HEADER_HEIGHT + ((Himage.height - HEADER_HEIGHT - BOX_HEIGHT - stop_name_height) // 2)
+        first_box_y = HEADER_HEIGHT + ((Himage.height - HEADER_HEIGHT - BOX_HEIGHT - stop_name_height) // 2)
         logger.debug(f"First box y: {first_box_y}. Header height: {HEADER_HEIGHT}, box height: {BOX_HEIGHT}. Himage height: {Himage.height}")
         second_box_y = first_box_y  # Not used but kept for consistency
     else:  # len(bus_data) == 2 or empty
@@ -799,7 +801,7 @@ def update_display(epd, weather_data: WeatherData = None, bus_data=None, error_m
         SPACING = total_available_height // 3  # Divide remaining space into thirds
 
         first_box_y = HEADER_HEIGHT + SPACING
-        second_box_y = first_box_y + BOX_HEIGHT + SPACING
+        second_box_y = first_box_y + BOX_HEIGHT + SPACING//2 
 
         logger.debug(f"Two-line layout: Header height: {HEADER_HEIGHT}, Available height: {total_available_height}")
         logger.debug(f"Spacing: {SPACING}, First box y: {first_box_y}, Second box y: {second_box_y}")
@@ -939,26 +941,33 @@ def update_display(epd, weather_data: WeatherData = None, bus_data=None, error_m
     time_width = time_bbox[2] - time_bbox[0]
     time_height = time_bbox[3] - time_bbox[1]
 
+    # Calculate available space for weather info
+    available_width = Himage.width - time_width - (3 * MARGIN)  # Space left of the time
+    
+    # If weather data is available, draw sunshine hours and precipitation in the bottom left
+
+    logger.debug(f"Show sunshine hours setting: {show_sunshine}")
+    logger.debug(f"Show precipitation setting: {show_precipitation}")
+    
     # Adjust time position based on number of bus lines
     if len(bus_data) == 1:
         time_y = Himage.height - time_height - MARGIN
     else:
         time_y = Himage.height - time_height - MARGIN
 
+    footer_weather_font = font_small if len(bus_data) < 2 else font_tiny
+
+    
+
+    # Draw the time in bottom right
     draw.text((Himage.width - time_width - MARGIN, time_y),
-              current_time, font=font_small, fill=BLACK)
+              current_time, font=footer_weather_font, fill=BLACK)
     
-    # If weather data is available, draw sunshine hours and precipitation in the bottom left
-    show_sunshine = os.getenv('show_sunshine_hours', 'true').lower() == 'true'
-    show_precipitation = os.getenv('show_precipitation', 'true').lower() == 'true'
-    logger.info(f"Show sunshine hours setting: {show_sunshine}")
-    logger.info(f"Show precipitation setting: {show_precipitation}")
-    
-    if (weather_enabled and weather_data and weather_data.daily_forecast):
+    if  weather_enabled and weather_data and weather_data.daily_forecast:
         try:
             # Calculate positions
             x_pos = MARGIN
-            y_pos = Himage.height - time_height - MARGIN
+            y_pos = time_y  # Align with current time
             
             # Load weather icons if needed
             sun_icon = None
@@ -967,31 +976,49 @@ def update_display(epd, weather_data: WeatherData = None, bus_data=None, error_m
             if show_sunshine:
                 sunshine_duration = weather_data.daily_forecast[0].sunshine_duration
                 sunshine_hours = sunshine_duration.total_seconds() / 3600
-                sun_icon = load_svg_icon(ICONS_DIR / "sun.svg", (text_height, text_height + 3), epd)
-                logger.info(f"Sunshine duration for today: {sunshine_duration} ({sunshine_hours:.1f}h)")
+                sun_icon = load_svg_icon(ICONS_DIR / "sun.svg", (time_height, time_height), epd)
+                logger.debug(f"Sunshine duration for today: {sunshine_duration} ({sunshine_hours:.1f}h)")
             
             if show_precipitation:
                 precipitation = weather_data.daily_forecast[0].precipitation_amount
-                umbrella_icon = load_svg_icon(ICONS_DIR / "umbrella.svg", (text_height, text_height + 3), epd)
-                logger.info(f"Precipitation for today: {precipitation:.1f}mm")
+                umbrella_icon = load_svg_icon(ICONS_DIR / "umbrella.svg", (time_height, time_height), epd)
+                logger.debug(f"Precipitation for today: {precipitation:.1f}mm")
             
-            # Draw sun icon and text if enabled
-            if show_sunshine and sun_icon:
+            # Calculate total width needed
+            total_width_needed = 0
+            if show_sunshine:
                 sun_text = f"{sunshine_hours:.1f}h"
                 sun_bbox = draw.textbbox((0, 0), sun_text, font=font_small)
-                sun_width = sun_bbox[2] - sun_bbox[0]
-                
-                Himage.paste(sun_icon, (x_pos, y_pos))
-                draw.text((x_pos + text_height + 2, y_pos), sun_text, font=font_small, fill=BLACK)
-                x_pos += text_height + sun_width + 10  # Add spacing after sun info
+                sun_width = sun_bbox[2] - sun_bbox[0] + time_height + 2  # icon + text + spacing
+                total_width_needed += sun_width + MARGIN
             
-            # Draw umbrella icon and text if enabled
-            if show_precipitation and umbrella_icon:
+            if show_precipitation:
                 rain_text = f"{precipitation:.1f}mm"
-                Himage.paste(umbrella_icon, (x_pos, y_pos))
-                draw.text((x_pos + text_height + 2, y_pos), rain_text, font=font_small, fill=BLACK)
+                rain_bbox = draw.textbbox((0, 0), rain_text, font=font_small)
+                rain_width = rain_bbox[2] - rain_bbox[0] + time_height + 2  # icon + text + spacing
+                total_width_needed += rain_width
             
-            logger.info(f"Drew weather info with icons (sunshine: {show_sunshine}, precipitation: {show_precipitation})")
+            # Only draw if we have enough space
+            if total_width_needed < available_width:
+                # Draw sun icon and text if enabled
+                if show_sunshine and sun_icon:
+                    sun_text = f"{sunshine_hours:.1f}h"
+                    sun_bbox = draw.textbbox((0, 0), sun_text, font=footer_weather_font)
+                    sun_width = sun_bbox[2] - sun_bbox[0]
+                    
+                    Himage.paste(sun_icon, (x_pos, y_pos))
+                    draw.text((x_pos + time_height + 2, y_pos), sun_text, font=footer_weather_font, fill=BLACK)
+                    x_pos += time_height + sun_width + MARGIN + 5  # Add spacing after sun info
+                
+                # Draw umbrella icon and text if enabled
+                if show_precipitation and umbrella_icon:
+                    rain_text = f"{precipitation:.1f}mm"
+                    Himage.paste(umbrella_icon, (x_pos, y_pos))
+                    draw.text((x_pos + time_height + 2, y_pos), rain_text, font=footer_weather_font, fill=BLACK)
+            else:
+                logger.debug(f"Not enough horizontal space for weather info. Need {total_width_needed}px, have {available_width}px")
+            
+            logger.debug(f"Drew weather info with icons (sunshine: {show_sunshine}, precipitation: {show_precipitation})")
             
         except Exception as e:
             logger.warning(f"Could not display weather info: {e}")

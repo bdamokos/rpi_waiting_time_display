@@ -49,10 +49,10 @@ def _get_stop_config():
     return None
 
 Stop = _get_stop_config()
-Lines = os.getenv("Lines")
+Lines = os.getenv("Lines", "")  # Default to empty string instead of None
 bus_api_base_url = os.getenv("BUS_API_BASE_URL", "http://localhost:5001/")
 bus_provider = os.getenv("Provider", "stib")
-logging.debug(f"Bus provider: {bus_provider}. Base URL: {bus_api_base_url}. Monitoring lines: {Lines} and stop: {Stop}")
+logging.debug(f"Bus provider: {bus_provider}. Base URL: {bus_api_base_url}. Monitoring lines: {Lines if Lines else 'all'} and stop: {Stop}")
 
 DISPLAY_SCREEN_ROTATION = int(os.getenv('screen_rotation', 90))
 weather_enabled = True if os.getenv("weather_enabled", "true").lower() == "true" else False
@@ -76,9 +76,10 @@ def _parse_lines(lines_str: str) -> list:
     - List format: [59, 64]
     - String list format: ["59", "64"]
     - Preserves leading zeros: "0090" stays "0090"
+    - Empty string or None: returns empty list (all lines will be shown)
     """
     if not lines_str:
-        logger.error("No bus lines configured")
+        logger.info("No specific bus lines configured, will show all available lines")
         return []
     
     # Remove leading/trailing whitespace
@@ -307,7 +308,9 @@ class BusService:
                 return [], None, stop_name
 
             bus_times = []
-            for line in self.lines_of_interest:
+            # If no specific lines are configured, use all lines from the stop data
+            lines_to_process = self.lines_of_interest if self.lines_of_interest else stop_data.get("lines", {}).keys()
+            for line in lines_to_process:
                 logger.debug(f"Processing line {line}")
                 line_data = stop_data.get("lines", {}).get(line, {})
                 logger.debug(f"Line data found: {line_data}")
@@ -557,6 +560,106 @@ def draw_weather_info(draw, Himage, weather_data: WeatherData, font_paths, epd, 
         logger.error(f"Error drawing weather info: {e}")
         traceback.print_exc()
 
+def select_lines_to_display(bus_data: List[Dict]) -> List[Dict]:
+    """
+    Select which 2 lines to display based on earliest arrival times.
+    In case of ties (same arrival time), sort by line number.
+    Lines with no valid times (e.g. "End of service") are considered last.
+    
+    Priority order:
+    1. Negative arrival times (already late, closest to 0 first)
+    2. Buses at stop (0 minutes)
+    3. Positive arrival times
+    4. No valid times
+    """
+    def get_earliest_time(times: List[str]) -> tuple[float, bool]:
+        """
+        Extract the earliest numeric time from a list of time strings
+        Returns (time, has_zero) where time is the earliest non-zero time
+        and has_zero indicates if there's a bus at the stop
+        """
+        earliest = float('inf')
+        has_zero = False
+        has_negative = False
+        earliest_negative = float('-inf')
+        
+        for time_str in times:
+            # Skip empty times or special messages
+            if not time_str or time_str == "↓↓" or time_str == "⚡↓↓":
+                has_zero = True
+                continue
+                
+            # Extract numeric value from time string (e.g. "⚡3'" -> 3)
+            # Keep the minus sign for negative times
+            digits = ''.join(c for c in time_str if c.isdigit() or c == '-')
+            if digits:
+                try:
+                    time = int(digits)
+                    if time == 0:
+                        has_zero = True
+                    elif time < 0:
+                        has_negative = True
+                        earliest_negative = max(earliest_negative, time)  # Get the closest to 0
+                    else:
+                        earliest = min(earliest, time)
+                except ValueError:
+                    continue
+        
+        # If we have a negative time, return that
+        if has_negative:
+            return (earliest_negative, False)
+        # Otherwise return the earliest positive time
+        return (earliest, has_zero)
+
+    # Create list of lines with their earliest times
+    lines_with_times = []
+    configured_lines = os.getenv("Lines", "")
+    lines_of_interest = _parse_lines(configured_lines) if configured_lines else []
+    
+    for bus in bus_data:
+        # If we have configured lines, only process those
+        if lines_of_interest and bus['line'] not in lines_of_interest:
+            continue
+            
+        earliest, has_zero = get_earliest_time(bus['times'])
+        lines_with_times.append({
+            'line': bus['line'],
+            'earliest_time': earliest,
+            'has_zero': has_zero,
+            'original_data': bus
+        })
+    
+    # Sort by:
+    # 1. Negative times first (closest to 0)
+    # 2. Has zero (True comes before False)
+    # 3. Positive times (smaller first)
+    # 4. Line number (for consistent tie-breaking)
+    def sort_key(x):
+        time = x['earliest_time']
+        return (
+            time >= 0,  # Negative times first
+            not x['has_zero'],  # Then zeros
+            abs(time) if time != float('inf') else float('inf'),  # Then by absolute time
+            x['line']  # Then by line number
+        )
+    
+    lines_with_times.sort(key=sort_key)
+    
+    # Take first two lines
+    selected = lines_with_times[:2]
+    
+    # Log selection results
+    if len(bus_data) > 2:
+        selected_lines = [s['line'] for s in selected]
+        dropped_lines = [bus['line'] for bus in bus_data if bus['line'] not in selected_lines]
+        logger.info(f"Selected lines {selected_lines} from {len(bus_data)} available lines")
+        logger.debug(f"Dropped lines: {dropped_lines}")
+        if any(s['earliest_time'] == float('inf') and not s['has_zero'] for s in selected):
+            logger.warning("Selected a line with no valid times - this might not be optimal")
+    
+    # Return original bus data for selected lines
+    return [line['original_data'] for line in selected]
+
 def update_display(epd, weather_data: WeatherData = None, bus_data=None, error_message=None, stop_name=None, first_run=False, set_base_image=False):
     """Update the display with new weather and waiting timesdata"""
     MARGIN = 8
@@ -676,13 +779,21 @@ def update_display(epd, weather_data: WeatherData = None, bus_data=None, error_m
     HEADER_HEIGHT = stop_name_height + MARGIN
     BOX_HEIGHT = 40
 
+    # Select which lines to display if we have more than 2
+    if bus_data and len(bus_data) > 2:
+        bus_data = select_lines_to_display(bus_data)
+    
+    # Calculate layout
+    HEADER_HEIGHT = stop_name_height + MARGIN
+    BOX_HEIGHT = 40
+
     # Adjust spacing based on number of bus lines
     if len(bus_data) == 1:
         # Center the single bus line vertically
         first_box_y = MARGIN + HEADER_HEIGHT + ((Himage.height - HEADER_HEIGHT - BOX_HEIGHT - stop_name_height) // 2)
         logger.debug(f"First box y: {first_box_y}. Header height: {HEADER_HEIGHT}, box height: {BOX_HEIGHT}. Himage height: {Himage.height}")
         second_box_y = first_box_y  # Not used but kept for consistency
-    elif len(bus_data) == 2:
+    else:  # len(bus_data) == 2 or empty
         # Calculate spacing for two lines to be evenly distributed
         total_available_height = Himage.height - HEADER_HEIGHT - (2 * BOX_HEIGHT)
         SPACING = total_available_height // 3  # Divide remaining space into thirds
@@ -692,13 +803,6 @@ def update_display(epd, weather_data: WeatherData = None, bus_data=None, error_m
 
         logger.debug(f"Two-line layout: Header height: {HEADER_HEIGHT}, Available height: {total_available_height}")
         logger.debug(f"Spacing: {SPACING}, First box y: {first_box_y}, Second box y: {second_box_y}")
-    else:
-        logger.error(f"Unexpected number of bus lines: {len(bus_data)}. Display currently supports up to 2 lines from the same provider and stop.")
-        draw.text((MARGIN, MARGIN), "Error, see logs", font=font_large, fill=RED)
-        return
-
-
-
 
     logger.debug(f"Bus data: {bus_data}")
     # Filter out bus data with no times or messages

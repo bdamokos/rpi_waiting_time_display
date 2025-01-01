@@ -270,6 +270,7 @@ def aeroapi_get_usage():
     current_time = time.time()
     last_real_data_time = None
     last_real_data_index = -1
+    first_day_of_month = time.strftime("%Y-%m-01", time.gmtime())
 
     # Find the last recorded real usage data point
     for index, entry in enumerate(reversed(aeroapi_usage_data)):
@@ -280,7 +281,7 @@ def aeroapi_get_usage():
 
     # Check if we need to fetch fresh usage data
     if last_real_data_time is None or (current_time - last_real_data_time >= 3600):
-        usage_data = aeroapi_get_data("account", "usage")
+        usage_data = aeroapi_get_data("account", "usage", f"start={first_day_of_month}")
         if usage_data is not None:
             total_cost = usage_data.get("total_cost", 0)
             # Remove old data before the last real usage data
@@ -539,18 +540,18 @@ def update_display_with_flights(epd, flights, set_base_image=False):
     draw.text((width - 60 - MARGIN, MARGIN), flight_number, fill='black', font=flight_number_font_size)
 
     # Draw horizontal line under header
-    if aeroapi_enabled:
+    if aeroapi_enabled and (flight_details.get('origin_code', '') or flight_details.get('destination_code', '')):
         draw.line([(MARGIN, 22), (width - MARGIN, 22)], fill='black', width=1)
 
     # Main section: Origin -> Distance -> Destination
     y_pos = 16  # Moved up even further
-    distance_font_size = font_small if aeroapi_enabled else font_medium
+    distance_font_size = font_small if (aeroapi_enabled and (flight_details.get('origin_code', '') or flight_details.get('destination_code', ''))) else font_medium
     # Draw distance at the top
     distance = f"{flight_details['last_distance']:.1f} km"
     distance_bbox = draw.textbbox((0, 0), distance, font=distance_font_size)
     distance_width = distance_bbox[2] - distance_bbox[0]
     distance_x = (width - distance_width) // 2
-    if aeroapi_enabled:
+    if aeroapi_enabled and (flight_details.get('origin_code', '') or flight_details.get('destination_code', '')):
         draw.text((distance_x, MARGIN), distance, fill='black', font=distance_font_size)
     else:
         draw.text((distance_x, height//2 - distance_font_size.size//2-5), distance, fill='black', font=distance_font_size)

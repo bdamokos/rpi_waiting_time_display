@@ -5,7 +5,7 @@ A Raspberry Pi project that displays bus waiting times using an e-Paper display 
 
 ## Features
 - ☀️ Weather conditions and temperature
-- 🚌 Next bus arrival times for configured lines (STIB/MIVB, DeLijn, BKK)
+- 🚌 Next bus arrival times for configured lines (STIB/MIVB, DeLijn, SNCB/MIVB, BKK)
 - 📡 Easy WiFi setup via QR code (needs further testing) or by plugging the display to your computer and using the setup page on the [website](https://bdamokos.github.io/rpi_waiting_time_display/setup/)
 - ✈️ Optional: Overhead flight tracking
 - 🛰️ Optional: ISS tracking when visible

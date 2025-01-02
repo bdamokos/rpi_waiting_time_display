@@ -404,9 +404,10 @@ def draw_weather_display(epd, weather_data, last_weather_data=None, set_base_ima
         
         # Calculate total width needed
         total_width_needed = 0
+        sunrise_x_pos = 40 # Declare a default position for the sunrise to avoid errors - might need to be adjusted
         if show_sunshine:
-            sun_text = f"{sunshine_hours:.1f}h"
-            sun_bbox = draw.textbbox((0, 0), sun_text, font=font_medium)
+            sunshine_text = f"{sunshine_hours:.1f}h"
+            sun_bbox = draw.textbbox((0, 0), sunshine_text, font=font_medium)
             sun_width = sun_bbox[2] - sun_bbox[0] + 20 + 2  # icon + text + spacing
             total_width_needed += sun_width + MARGIN
             
@@ -420,12 +421,12 @@ def draw_weather_display(epd, weather_data, last_weather_data=None, set_base_ima
         if total_width_needed < available_width:
             # Draw sun icon and text if enabled
             if show_sunshine and sunshine_hours_icon:
-                sun_text = f"{sunshine_hours:.1f}h"
-                sun_bbox = draw.textbbox((0, 0), sun_text, font=font_medium)
-                sun_width = sun_bbox[2] - sun_bbox[0]
+                sunshine_hours_text = f"{sunshine_hours:.1f}h"
+                sunshine_hours_bbox = draw.textbbox((0, 0), sunshine_hours_text, font=font_medium)
+                sunshine_hours_width = sunshine_hours_bbox[2] - sunshine_hours_bbox[0]
                 
                 Himage.paste(sunshine_hours_icon, (show_sunshine_or_precipitation_x_pos, show_sunshine_or_precipitation_y_pos))
-                draw.text((show_sunshine_or_precipitation_x_pos + 20 + 2, show_sunshine_or_precipitation_y_pos), sun_text, font=font_medium, fill=BLACK)
+                draw.text((show_sunshine_or_precipitation_x_pos + 20 + 2, show_sunshine_or_precipitation_y_pos+2), sunshine_hours_text, font=font_medium, fill=BLACK)
                 sunrise_x_pos = show_sunshine_or_precipitation_x_pos
                 show_sunshine_or_precipitation_x_pos += MARGIN + sun_icon_width + sun_text_width  # Add spacing after sun info
                 
@@ -433,7 +434,7 @@ def draw_weather_display(epd, weather_data, last_weather_data=None, set_base_ima
             if show_precipitation and umbrella_icon:
                 rain_text = f"{precipitation:.1f}mm"
                 Himage.paste(umbrella_icon, (show_sunshine_or_precipitation_x_pos - 4, show_sunshine_or_precipitation_y_pos))
-                draw.text((show_sunshine_or_precipitation_x_pos + 20 + 2, show_sunshine_or_precipitation_y_pos), rain_text, font=font_medium, fill=BLACK)
+                draw.text((show_sunshine_or_precipitation_x_pos + 20 + 2, show_sunshine_or_precipitation_y_pos+2), rain_text, font=font_medium, fill=BLACK)
                 
 
     # Middle row: Next sun event (moved left and smaller)
@@ -444,7 +445,7 @@ def draw_weather_display(epd, weather_data, last_weather_data=None, set_base_ima
     # Draw sun info on left side with smaller font
     if sun_icon:
         Himage.paste(sun_icon, (MARGIN, y_pos))
-    draw.text((sunrise_x_pos +20 + 2, y_pos), sun_text, font=font_medium, fill=BLACK)
+    draw.text((sunrise_x_pos +16, y_pos+2), sun_text, font=font_medium, fill=BLACK)
     draw.text((MARGIN + sun_icon_width + sun_text_width, y_pos), moon_phase_emoji, font=font_emoji, fill=BLACK)
     draw.text((MARGIN + sun_icon_width + sun_text_width + moon_phase_width, y_pos), moon_phase_name, font=font_medium, fill=BLACK)
 

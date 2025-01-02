@@ -428,7 +428,7 @@ def display_iss_info(epd, iss_info, satellite_name="ISS (ZARYA)"):
     # Line 6: Visible until
     if 'visible_until_human' in iss_info and iss_info['visible_until_human'] is not None:
         visible_text = f"Visible until: {iss_info['visible_until_human']}"
-        draw.text((text_start_x, 10 + line_height * 5), visible_text, font=font_medium, fill= "black")
+        draw.text((text_start_x-50, 10 + line_height * 5), visible_text, font=font_medium, fill= "black")
 
     # Rotate and display the image
    

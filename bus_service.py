@@ -322,9 +322,18 @@ class BusService:
 
                 # Get line display name from metadata if available
                 display_line = line  # Default to route ID
-                if '_metadata' in line_data and 'route_short_name' in line_data['_metadata']:
-                    display_line = line_data['_metadata']['route_short_name']
-                    logger.debug(f"Using display line number {display_line} for route {line}")
+                if '_metadata' in line_data:
+                    metadata = line_data['_metadata']
+                    if isinstance(metadata, list) and len(metadata) > 0:
+                        # New format: array of metadata objects
+                        metadata = metadata[0]  # Take first metadata entry
+                        if 'route_short_name' in metadata:
+                            display_line = metadata['route_short_name']
+                            logger.debug(f"Using display line number {display_line} for route {line} (array format)")
+                    elif isinstance(metadata, dict) and 'route_short_name' in metadata:
+                        # Old format: direct metadata object
+                        display_line = metadata['route_short_name']
+                        logger.debug(f"Using display line number {display_line} for route {line} (direct format)")
 
                 # Process times and messages from all destinations
                 all_times = []

@@ -1,0 +1,25 @@
+{
+    "providers": [
+        {
+            "name": "Budapesti Közlekedési Központ",
+            "country": "Hungary",
+            "realtime_provider": "bkk",
+            "schedule_provider": "mdb-990",
+            "enabled": true
+        },
+        {
+            "name": "STIB/MIVB",
+            "country": "Belgium",
+            "realtime_provider": "stib",
+            "schedule_provider": "mdb-1088",
+            "enabled": true
+        },
+        {
+            "name": "De Lijn",
+            "country": "Belgium",
+            "realtime_provider": "delijn",
+            "schedule_provider": "mdb-684",
+            "enabled": true
+        }
+    ]
+} 

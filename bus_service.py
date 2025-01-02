@@ -18,6 +18,10 @@ from weather.display import load_svg_icon
 from weather.models import WeatherData, TemperatureUnit
 from weather.icons import ICONS_DIR
 import traceback
+import json
+from pathlib import Path
+import threading
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -128,20 +132,60 @@ class BusService:
     def __init__(self):
         self.base_url = self._resolve_base_url()
         self.provider = os.getenv("Provider", "stib")
+        self.current_provider = self.provider  # Keep track of current active provider
+        self.provider_config = self._load_provider_config()
         logger.debug(f"Bus provider: {self.provider}. Resolved Base URL: {self.base_url}")
-        self.api_url = f"{self.base_url}/api/{self.provider}/waiting_times?stop_id={Stop}&download=true"
-        logger.debug(f"API URL: {self.api_url}")
-        self.colors_url = f"{self.base_url}/api/{self.provider}/colors"
-        logger.debug(f"Colors URL: {self.colors_url}")
+        self._update_api_urls()
         self.stop_id = Stop
         logger.debug(f"Stop ID: {self.stop_id}")
         self.lines_of_interest = _parse_lines(Lines)
         logger.info(f"Monitoring bus lines: {self.lines_of_interest}")
-        # Initialize backoff with 3 minutes initial and 1 hour max
-        self._backoff = ExponentialBackoff(initial_backoff=180, max_backoff=3600)
+        # Initialize separate backoffs for RT and fallback
+        self._rt_backoff = ExponentialBackoff(initial_backoff=180, max_backoff=3600)
+        self._fallback_backoff = ExponentialBackoff(initial_backoff=180, max_backoff=3600)
         self._stop_event = Event()
         self.epd = None  # Will be set later
         
+        # Start pre-warming thread for schedule provider
+        self._start_schedule_prewarm()
+        
+    def _start_schedule_prewarm(self):
+        """Start a thread to pre-warm the schedule provider after a delay"""
+        # If our main provider is a schedule provider, no need to pre-warm
+        if self._get_provider_type(self.provider) == 'schedule':
+            logger.info(f"Provider {self.provider} is already our main schedule provider, skipping pre-warm")
+            return
+
+        # Get fallback provider if we're a realtime provider
+        fallback = self._get_fallback_provider()
+        if not fallback:
+            logger.warning("No schedule provider configured, skipping pre-warm")
+            return
+            
+        def prewarm_task():
+            # Wait for 1 minute before starting pre-warm
+            time.sleep(60)
+            try:
+                logger.info(f"Pre-warming schedule provider {fallback}")
+                # Use the colors endpoint as a trigger for download
+                response = requests.get(
+                    f"{self.base_url}/api/{fallback}/colors/1",
+                    params={"download": "true"},
+                    timeout=300  # 5 minute timeout for initial load
+                )
+                if response.status_code == 200:
+                    logger.info(f"Successfully pre-warmed schedule provider {fallback}")
+                else:
+                    logger.warning(f"Pre-warm returned status {response.status_code}: {response.text}")
+            except Exception as e:
+                logger.warning(f"Failed to pre-warm schedule provider: {e}")
+        
+        # Start pre-warming in background thread
+        thread = threading.Thread(target=prewarm_task, name="SchedulePrewarm")
+        thread.daemon = True  # Make thread exit when main program exits
+        thread.start()
+        logger.debug("Started schedule pre-warm thread")
+
     def _resolve_base_url(self) -> str:
         """Resolve the base URL, handling .local domains"""
         base_url = bus_api_base_url.lower()
@@ -264,25 +308,148 @@ class BusService:
         """Stop the bus service"""
         self._stop_event.set()
 
-    def get_waiting_times(self) -> tuple[List[Dict], str, str]:
-        """Fetch and process waiting times for our bus lines"""
-        # Check if we should retry based on backoff
-        if not self._backoff.should_retry():
-            return self._get_error_data(), f"Backing off until {self._backoff.get_retry_time_str()}", ""
+    def _load_provider_config(self) -> dict:
+        """Load provider configuration from JSON file"""
+        try:
+            config_path = Path(__file__).parent / 'providers.json'
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+            return config
+        except Exception as e:
+            logger.error(f"Failed to load provider config: {e}")
+            return {"providers": []}
+            
+    def _get_provider_type(self, provider_id: str) -> str:
+        """
+        Determine if a provider is realtime, schedule-only, or unknown
+        Returns: 'realtime', 'schedule', or 'unknown'
+        """
+        try:
+            for provider in self.provider_config.get('providers', []):
+                if provider.get('realtime_provider') == provider_id:
+                    return 'realtime'
+                if provider.get('schedule_provider') == provider_id:
+                    return 'schedule'
+            return 'unknown'
+        except Exception as e:
+            logger.error(f"Error determining provider type: {e}")
+            return 'unknown'
 
-        # First check API health
-        if not self.get_api_health():
-            self._backoff.update_backoff_state(False)
-            logger.error("API not available")
-            return self._get_error_data(), "API not available", ""
+    def _get_fallback_provider(self) -> str:
+        """Get fallback provider for current provider"""
+        try:
+            # If current provider is already a schedule provider or unknown, no fallback
+            provider_type = self._get_provider_type(self.provider)
+            if provider_type in ['schedule', 'unknown']:
+                logger.info(f"Provider {self.provider} is {provider_type}, no fallback needed")
+                return None
+
+            # Look for fallback for realtime provider
+            for provider in self.provider_config.get('providers', []):
+                if provider.get('realtime_provider') == self.provider:
+                    return provider.get('schedule_provider')
+            return None
+        except Exception as e:
+            logger.error(f"Error getting fallback provider: {e}")
+            return None
+            
+    def _update_api_urls(self):
+        """Update API URLs based on current provider"""
+        self.api_url = f"{self.base_url}/api/{self.current_provider}/waiting_times?stop_id={Stop}&download=true"
+        self.colors_url = f"{self.base_url}/api/{self.current_provider}/colors"
+        logger.debug(f"Updated URLs - API: {self.api_url}, Colors: {self.colors_url}")
+
+    def _try_realtime_provider(self) -> tuple[bool, dict]:
+        """Try to fetch data from realtime provider"""
+        # Only try RT if we're using a known RT provider
+        if self._get_provider_type(self.provider) != 'realtime':
+            logger.debug(f"Provider {self.provider} is not a realtime provider, skipping RT check")
+            return False, None
+
+        if not self._rt_backoff.should_retry():
+            return False, None
 
         try:
-            response = requests.get(self.api_url, timeout=120)  # 120 second timeout
+            # Temporarily switch URLs to RT provider
+            original_urls = (self.api_url, self.colors_url)
+            self.current_provider = self.provider
+            self._update_api_urls()
+
+            response = requests.get(self.api_url, timeout=120)
+            data = response.json()
+            
+            # Update backoff state
+            self._rt_backoff.update_backoff_state(True)
+            return True, data
+        except Exception as e:
+            logger.debug(f"Realtime provider check failed: {e}")
+            self._rt_backoff.update_backoff_state(False)
+            # Restore URLs if we're staying with fallback
+            self.api_url, self.colors_url = original_urls
+            return False, None
+
+    def get_waiting_times(self) -> tuple[List[Dict], str, str]:
+        """Fetch and process waiting times for our bus lines"""
+        # Only check RT if we started with a RT provider
+        if self.current_provider != self.provider and self._get_provider_type(self.provider) == 'realtime':
+            success, rt_data = self._try_realtime_provider()
+            if success:
+                logger.info("Successfully switched back to realtime provider")
+                return self._process_response_data(rt_data)
+
+        # Get current backoff based on provider type
+        provider_type = self._get_provider_type(self.current_provider)
+        current_backoff = self._rt_backoff if provider_type == 'realtime' else self._fallback_backoff
+
+        if not current_backoff.should_retry():
+            # Only try fallback if we're a RT provider
+            if provider_type == 'realtime':
+                fallback = self._get_fallback_provider()
+                if fallback:
+                    logger.info(f"Switching to fallback provider: {fallback}")
+                    self.current_provider = fallback
+                    self._update_api_urls()
+                    # Only retry fallback if it's not in backoff
+                    if self._fallback_backoff.should_retry():
+                        return self.get_waiting_times()
+            return self._get_error_data(), f"Backing off until {current_backoff.get_retry_time_str()}", ""
+
+        try:
+            response = requests.get(self.api_url, timeout=120)
             logger.debug(f"API response time: {response.elapsed.total_seconds():.3f} seconds")
             response.raise_for_status()
             data = response.json()
-            logger.debug(f"API response: {data}")
+            
+            # Update appropriate backoff on success
+            if provider_type == 'realtime':
+                self._rt_backoff.update_backoff_state(True)
+            else:
+                self._fallback_backoff.update_backoff_state(True)
+            
+            return self._process_response_data(data)
 
+        except Exception as e:
+            # Update appropriate backoff on failure
+            if provider_type == 'realtime':
+                self._rt_backoff.update_backoff_state(False)
+                fallback = self._get_fallback_provider()
+                if fallback and self._fallback_backoff.should_retry():
+                    logger.info(f"Error with realtime provider, switching to fallback: {fallback}")
+                    self.current_provider = fallback
+                    self._update_api_urls()
+                    return self.get_waiting_times()
+            else:
+                self._fallback_backoff.update_backoff_state(False)
+            
+            logger.error(f"Error fetching bus times: {e}", exc_info=True)
+            return self._get_error_data(), f"Error: {str(e)}", ""
+
+    def _process_response_data(self, data: dict) -> tuple[List[Dict], str, str]:
+        """Process the response data into waiting times format"""
+        try:
+            # Get provider type once at the start
+            provider_type = self._get_provider_type(self.current_provider)
+            
             stops_data_location_keys = ['stops_data', 'stops']
             for key in stops_data_location_keys:
                 if key in data:
@@ -467,14 +634,32 @@ class BusService:
                     })
 
             # Update backoff state on success
-            self._backoff.update_backoff_state(True)
+            if provider_type == 'realtime':
+                self._rt_backoff.update_backoff_state(True)
+            else:
+                self._fallback_backoff.update_backoff_state(True)
             return bus_times, None, stop_name
 
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
-            self._backoff.update_backoff_state(False)
+            if provider_type == 'realtime':
+                self._rt_backoff.update_backoff_state(False)
+            else:
+                self._fallback_backoff.update_backoff_state(False)
             return self._get_error_data(), "Connection failed", ""
         except Exception as e:
-            self._backoff.update_backoff_state(False)
+            if provider_type == 'realtime':
+                self._rt_backoff.update_backoff_state(False)
+            else:
+                self._fallback_backoff.update_backoff_state(False)
+            # If using realtime provider and failed, try fallback
+            if self.current_provider == self.provider:
+                fallback = self._get_fallback_provider()
+                if fallback:
+                    logger.info(f"Error with realtime provider, switching to fallback: {fallback}")
+                    self.current_provider = fallback
+                    self._update_api_urls()
+                    self._fallback_backoff.reset()  # Reset backoff for fallback provider
+                    return self.get_waiting_times()  # Retry with fallback
             logger.error(f"Error fetching bus times: {e}", exc_info=True)
             return self._get_error_data(), f"Error: {str(e)}", ""
 

@@ -1,14 +1,9 @@
-theme: jekyll-theme-primer
 title: Waiting Times Pi Display
 description: A Raspberry Pi project that displays public transport waiting times, weather and overhead flights (and space stations) using an e-Paper display
 
 # Theme configuration
+theme: minima
 show_downloads: false        # Hide the download buttons
-github:
-  is_project_page: true     # Show the "View on GitHub" button
-  repository_url: https://github.com/bdamokos/rpi_waiting_time_display
-  owner_url: https://github.com/bdamokos
-  owner_name: bdamokos
 
 # Site configuration
 markdown: kramdown          # Markdown processor
@@ -19,3 +14,14 @@ kramdown:                   # Markdown options
 # Disable features we don't need
 google_analytics: false     # Disable analytics
 show_header: true          # Show the header section
+
+# Exclude from processing
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor/bundle/
+  - vendor/cache/
+  - vendor/gems/
+  - vendor/ruby/
+  - setup/js/providers.json

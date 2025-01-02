@@ -268,7 +268,65 @@ OPENWEATHER_API_KEY=your_api_key</pre>
                 <p>Note: The application is designed to stay within the free tier limits unless specifically authorized.</p>
             </div>
         </div>
+        <div class="api-section">
+            <h2>🚌 Public Transport APIs</h2>
+            <p>The application supports multiple public transport providers, with automatic fallback to static schedule data when realtime information is unavailable.</p>
+            <table class="comparison-table">
+                <tr>
+                    <th>Feature</th>
+                    <th>Realtime Data</th>
+                    <th>Schedule Fallback</th>
+                </tr>
+                <tr>
+                    <td>Arrival Times</td>
+                    <td><span class="feature-status available">Live updates</span></td>
+                    <td><span class="feature-status available">Static schedule</span></td>
+                </tr>
+                <tr>
+                    <td>Time Indicators</td>
+                    <td><span class="feature-status available">⚡ for realtime</span></td>
+                    <td><span class="feature-status available">🕒 when mixed</span></td>
+                </tr>
+                <tr>
+                    <td>Update Frequency</td>
+                    <td><span class="feature-status available">Usually every 30 seconds</span></td>
+                    <td><span class="feature-status available">Twice a week</span></td>
+                </tr>
+                <tr>
+                    <td>Data Source</td>
+                    <td><span class="feature-status available">Provider API</span></td>
+                    <td><span class="feature-status available">GTFS data</span></td>
+                </tr>
+            </table>
+            <div class="api-info">
+                <h3>Supported realtime providers</h3>
+                <ul>
+                    <li>Belgium:
+                        <ul>
+                            <li>STIB/MIVB (Brussels) - RT: stib, Schedule: mdb-1088</li>
+                            <li>De Lijn (Flanders) - RT: delijn, Schedule: mdb-684</li>
+                        </ul>
+                    </li>
+                    <li>Hungary:
+                        <ul>
+                            <li>BKK (Budapest) - RT: bkk, Schedule: mdb-990</li>
+                        </ul>
+                    </li>
+                </ul>
+                <h3>Supported schedule providers</h3>
+                <p>All the providers listed above also have a schedule-only mode, which is used when realtime data is not available. For public transport companies where the processing of realtime data is not programmed in, you can use the schedule-only mode, as long as you can find the company in the <a href="https://mobilitydatabase.org/" target="_blank"></a>Mobility Database</a>.</p>
 
+
+                <h3>Fallback mechanism</h3>
+                <p>The system automatically handles fallback between realtime and schedule data:</p>
+                <ul>
+                    <li>If realtime data is temporarily unavailable (e.g., during system startup or API issues), it switches to schedule data</li>
+                    <li>Periodically checks if realtime data becomes available again</li>
+                    <li>Uses exponential backoff to prevent overwhelming the system during outages</li>
+                    <li>Visual indicators (⚡/🕒) show data source when mixing realtime and scheduled times</li>
+                </ul>
+            </div>
+        </div>
         <div class="api-section">
             <h2>🔧 Technical Details: APIs Used</h2>
             
@@ -353,6 +411,8 @@ OPENWEATHER_API_KEY=your_api_key</pre>
                 </ul>
             </div>
         </div>
+
+      
     </div>
 </body>
 </html> 

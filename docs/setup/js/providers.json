@@ -20,6 +20,13 @@
             "realtime_provider": "delijn",
             "schedule_provider": "mdb-684",
             "enabled": true
+        },
+        {
+            "name": "SNCB",
+            "country": "Belgium",
+            "realtime_provider": "sncb",
+            "schedule_provider": "mdb-1859",
+            "enabled": true
         }
     ]
 } 

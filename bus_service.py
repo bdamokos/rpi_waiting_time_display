@@ -311,7 +311,7 @@ class BusService:
     def _load_provider_config(self) -> dict:
         """Load provider configuration from JSON file"""
         try:
-            config_path = Path(__file__).parent / 'providers.json'
+            config_path = Path(__file__).parent / 'docs/setup/js/providers.json'
             with open(config_path, 'r') as f:
                 config = json.load(f)
             return config

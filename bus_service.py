@@ -129,7 +129,7 @@ class BusService:
         self.base_url = self._resolve_base_url()
         self.provider = os.getenv("Provider", "stib")
         logger.debug(f"Bus provider: {self.provider}. Resolved Base URL: {self.base_url}")
-        self.api_url = f"{self.base_url}/api/{self.provider}/waiting_times?stop_id={Stop}&download=true"
+        self.api_url = f"{self.base_url}/api/{self.provider}/waiting_times?stop_id={Stop}&download=true&limit=4"
         logger.debug(f"API URL: {self.api_url}")
         self.colors_url = f"{self.base_url}/api/{self.provider}/colors"
         logger.debug(f"Colors URL: {self.colors_url}")
@@ -340,6 +340,18 @@ class BusService:
                 minutes_source = None
                 minutes_keys = ['minutes', 'scheduled_minutes', 'realtime_minutes']
                 
+                # Check if we have any realtime data
+                has_realtime = False
+                has_non_scheduled = False
+                for destination, times in line_data.items():
+                    if destination == '_metadata':
+                        continue
+                    for bus in times:
+                        if 'realtime_minutes' in bus:
+                            has_realtime = True
+                        if 'minutes' in bus or 'realtime_minutes' in bus:
+                            has_non_scheduled = True
+
                 for destination, times in line_data.items():
                     if destination == '_metadata':  # Skip metadata
                         continue
@@ -359,7 +371,8 @@ class BusService:
                         elif 'scheduled_minutes' in minutes_values:
                             minutes_source = 'scheduled_minutes'
                             minutes = minutes_values['scheduled_minutes']
-                            minutes_emoji = '🕒'
+                            # Only show clock if we have a mix of scheduled and realtime/regular times
+                            minutes_emoji = '🕒' if has_non_scheduled else ''
                         elif 'minutes' in minutes_values:
                             minutes_source = 'minutes'
                             minutes = minutes_values['minutes']

@@ -24,4 +24,3 @@ exclude:
   - vendor/cache/
   - vendor/gems/
   - vendor/ruby/
-  - setup/js/providers.json

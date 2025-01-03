@@ -381,9 +381,21 @@ class BusService:
             # Update backoff state
             self._rt_backoff.update_backoff_state(True)
             return True, data
+        except requests.exceptions.ConnectionError as e:
+            logger.debug(f"Realtime provider connection error: {e}")
+            self._rt_backoff.update_backoff_state(False, error_type='connection')
+            # Restore URLs if we're staying with fallback
+            self.api_url, self.colors_url = original_urls
+            return False, None
+        except requests.exceptions.Timeout as e:
+            logger.debug(f"Realtime provider timeout: {e}")
+            self._rt_backoff.update_backoff_state(False, error_type='timeout')
+            # Restore URLs if we're staying with fallback
+            self.api_url, self.colors_url = original_urls
+            return False, None
         except Exception as e:
-            logger.debug(f"Realtime provider check failed: {e}")
-            self._rt_backoff.update_backoff_state(False)
+            logger.debug(f"Realtime provider error: {e}")
+            self._rt_backoff.update_backoff_state(False, error_type='error')
             # Restore URLs if we're staying with fallback
             self.api_url, self.colors_url = original_urls
             return False, None
@@ -412,7 +424,13 @@ class BusService:
                     # Only retry fallback if it's not in backoff
                     if self._fallback_backoff.should_retry():
                         return self.get_waiting_times()
-            return self._get_error_data(), f"Backing off until {current_backoff.get_retry_time_str()}", ""
+            error_type = current_backoff.get_last_error()
+            error_msg = {
+                'connection': "Unable to connect to service",
+                'timeout': "Service not responding",
+                None: "Service temporarily unavailable"
+            }.get(error_type, "Service temporarily unavailable")
+            return self._get_error_data(), f"{error_msg}. Next attempt at {current_backoff.get_retry_time_str()}", ""
 
         try:
             response = requests.get(self.api_url, timeout=120)
@@ -428,21 +446,28 @@ class BusService:
             
             return self._process_response_data(data)
 
-        except Exception as e:
-            # Update appropriate backoff on failure
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
             if provider_type == 'realtime':
-                self._rt_backoff.update_backoff_state(False)
+                self._rt_backoff.update_backoff_state(False, error_type='connection' if isinstance(e, requests.exceptions.ConnectionError) else 'timeout')
+            else:
+                self._fallback_backoff.update_backoff_state(False, error_type='connection' if isinstance(e, requests.exceptions.ConnectionError) else 'timeout')
+            return self._get_error_data(), "Connection failed" if isinstance(e, requests.exceptions.ConnectionError) else "Service not responding", ""
+        except Exception as e:
+            if provider_type == 'realtime':
+                self._rt_backoff.update_backoff_state(False, error_type='error')
+            else:
+                self._fallback_backoff.update_backoff_state(False, error_type='error')
+            # If using realtime provider and failed, try fallback
+            if self.current_provider == self.provider:
                 fallback = self._get_fallback_provider()
-                if fallback and self._fallback_backoff.should_retry():
+                if fallback:
                     logger.info(f"Error with realtime provider, switching to fallback: {fallback}")
                     self.current_provider = fallback
                     self._update_api_urls()
-                    return self.get_waiting_times()
-            else:
-                self._fallback_backoff.update_backoff_state(False)
-            
+                    self._fallback_backoff.reset()  # Reset backoff for fallback provider
+                    return self.get_waiting_times()  # Retry with fallback
             logger.error(f"Error fetching bus times: {e}", exc_info=True)
-            return self._get_error_data(), f"Error: {str(e)}", ""
+            return self._get_error_data(), "Service error", ""
 
     def _process_response_data(self, data: dict) -> tuple[List[Dict], str, str]:
         """Process the response data into waiting times format"""
@@ -640,17 +665,17 @@ class BusService:
                 self._fallback_backoff.update_backoff_state(True)
             return bus_times, None, stop_name
 
-        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
             if provider_type == 'realtime':
-                self._rt_backoff.update_backoff_state(False)
+                self._rt_backoff.update_backoff_state(False, error_type='connection' if isinstance(e, requests.exceptions.ConnectionError) else 'timeout')
             else:
-                self._fallback_backoff.update_backoff_state(False)
-            return self._get_error_data(), "Connection failed", ""
+                self._fallback_backoff.update_backoff_state(False, error_type='connection' if isinstance(e, requests.exceptions.ConnectionError) else 'timeout')
+            return self._get_error_data(), "Connection failed" if isinstance(e, requests.exceptions.ConnectionError) else "Service not responding", ""
         except Exception as e:
             if provider_type == 'realtime':
-                self._rt_backoff.update_backoff_state(False)
+                self._rt_backoff.update_backoff_state(False, error_type='error')
             else:
-                self._fallback_backoff.update_backoff_state(False)
+                self._fallback_backoff.update_backoff_state(False, error_type='error')
             # If using realtime provider and failed, try fallback
             if self.current_provider == self.provider:
                 fallback = self._get_fallback_provider()
@@ -661,7 +686,7 @@ class BusService:
                     self._fallback_backoff.reset()  # Reset backoff for fallback provider
                     return self.get_waiting_times()  # Retry with fallback
             logger.error(f"Error fetching bus times: {e}", exc_info=True)
-            return self._get_error_data(), f"Error: {str(e)}", ""
+            return self._get_error_data(), "Service error", ""
 
     def _get_error_data(self) -> List[Dict]:
         """Return error data structure when something goes wrong"""

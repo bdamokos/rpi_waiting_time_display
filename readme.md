@@ -33,6 +33,7 @@ Basic setup (Raspberry Pi Zero 2W + display): **~€60**
 
 ## Need Help?
 - [Debugging interface](https://bdamokos.github.io/rpi_waiting_time_display/features/#debugging)
+- [Updates and Version Control](https://bdamokos.github.io/rpi_waiting_time_display/updates/)
 - [Create an issue](https://github.com/bdamokos/rpi_waiting_time_display/issues)
 
 ## Inspiration and Acknowledgments

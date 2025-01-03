@@ -80,6 +80,13 @@ const SETTING_GROUPS = {
         title: "Debug Settings",
         description: "Settings for development and debugging",
         settings: {
+            UPDATE_MODE: {
+                type: "select",
+                label: "Update Mode",
+                description: "Control how the display programme updates itself. 'releases' is recommended for most users. 'main' fetches the latest version from the main branch, 'none' disables updates.",
+                options: ["releases", "main", "none"],
+                default: "releases"
+            },
             debug_port_enabled: {
                 type: "boolean",
                 label: "Enable Debug Port",

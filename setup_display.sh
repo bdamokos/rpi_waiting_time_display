@@ -258,7 +258,7 @@ apt-get update
 check_error "Failed to update package list"
 
 # Install dependencies
-apt-get install -y git gh fonts-dejavu watchdog python3-dev network-manager libcairo2-dev pkg-config python3-dev
+apt-get install -y git gh fonts-dejavu watchdog python3-dev network-manager libcairo2-dev pkg-config python3-dev python3-serial
 check_error "Failed to install packages"
 
 # Setup watchdog

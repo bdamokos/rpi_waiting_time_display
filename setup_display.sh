@@ -2,7 +2,7 @@
 
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.26 (2024-12-31)"  # AUTO-INCREMENT
+echo "Version: 0.0.27 (2025-01-03)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -382,10 +382,36 @@ esac
 
 su - $ACTUAL_USER -c "chmod +x $ACTUAL_HOME/start_display.sh"
 
+# Ask for update mode
+echo "----------------------------------------"
+echo "Please select update mode:"
+echo "1) Releases only (recommended, more stable)"
+echo "2) All updates (main branch, may be unstable)"
+echo "3) No updates (manual updates only)"
+read -p "Enter your choice (1-3) [1]: " update_choice
+case $update_choice in
+    2)
+        UPDATE_MODE="main"
+        echo "Selected: All updates (main branch)"
+        ;;
+    3)
+        UPDATE_MODE="none"
+        echo "Selected: No automatic updates"
+        ;;
+    *)
+        UPDATE_MODE="releases"
+        echo "Selected: Releases only"
+        ;;
+esac
+echo "----------------------------------------"
+
 # Create .env file
 if [ ! -f "$ACTUAL_HOME/display_programme/.env" ]; then
     echo "Creating .env file..."
-    su - $ACTUAL_USER -c "cp $ACTUAL_HOME/display_programme/.env.example $ACTUAL_HOME/display_programme/.env"
+    # Create with just UPDATE_MODE initially
+    echo "UPDATE_MODE=$UPDATE_MODE" > "$ACTUAL_HOME/display_programme/.env"
+    # Copy the example file as a reference, but commented out
+    sed 's/^/# /' "$ACTUAL_HOME/display_programme/.env.example" >> "$ACTUAL_HOME/display_programme/.env"
     echo "Please edit the .env file with your settings:"
     echo "nano $ACTUAL_HOME/display_programme/.env"
 fi

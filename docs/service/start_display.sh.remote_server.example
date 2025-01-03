@@ -6,7 +6,7 @@
 # chmod +x ~/start_display.sh
 echo "----------------------------------------"
 echo "Starting display service script"
-echo "Version: 0.0.7 (2025-01-03)"  # AUTO-INCREMENT
+echo "Version: 0.0.8 (2025-01-03)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -144,7 +144,11 @@ source ~/display_programme/docs/service/version_check.sh
 # Get update mode from environment file
 UPDATE_MODE="main"  # Default to main for backward compatibility
 if [ -f ~/display_programme/.env ]; then
-    source ~/display_programme/.env
+    # Extract UPDATE_MODE if it exists in the file
+    UPDATE_MODE_LINE=$(grep "^UPDATE_MODE=" ~/display_programme/.env)
+    if [ ! -z "$UPDATE_MODE_LINE" ]; then
+        UPDATE_MODE=$(echo "$UPDATE_MODE_LINE" | cut -d'=' -f2 | tr -d '"' | tr -d "'" | xargs)
+    fi
 fi
 
 # Step 1: Update display_programme first

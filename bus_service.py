@@ -968,10 +968,13 @@ def update_display(epd, weather_data: WeatherData = None, bus_data=None, error_m
         logger.debug(f"Stop name height: {stop_name_height}")
             
     # Calculate layout
-    HEADER_HEIGHT = stop_name_height + MARGIN
+    HEADER_HEIGHT = stop_name_height
     BOX_HEIGHT = 40
     if show_sunshine or show_precipitation and len(bus_data) > 1:
-        BOX_HEIGHT = 30
+        if len(lines) > 1:
+            BOX_HEIGHT = 25
+        else:
+            BOX_HEIGHT = 30
         
     else:
         BOX_HEIGHT = 40
@@ -990,7 +993,8 @@ def update_display(epd, weather_data: WeatherData = None, bus_data=None, error_m
         # Calculate spacing for two lines to be evenly distributed
         total_available_height = Himage.height - HEADER_HEIGHT - (2 * BOX_HEIGHT)
         SPACING = total_available_height // 3  # Divide remaining space into thirds
-
+        if len(lines) > 1:
+            SPACING = min(SPACING - 5, MARGIN)
         first_box_y = HEADER_HEIGHT + SPACING
         second_box_y = first_box_y + BOX_HEIGHT + SPACING//2 
 

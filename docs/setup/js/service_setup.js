@@ -209,7 +209,7 @@ window.startServiceSetup = async function() {
                 const enabledKey = service.enabled_key || `${id}_enabled`;
                 const response = await window.setupDevice.send(JSON.stringify({
                     command: 'config_get',
-                    config_type: service.config_type,
+                    config_type: 'display_env',
                     key: enabledKey
                 }));
                 if (response.status === 'success') {

@@ -1261,7 +1261,7 @@ def _find_text_segments(text: str) -> list:
     # Second priority: blocks divided by spaces
     return [word for word in text.split() if word]
 
-def _calculate_text_layout(draw, text: str, font, available_width: int, ellipsis_width: int, margin: int) -> tuple[list, int]:
+def _calculate_text_layout(draw, text: str, font, first_line_width: int, second_line_width: int, ellipsis_width: int, margin: int) -> tuple[list, int]:
     """
     Calculate optimal text layout for given width constraints.
     Returns: (lines, total_height)
@@ -1291,7 +1291,9 @@ def _calculate_text_layout(draw, text: str, font, available_width: int, ellipsis
             continue
             
         # Check if segment fits on current line
-        if current_width + segment_width <= available_width:
+        # Use first line width for first line, second line width for subsequent lines
+        max_width = first_line_width if not lines else second_line_width
+        if current_width + segment_width <= max_width:
             current_line.append(segment)
             current_width += segment_width
         else:
@@ -1304,23 +1306,61 @@ def _calculate_text_layout(draw, text: str, font, available_width: int, ellipsis
     if current_line:
         lines.append(" ".join(current_line))
     
-    # If we have more than 2 lines, we need to truncate
+    # Handle line truncation with ellipsis
     if len(lines) > 2:
-        # Keep first line as is
-        # For second line, need to ensure we have space for ellipsis
-        second_line = lines[1]
-        while len(lines) > 2 or (len(lines) == 2 and draw.textbbox((0, 0), lines[1], font=font)[2] + ellipsis_width > available_width):
-            if len(lines) > 2:
-                lines.pop()
-            else:
-                # Truncate second line
-                words = lines[1].split()
-                while words and draw.textbbox((0, 0), " ".join(words) + "...", font=font)[2] > available_width:
-                    words.pop()
-                if words:
-                    lines[1] = " ".join(words) + "..."
+        # Keep first line as is if it fits
+        first_line_bbox = draw.textbbox((0, 0), lines[0], font=font)
+        if first_line_bbox[2] > first_line_width:
+            # First line needs truncation
+            words = lines[0].split()
+            truncated = []
+            current_width = 0
+            for word in words:
+                word_bbox = draw.textbbox((0, 0), ((" " if truncated else "") + word), font=font)
+                word_width = word_bbox[2] - word_bbox[0]
+                if current_width + word_width + ellipsis_width <= first_line_width:
+                    truncated.append(word)
+                    current_width += word_width
                 else:
-                    lines.pop()
+                    break
+            lines[0] = " ".join(truncated) + "..."
+        
+        # Combine remaining text and truncate for second line
+        remaining_text = " ".join([line for line in lines[1:]])
+        words = remaining_text.split()
+        truncated = []
+        current_width = 0
+        for word in words:
+            word_bbox = draw.textbbox((0, 0), ((" " if truncated else "") + word), font=font)
+            word_width = word_bbox[2] - word_bbox[0]
+            if current_width + word_width + ellipsis_width <= second_line_width:
+                truncated.append(word)
+                current_width += word_width
+            else:
+                break
+        if truncated:
+            lines = [lines[0], " ".join(truncated) + "..."]
+        else:
+            lines = [lines[0]]
+    elif len(lines) == 2:
+        # Check if second line needs truncation
+        second_line_bbox = draw.textbbox((0, 0), lines[1], font=font)
+        if second_line_bbox[2] > second_line_width:
+            words = lines[1].split()
+            truncated = []
+            current_width = 0
+            for word in words:
+                word_bbox = draw.textbbox((0, 0), ((" " if truncated else "") + word), font=font)
+                word_width = word_bbox[2] - word_bbox[0]
+                if current_width + word_width + ellipsis_width <= second_line_width:
+                    truncated.append(word)
+                    current_width += word_width
+                else:
+                    break
+            if truncated:
+                lines[1] = " ".join(truncated) + "..."
+            else:
+                lines.pop()
     
     total_height = len(lines) * (line_height + margin)
     return lines, total_height
@@ -1354,7 +1394,8 @@ def _layout_stop_name(draw, stop_name: str, font_small, weather_width: int, Hima
         draw=draw,
         text=stop_name,
         font=font_small,
-        available_width=first_line_width,  # Use first line width as constraint
+        first_line_width=first_line_width,
+        second_line_width=second_line_width,
         ellipsis_width=ellipsis_width,
         margin=MARGIN
     )

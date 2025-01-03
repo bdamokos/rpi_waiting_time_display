@@ -949,42 +949,25 @@ def update_display(epd, weather_data: WeatherData = None, bus_data=None, error_m
     stop_name_height = 0
     stop_name = os.getenv("Stop_name_override", stop_name)
     if stop_name:
-        stop_name_bbox = draw.textbbox((0, 0), stop_name, font=font_small)
-        stop_name_width = stop_name_bbox[2] - stop_name_bbox[0]
-        if (weather_enabled and (Himage.width - weather_width - stop_name_width - MARGIN) < 0) or (not weather_enabled and (Himage.width - stop_name_width - MARGIN) < 0):
-            logger.debug(f"Stop name width: {stop_name_width}, weather width: {weather_width if weather_enabled else 0}, total width: {Himage.width}, margin: {MARGIN}. The total width is too small for the stop name and weather.")
-            # Split stop name into two lines
-            stop_name_parts = stop_name.split(' ', 1)
-            logger.debug(f"Stop name parts: {stop_name_parts}")
-            if len(stop_name_parts) > 1:
-                line1, line2 = stop_name_parts
-            else:
-                line1 = stop_name
-                line2 = ""
-
-            # Draw first line
-            draw.text((MARGIN, MARGIN), line1, font=font_small, fill=BLACK)
-            line1_bbox = draw.textbbox((0, 0), line1, font=font_small)
-            stop_name_height = line1_bbox[3] - line1_bbox[1] + MARGIN
-
-
-            # Draw second line if it exists
-            if line2:
-                line1_bbox = draw.textbbox((0, 0), line1, font=font_small)
-                line1_height = line1_bbox[3] - line1_bbox[1]
-                draw.text((MARGIN, MARGIN + line1_height+MARGIN), line2, font=font_small, fill=BLACK)
-                line2_bbox = draw.textbbox((0, 0), line2, font=font_small)
-                line2_height = line2_bbox[3] - line2_bbox[1]
-                stop_name_height = line1_height + line2_height + MARGIN + MARGIN + MARGIN
-                logger.debug(f"Stop name height: {stop_name_height}")
-        else:
-            logger.debug(f"Stop name width: {stop_name_width}, weather width: {weather_width if weather_enabled else 0}, total width: {Himage.width}, margin: {MARGIN}")
-            draw.text((MARGIN, MARGIN), stop_name, font=font_small, fill=BLACK)
-            stop_name_bbox = draw.textbbox((0, 0), stop_name, font=font_small)
-            stop_name_height = stop_name_bbox[3] - stop_name_bbox[1] + MARGIN
-    logger.debug(f"Stop name height: {stop_name_height}")
+        stop_name_height, lines = _layout_stop_name(
+            draw=draw,
+            stop_name=stop_name,
+            font_small=font_small,
+            weather_width=weather_width if weather_enabled else 0,
+            Himage=Himage,
+            MARGIN=MARGIN
+        )
+        
+        # Draw the lines
+        y_pos = MARGIN
+        for line in lines:
+            draw.text((MARGIN, y_pos), line, font=font_small, fill=BLACK)
+            line_bbox = draw.textbbox((0, 0), line, font=font_small)
+            y_pos += line_bbox[3] - line_bbox[1] + MARGIN
+        
+        logger.debug(f"Stop name height: {stop_name_height}")
+            
     # Calculate layout
-
     HEADER_HEIGHT = stop_name_height + MARGIN
     BOX_HEIGHT = 40
     if show_sunshine or show_precipitation and len(bus_data) > 1:
@@ -1264,3 +1247,116 @@ def update_display(epd, weather_data: WeatherData = None, bus_data=None, error_m
         else:
             logger.debug("Using full display update")
             epd.display(buffer)
+
+def _find_text_segments(text: str) -> list:
+    """Find natural segments in text based on priority delimiters."""
+    # First priority: sections divided by dash, en-dash, em-dash, slash, comma
+    priority1_delimiters = [',', '/', '-', '–', '—']  # en-dash (–) and em-dash (—)
+    
+    # Check if we have any priority 1 delimiters
+    for delimiter in priority1_delimiters:
+        if delimiter in text:
+            return [seg.strip() for seg in text.split(delimiter) if seg.strip()]
+    
+    # Second priority: blocks divided by spaces
+    return [word for word in text.split() if word]
+
+def _calculate_text_layout(draw, text: str, font, available_width: int, ellipsis_width: int, margin: int) -> tuple[list, int]:
+    """
+    Calculate optimal text layout for given width constraints.
+    Returns: (lines, total_height)
+    """
+    segments = _find_text_segments(text)
+    if not segments:
+        return [], 0
+        
+    # Get line height from a sample text
+    line_bbox = draw.textbbox((0, 0), "Aj", font=font)
+    line_height = line_bbox[3] - line_bbox[1]
+    
+    # Try to fit segments on lines
+    lines = []
+    current_line = []
+    current_width = 0
+    
+    for segment in segments:
+        # Calculate segment width including a space
+        segment_bbox = draw.textbbox((0, 0), segment + " ", font=font)
+        segment_width = segment_bbox[2] - segment_bbox[0]
+        
+        # If this is first segment on the line
+        if not current_line:
+            current_line.append(segment)
+            current_width = segment_width
+            continue
+            
+        # Check if segment fits on current line
+        if current_width + segment_width <= available_width:
+            current_line.append(segment)
+            current_width += segment_width
+        else:
+            # Start new line
+            lines.append(" ".join(current_line))
+            current_line = [segment]
+            current_width = segment_width
+    
+    # Add last line
+    if current_line:
+        lines.append(" ".join(current_line))
+    
+    # If we have more than 2 lines, we need to truncate
+    if len(lines) > 2:
+        # Keep first line as is
+        # For second line, need to ensure we have space for ellipsis
+        second_line = lines[1]
+        while len(lines) > 2 or (len(lines) == 2 and draw.textbbox((0, 0), lines[1], font=font)[2] + ellipsis_width > available_width):
+            if len(lines) > 2:
+                lines.pop()
+            else:
+                # Truncate second line
+                words = lines[1].split()
+                while words and draw.textbbox((0, 0), " ".join(words) + "...", font=font)[2] > available_width:
+                    words.pop()
+                if words:
+                    lines[1] = " ".join(words) + "..."
+                else:
+                    lines.pop()
+    
+    total_height = len(lines) * (line_height + margin)
+    return lines, total_height
+
+def _layout_stop_name(draw, stop_name: str, font_small, weather_width: int, Himage, MARGIN: int) -> tuple[int, list]:
+    """
+    Layout stop name text optimally.
+    Returns: (total_height, lines)
+    """
+    if not stop_name:
+        return 0, []
+        
+    # Calculate available widths for each line
+    first_line_width = Himage.width - weather_width - 2*MARGIN
+    second_line_width = Himage.width - 2*MARGIN
+    
+    # Get width of ellipsis
+    ellipsis_bbox = draw.textbbox((0, 0), "...", font=font_small)
+    ellipsis_width = ellipsis_bbox[2] - ellipsis_bbox[0]
+    
+    # Try to fit everything on one line first
+    full_text_bbox = draw.textbbox((0, 0), stop_name, font=font_small)
+    full_text_width = full_text_bbox[2] - full_text_bbox[0]
+    
+    if full_text_width <= first_line_width:
+        # Everything fits on one line
+        return full_text_bbox[3] - full_text_bbox[1] + MARGIN, [stop_name]
+    
+    # Need to split into multiple lines
+    lines, total_height = _calculate_text_layout(
+        draw=draw,
+        text=stop_name,
+        font=font_small,
+        available_width=first_line_width,  # Use first line width as constraint
+        ellipsis_width=ellipsis_width,
+        margin=MARGIN
+    )
+    
+    return total_height, lines

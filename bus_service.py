@@ -947,6 +947,7 @@ def update_display(epd, weather_data: WeatherData = None, bus_data=None, error_m
           
 
     stop_name_height = 0
+    stop_name = os.getenv("Stop_name_override", stop_name)
     if stop_name:
         stop_name_bbox = draw.textbbox((0, 0), stop_name, font=font_small)
         stop_name_width = stop_name_bbox[2] - stop_name_bbox[0]

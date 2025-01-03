@@ -1,5 +1,24 @@
 // Initialize service setup module
 document.addEventListener('DOMContentLoaded', () => {
+    // Add CSS styles
+    const style = document.createElement('style');
+    style.textContent = `
+        .service-note {
+            color: #856404;
+            background-color: #fff3cd;
+            border: 1px solid #ffeeba;
+            border-radius: 4px;
+            padding: 8px 12px;
+            margin: 10px 0;
+            font-size: 0.9em;
+        }
+        
+        .service-card.core-service {
+            border-left: 3px solid #28a745;
+        }
+    `;
+    document.head.appendChild(style);
+
     const serviceSetupButton = document.getElementById('service-setup-button');
     const apiSetupButton = document.getElementById('api-setup-button');
     
@@ -61,7 +80,7 @@ const services = {
         description: 'Display transit schedules and delays',
         config_type: 'transit_env',
         requires_api_key: true,
-        always_enabled: true,
+        enabled_key: 'transit_enabled',
         api_keys: [
             {
                 name: 'STIB_API_KEY',
@@ -218,14 +237,31 @@ window.startServiceSetup = async function() {
             }
         }
 
+        // Check if at least one core service is enabled
+        const hasEnabledCoreService = enabledServices['weather'] || enabledServices['transit'];
+        if (!hasEnabledCoreService) {
+            window.showError('Warning: No core services are enabled. At least one core service (Weather or Transit) must be enabled for the display to function. Enabling Weather service by default.');
+            
+            // Enable weather service by default
+            await window.setupDevice.send(JSON.stringify({
+                command: 'config_set',
+                config_type: 'display_env',
+                key: 'weather_enabled',
+                value: 'true'
+            }));
+            
+            enabledServices['weather'] = true;
+        }
+
         serviceSetup.innerHTML = `
             <div class="service-setup-container">
                 <h3>Available Services</h3>
                 <p>Choose which services you want to enable:</p>
+                <p class="service-note"><small>⚠️ At least one core service (Weather or Transit) must be enabled</small></p>
                 
                 <div class="service-grid">
                     ${Object.entries(services).map(([id, service]) => `
-                        <div class="service-card">
+                        <div class="service-card ${(id === 'weather' || id === 'transit') ? 'core-service' : ''}">
                             <div class="service-header">
                                 <h4>${service.name}</h4>
                                 ${service.always_enabled ? `
@@ -543,6 +579,38 @@ window.toggleService = async function(serviceId, enabled) {
     }
 
     try {
+        // Check if this would disable all services
+        if (!enabled) {
+            const enabledServices = {};
+            for (const [id, srv] of Object.entries(services)) {
+                if (id === serviceId) {
+                    enabledServices[id] = false;
+                } else {
+                    const enabledKey = srv.enabled_key || `${id}_enabled`;
+                    const response = await window.setupDevice.send(JSON.stringify({
+                        command: 'config_get',
+                        config_type: 'display_env',
+                        key: enabledKey
+                    }));
+                    enabledServices[id] = response.status === 'success' && 
+                        (response.value === 'true' || response.value === true);
+                }
+            }
+
+            // Check if at least one core service (weather or transit) would remain enabled
+            const hasEnabledCoreService = enabledServices['weather'] || enabledServices['transit'];
+            
+            if (!hasEnabledCoreService) {
+                window.showError('At least one core service (Weather or Transit) must be enabled for the display to function.');
+                // Revert the checkbox state
+                const checkbox = document.getElementById(`service-${serviceId}`);
+                if (checkbox) {
+                    checkbox.checked = true;
+                }
+                return;
+            }
+        }
+
         const enabledKey = service.enabled_key || `${serviceId}_enabled`;
         const response = await window.setupDevice.send(JSON.stringify({
             command: 'config_set',

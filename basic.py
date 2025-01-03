@@ -36,6 +36,7 @@ WEATHER_UPDATE_INTERVAL = int(os.getenv("refresh_weather_interval", 600))
 BUS_DATA_MAX_AGE = max(90, DISPLAY_REFRESH_INTERVAL)  # Ensure bus data doesn't become stale before next refresh
 
 weather_enabled = True if os.getenv("weather_enabled", "true").lower() == "true" else False
+transit_enabled = True if os.getenv("transit_enabled", "true").lower() == "true" else False
 
 HOTSPOT_ENABLED = os.getenv('hotspot_enabled', 'true').lower() == 'true'
 hostname = get_hostname()
@@ -44,8 +45,18 @@ HOTSPOT_PASSWORD = os.getenv('hotspot_password', 'YourPassword')
 
 DISPLAY_SCREEN_ROTATION = int(os.getenv('screen_rotation', 90))
 
-COORDINATES_LAT = float(os.getenv('Coordinates_LAT'))
-COORDINATES_LNG = float(os.getenv('Coordinates_LNG'))
+# Default coordinates (Brussels)
+DEFAULT_LAT = 50.8503
+DEFAULT_LNG = 4.3517
+
+try:
+    COORDINATES_LAT = float(os.getenv('Coordinates_LAT', DEFAULT_LAT))
+    COORDINATES_LNG = float(os.getenv('Coordinates_LNG', DEFAULT_LNG))
+except (ValueError, TypeError):
+    logger.warning("Invalid or missing coordinates, using default coordinates (Brussels)")
+    COORDINATES_LAT = DEFAULT_LAT
+    COORDINATES_LNG = DEFAULT_LNG
+
 flights_enabled = True if os.getenv('flights_enabled', 'false').lower() == 'true' else False
 aeroapi_enabled = True if os.getenv('aeroapi_enabled', 'false').lower() == 'true' else False
 flight_check_interval = max(1, int(os.getenv('flight_check_interval', 5)))
@@ -175,18 +186,20 @@ class WeatherManager:
 
 class BusManager:
     def __init__(self):
-        self.bus_service = BusService()
+        self.bus_service = BusService() if transit_enabled else None
         self.bus_data = {
             'data': [],
-            'error_message': None,
+            'error_message': None if transit_enabled else "Transit display is disabled",
             'stop_name': None
         }
         self.last_update = None
         self._lock = threading.Lock()
-        logger.info("BusManager initialized")
+        logger.info("BusManager initialized" + (" (disabled)" if not transit_enabled else ""))
 
     def fetch_data(self):
         """Fetch new bus data on demand"""
+        if not transit_enabled:
+            return
         try:
             logger.debug("Fetching new bus data...")
             data, error_message, stop_name = self.bus_service.get_waiting_times()

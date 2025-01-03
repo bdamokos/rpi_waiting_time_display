@@ -6,7 +6,7 @@
 # chmod +x ~/start_display.sh
 echo "----------------------------------------"
 echo "Starting display service script"
-echo "Version: 0.0.18 (2024-12-26)"  # AUTO-INCREMENT
+echo "Version: 0.0.19 (2025-01-03)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024 Bence Damokos"
 echo "----------------------------------------"
@@ -138,18 +138,25 @@ check_service_file() {
 # Sleep for 10 seconds to allow for network to be ready
 sleep 10
 
+# Source version checking functions
+source ~/display_programme/docs/service/version_check.sh
+
+# Get update mode from environment file
+UPDATE_MODE="main"  # Default to main for backward compatibility
+if [ -f ~/display_programme/.env ]; then
+    source ~/display_programme/.env
+fi
+
 # Step 1: Update display_programme first
 echo "----------------------------------------"
 cd ~/display_programme
-echo "Updating display_programme from git..."
-git fetch -v origin main
-if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
-    echo "Updates found, resetting to origin/main..."
-    git reset --hard origin/main
-    git pull -v origin main
+echo "Checking for display_programme updates..."
+if check_update_needed "$HOME/display_programme" "rpi_waiting_time_display" "$UPDATE_MODE"; then
+    echo "Performing update..."
+    perform_update "$HOME/display_programme" "rpi_waiting_time_display" "$UPDATE_MODE"
     echo "Display programme updated."
 else
-    echo "Already up to date."
+    echo "No updates needed."
 fi
 echo "----------------------------------------"
 
@@ -184,15 +191,13 @@ echo "----------------------------------------"
 
 # Step 4: Update brussels_transit
 cd ~/brussels_transit
-echo "Updating brussels_transit from git..."
-git fetch -v origin main
-if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
-    echo "Updates found, resetting to origin/main..."
-    git reset --hard origin/main
-    git pull -v origin main
+echo "Checking for brussels_transit updates..."
+if check_update_needed "$HOME/brussels_transit" "brussels_transit" "$UPDATE_MODE"; then
+    echo "Performing update..."
+    perform_update "$HOME/brussels_transit" "brussels_transit" "$UPDATE_MODE"
     echo "Brussels transit updated."
 else
-    echo "Already up to date."
+    echo "No updates needed."
 fi
 echo "----------------------------------------"
 

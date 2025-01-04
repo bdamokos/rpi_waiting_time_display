@@ -51,11 +51,14 @@ def _get_stop_config():
             return env_vars[key]
     
     return None
+
 show_sunshine = os.getenv('show_sunshine_hours', 'true').lower() == 'true'
 show_precipitation = os.getenv('show_precipitation', 'true').lower() == 'true'
 Stop = _get_stop_config()
 Lines = os.getenv("Lines", "")  # Default to empty string instead of None
 bus_api_base_url = os.getenv("BUS_API_BASE_URL", "http://localhost:5001/")
+bus_schedule_url = os.getenv("BUS_SCHEDULE_URL", bus_api_base_url)
+pre_load_bus_schedule = os.getenv("PRE_LOAD_BUS_SCHEDULE", "true").lower() == "true"
 bus_provider = os.getenv("Provider", "stib")
 logging.debug(f"Bus provider: {bus_provider}. Base URL: {bus_api_base_url}. Monitoring lines: {Lines if Lines else 'all'} and stop: {Stop}")
 
@@ -131,6 +134,7 @@ def _parse_lines(lines_str: str) -> list:
 class BusService:
     def __init__(self):
         self.base_url = self._resolve_base_url()
+        self.schedule_url = self._resolve_schedule_url()
         self.provider = os.getenv("Provider", "stib")
         self.current_provider = self.provider  # Keep track of current active provider
         self.provider_config = self._load_provider_config()
@@ -146,45 +150,8 @@ class BusService:
         self._stop_event = Event()
         self.epd = None  # Will be set later
         
-        # Start pre-warming thread for schedule provider
-        self._start_schedule_prewarm()
-        
-    def _start_schedule_prewarm(self):
-        """Start a thread to pre-warm the schedule provider after a delay"""
-        # If our main provider is a schedule provider, no need to pre-warm
-        if self._get_provider_type(self.provider) == 'schedule':
-            logger.info(f"Provider {self.provider} is already our main schedule provider, skipping pre-warm")
-            return
-
-        # Get fallback provider if we're a realtime provider
-        fallback = self._get_fallback_provider()
-        if not fallback:
-            logger.warning("No schedule provider configured, skipping pre-warm")
-            return
-            
-        def prewarm_task():
-            # Wait for 1 minute before starting pre-warm
-            time.sleep(60)
-            try:
-                logger.info(f"Pre-warming schedule provider {fallback}")
-                # Use the colors endpoint as a trigger for download
-                response = requests.get(
-                    f"{self.base_url}/api/{fallback}/colors/1",
-                    params={"download": "true"},
-                    timeout=300  # 5 minute timeout for initial load
-                )
-                if response.status_code == 200:
-                    logger.info(f"Successfully pre-warmed schedule provider {fallback}")
-                else:
-                    logger.warning(f"Pre-warm returned status {response.status_code}: {response.text}")
-            except Exception as e:
-                logger.warning(f"Failed to pre-warm schedule provider: {e}")
-        
-        # Start pre-warming in background thread
-        thread = threading.Thread(target=prewarm_task, name="SchedulePrewarm")
-        thread.daemon = True  # Make thread exit when main program exits
-        thread.start()
-        logger.debug("Started schedule pre-warm thread")
+        # Start health check and pre-warming thread
+        self._start_health_check()
 
     def _resolve_base_url(self) -> str:
         """Resolve the base URL, handling .local domains"""
@@ -203,110 +170,64 @@ class BusService:
                 # Fallback to direct IP if resolution fails
                 return "http://127.0.0.1:5001/"
         return base_url
-    
-    @lru_cache(maxsize=1024)
-    def _hex_to_rgb(self, hex_color: str) -> Tuple[int, int, int]:
-        """Convert hex color to RGB tuple"""
-        hex_color = hex_color.lstrip('#')
-        return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
 
-    def _is_valid_hex_color(self, hex_color: str) -> bool:
-        """Validate if a string is a valid hex color code"""
-        if not hex_color:
-            return False
-        # Remove '#' if present
-        hex_color = hex_color.lstrip('#')
-        # Check if it's a valid hex color (6 characters, valid hex digits)
-        return len(hex_color) == 6 and all(c in '0123456789ABCDEFabcdef' for c in hex_color)
+    def _resolve_schedule_url(self) -> str:
+        """Resolve the schedule URL, handling .local domains"""
+        schedule_url = bus_schedule_url.lower()
+        if '.local' in schedule_url:
+            try:
+                # Extract hostname from URL
+                hostname = schedule_url.split('://')[1].split(':')[0]
+                # Try to resolve the IP address
+                ip = socket.gethostbyname(hostname)
+                logger.info(f"Resolved {hostname} to {ip}")
+                # Replace hostname with IP in URL
+                return schedule_url.replace(hostname, ip)
+            except Exception as e:
+                logger.warning(f"Could not resolve {hostname}, falling back to IP: {e}")
+                # Fallback to direct IP if resolution fails
+                return "http://127.0.0.1:5001/"
+        return schedule_url
 
-    @lru_cache(maxsize=1024)
-    def _get_color_distance(self, color1: Tuple[int, int, int], color2: Tuple[int, int, int]) -> float:
-        """Calculate Euclidean distance between two RGB colors"""
-        return sum((a - b) ** 2 for a, b in zip(color1, color2)) ** 0.5
+    def _start_health_check(self):
+        """Start a thread to check API health and pre-warm schedule provider"""
+        def health_check_task():
+            # First, wait for the API to be healthy
+            while not self._stop_event.is_set():
+                try:
+                    logger.info("Checking API health...")
+                    response = requests.get(f"{self.base_url}/health", timeout=10)
+                    if response.status_code == 200:
+                        logger.info("API is healthy")
+                        break
+                except Exception as e:
+                    logger.warning(f"API health check failed: {e}")
+                time.sleep(10)  # Wait 10 seconds before next attempt
 
-    @lru_cache(maxsize=1024)
-    def _get_dithering_colors(self, target_rgb: Tuple[int, int, int]) -> Tuple[str, str, float]:
-        """
-        Find the two closest display colors and the mix ratio for dithering.
-        Returns (primary_color, secondary_color, primary_ratio)
-        """
-        # Find the two closest colors
-        distances = [(name, self._get_color_distance(target_rgb, rgb))
-                    for name, rgb in DISPLAY_COLORS.items()]
-        distances.sort(key=lambda x: x[1])
-        
-        color1, dist1 = distances[0]
-        color2, dist2 = distances[1]
-        
-        # Calculate the ratio (how much of color1 to use)
-        total_dist = dist1 + dist2
-        if total_dist == 0:
-            ratio = 1.0
-        else:
-            ratio = 1 - (dist1 / total_dist)
-            
-        # Ensure ratio is between 0.0 and 1.0
-        ratio = max(0.0, min(1.0, ratio))
-        
-        # If the primary color is very dominant (>80%), use it exclusively
-        DOMINANCE_THRESHOLD = 0.8
-        if ratio >= DOMINANCE_THRESHOLD:
-            return color1, color2, 1.0
-        
-        return color1, color2, ratio
+            # If pre-load is enabled and we have a schedule provider, start pre-warming
+            if pre_load_bus_schedule and self._get_provider_type(self.provider) == 'realtime':
+                fallback = self._get_fallback_provider()
+                if fallback:
+                    try:
+                        logger.info(f"Pre-warming schedule provider {fallback}")
+                        # Send request directly to schedule URL
+                        response = requests.get(
+                            f"{self.schedule_url}/api/{fallback}/waiting_times",
+                            params={"stop_id": self.stop_id, "download": "true"},
+                            timeout=300  # 5 minute timeout for initial load
+                        )
+                        if response.status_code == 200:
+                            logger.info(f"Successfully pre-warmed schedule provider {fallback}")
+                        else:
+                            logger.warning(f"Pre-warm returned status {response.status_code}: {response.text}")
+                    except Exception as e:
+                        logger.warning(f"Failed to pre-warm schedule provider: {e}")
 
-    def set_epd(self, epd):
-        """Set the EPD display object for color optimization"""
-        self.epd = epd
-
-    @lru_cache(maxsize=1024)
-    def get_line_color(self, line: str) -> list:
-        """
-        Get the optimal colors and ratios for a specific bus line
-        Returns a list of (color, ratio) tuples
-        Cached to avoid repeated API calls for the same line number
-        """
-        try:
-            if not self.epd:
-                logger.warning("EPD not set, falling back to black and white")
-                return [('black', 0.7), ('white', 0.3)]
-
-            response = requests.get(f"{self.colors_url}/{line}")
-            response.raise_for_status()
-            line_colors = response.json()
-
-            # Extract the hex color from the response
-            if isinstance(line_colors, dict) and 'background' in line_colors:
-                hex_color = line_colors['background']
-            else:
-                hex_color = line_colors.get(line)
-
-            # Validate hex color
-            if not hex_color or not self._is_valid_hex_color(hex_color):
-                logger.warning(f"Invalid hex color received for line {line}: {hex_color}")
-                return [('black', 0.7), ('white', 0.3)]  # Fallback to black and white
-
-            # Convert hex to RGB
-            target_rgb = self._hex_to_rgb(hex_color)
-            return find_optimal_colors(target_rgb, self.epd)
-
-        except Exception as e:
-            logger.error(f"Error getting line color for {line}: {e}")
-            return [('black', 0.7), ('white', 0.3)]  # Fallback to black and white
-
-    def get_api_health(self) -> bool:
-        """Check if the API is healthy"""
-        try:
-            response = requests.get(f"{self.base_url}/health")
-            logger.info(f"Health check response: {response.status_code}")
-            return response.status_code == 200
-        except Exception as e:
-            logger.error(f"Health check failed: {e}")
-            return False
-
-    def stop(self):
-        """Stop the bus service"""
-        self._stop_event.set()
+        # Start health check in background thread
+        thread = threading.Thread(target=health_check_task, name="APIHealthCheck")
+        thread.daemon = True  # Make thread exit when main program exits
+        thread.start()
+        logger.debug("Started API health check thread")
 
     def _load_provider_config(self) -> dict:
         """Load provider configuration from JSON file"""
@@ -355,8 +276,9 @@ class BusService:
             
     def _update_api_urls(self):
         """Update API URLs based on current provider"""
-        self.api_url = f"{self.base_url}/api/{self.current_provider}/waiting_times?stop_id={Stop}&download=true"
-        self.colors_url = f"{self.base_url}/api/{self.current_provider}/colors"
+        base = self.schedule_url if self._get_provider_type(self.current_provider) == 'schedule' else self.base_url
+        self.api_url = f"{base}/api/{self.current_provider}/waiting_times?stop_id={Stop}&download=true"
+        self.colors_url = f"{base}/api/{self.current_provider}/colors"
         logger.debug(f"Updated URLs - API: {self.api_url}, Colors: {self.colors_url}")
 
     def _try_realtime_provider(self) -> tuple[bool, dict]:
@@ -400,6 +322,18 @@ class BusService:
             self.api_url, self.colors_url = original_urls
             return False, None
 
+    def _check_schedule_health(self) -> bool:
+        """Check if schedule provider is healthy"""
+        try:
+            fallback = self._get_fallback_provider()
+            if not fallback:
+                return False
+            response = requests.get(f"{self.schedule_url}/health", timeout=10)
+            return response.status_code == 200
+        except Exception as e:
+            logger.debug(f"Schedule health check failed: {e}")
+            return False
+
     def get_waiting_times(self) -> tuple[List[Dict], str, str]:
         """Fetch and process waiting times for our bus lines"""
         # Only check RT if we started with a RT provider
@@ -417,7 +351,7 @@ class BusService:
             # Only try fallback if we're a RT provider
             if provider_type == 'realtime':
                 fallback = self._get_fallback_provider()
-                if fallback:
+                if fallback and self._check_schedule_health():
                     logger.info(f"Switching to fallback provider: {fallback}")
                     self.current_provider = fallback
                     self._update_api_urls()
@@ -460,7 +394,7 @@ class BusService:
             # If using realtime provider and failed, try fallback
             if self.current_provider == self.provider:
                 fallback = self._get_fallback_provider()
-                if fallback:
+                if fallback and self._check_schedule_health():
                     logger.info(f"Error with realtime provider, switching to fallback: {fallback}")
                     self.current_provider = fallback
                     self._update_api_urls()
@@ -750,6 +684,110 @@ class BusService:
             logger.error(f"Error drawing display: {e}")
             traceback.print_exc()
             return None
+
+    @lru_cache(maxsize=1024)
+    def _hex_to_rgb(self, hex_color: str) -> Tuple[int, int, int]:
+        """Convert hex color to RGB tuple"""
+        hex_color = hex_color.lstrip('#')
+        return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+
+    def _is_valid_hex_color(self, hex_color: str) -> bool:
+        """Validate if a string is a valid hex color code"""
+        if not hex_color:
+            return False
+        # Remove '#' if present
+        hex_color = hex_color.lstrip('#')
+        # Check if it's a valid hex color (6 characters, valid hex digits)
+        return len(hex_color) == 6 and all(c in '0123456789ABCDEFabcdef' for c in hex_color)
+
+    @lru_cache(maxsize=1024)
+    def _get_color_distance(self, color1: Tuple[int, int, int], color2: Tuple[int, int, int]) -> float:
+        """Calculate Euclidean distance between two RGB colors"""
+        return sum((a - b) ** 2 for a, b in zip(color1, color2)) ** 0.5
+
+    @lru_cache(maxsize=1024)
+    def _get_dithering_colors(self, target_rgb: Tuple[int, int, int]) -> Tuple[str, str, float]:
+        """
+        Find the two closest display colors and the mix ratio for dithering.
+        Returns (primary_color, secondary_color, primary_ratio)
+        """
+        # Find the two closest colors
+        distances = [(name, self._get_color_distance(target_rgb, rgb))
+                    for name, rgb in DISPLAY_COLORS.items()]
+        distances.sort(key=lambda x: x[1])
+        
+        color1, dist1 = distances[0]
+        color2, dist2 = distances[1]
+        
+        # Calculate the ratio (how much of color1 to use)
+        total_dist = dist1 + dist2
+        if total_dist == 0:
+            ratio = 1.0
+        else:
+            ratio = 1 - (dist1 / total_dist)
+            
+        # Ensure ratio is between 0.0 and 1.0
+        ratio = max(0.0, min(1.0, ratio))
+        
+        # If the primary color is very dominant (>80%), use it exclusively
+        DOMINANCE_THRESHOLD = 0.8
+        if ratio >= DOMINANCE_THRESHOLD:
+            return color1, color2, 1.0
+        
+        return color1, color2, ratio
+
+    def set_epd(self, epd):
+        """Set the EPD display object for color optimization"""
+        self.epd = epd
+
+    @lru_cache(maxsize=1024)
+    def get_line_color(self, line: str) -> list:
+        """
+        Get the optimal colors and ratios for a specific bus line
+        Returns a list of (color, ratio) tuples
+        Cached to avoid repeated API calls for the same line number
+        """
+        try:
+            if not self.epd:
+                logger.warning("EPD not set, falling back to black and white")
+                return [('black', 0.7), ('white', 0.3)]
+
+            response = requests.get(f"{self.colors_url}/{line}")
+            response.raise_for_status()
+            line_colors = response.json()
+
+            # Extract the hex color from the response
+            if isinstance(line_colors, dict) and 'background' in line_colors:
+                hex_color = line_colors['background']
+            else:
+                hex_color = line_colors.get(line)
+
+            # Validate hex color
+            if not hex_color or not self._is_valid_hex_color(hex_color):
+                logger.warning(f"Invalid hex color received for line {line}: {hex_color}")
+                return [('black', 0.7), ('white', 0.3)]  # Fallback to black and white
+
+            # Convert hex to RGB
+            target_rgb = self._hex_to_rgb(hex_color)
+            return find_optimal_colors(target_rgb, self.epd)
+
+        except Exception as e:
+            logger.error(f"Error getting line color for {line}: {e}")
+            return [('black', 0.7), ('white', 0.3)]  # Fallback to black and white
+
+    def get_api_health(self) -> bool:
+        """Check if the API is healthy"""
+        try:
+            response = requests.get(f"{self.base_url}/health")
+            logger.info(f"Health check response: {response.status_code}")
+            return response.status_code == 200
+        except Exception as e:
+            logger.error(f"Health check failed: {e}")
+            return False
+
+    def stop(self):
+        """Stop the bus service"""
+        self._stop_event.set()
 
 def draw_weather_info(draw, Himage, weather_data: WeatherData, font_paths, epd, MARGIN):
     """Draw weather information in the top right corner."""

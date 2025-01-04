@@ -167,6 +167,30 @@ const SETTING_GROUPS = {
                 default: 3600
             }
         }
+    },
+    bus: {
+        title: "Bus Service Settings",
+        description: "Configure bus service behavior and endpoints",
+        settings: {
+            BUS_API_BASE_URL: {
+                type: "text",
+                label: "Bus API URL",
+                description: "URL for the realtime bus API endpoint",
+                default: "http://localhost:5001/"
+            },
+            BUS_SCHEDULE_URL: {
+                type: "text",
+                label: "Bus Schedule URL",
+                description: "URL for the schedule-only bus API endpoint (defaults to Bus API URL if not set)",
+                default: "http://localhost:8000/"
+            },
+            PRE_LOAD_BUS_SCHEDULE: {
+                type: "boolean",
+                label: "Pre-load Bus Schedule",
+                description: "Pre-load bus schedule data on startup to speed up fallback when realtime data is unavailable (experimental)",
+                default: true
+            }
+        }
     }
 };
 

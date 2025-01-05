@@ -58,7 +58,7 @@ Stop = _get_stop_config()
 Lines = os.getenv("Lines", "")  # Default to empty string instead of None
 bus_api_base_url = os.getenv("BUS_API_BASE_URL", "http://localhost:5001/")
 bus_schedule_url = os.getenv("BUS_SCHEDULE_URL", bus_api_base_url)
-pre_load_bus_schedule = os.getenv("PRE_LOAD_BUS_SCHEDULE", "true").lower() == "true"
+pre_load_bus_schedule = os.getenv("PRE_LOAD_BUS_SCHEDULE", "false").lower() == "true"
 bus_provider = os.getenv("Provider", "stib")
 logging.debug(f"Bus provider: {bus_provider}. Base URL: {bus_api_base_url}. Monitoring lines: {Lines if Lines else 'all'} and stop: {Stop}")
 
@@ -170,7 +170,7 @@ class BusService:
                 # Fallback to direct IP if resolution fails
                 return "http://127.0.0.1:5001/"
         return base_url
-
+    
     def _resolve_schedule_url(self) -> str:
         """Resolve the schedule URL, handling .local domains"""
         schedule_url = bus_schedule_url.lower()
@@ -201,8 +201,8 @@ class BusService:
                         logger.info("API is healthy")
                         break
                 except Exception as e:
-                    logger.warning(f"API health check failed: {e}")
-                time.sleep(10)  # Wait 10 seconds before next attempt
+                        logger.warning(f"API health check failed: {e}")
+                        time.sleep(10)  # Wait 10 seconds before next attempt
 
             # If pre-load is enabled and we have a schedule provider, start pre-warming
             if pre_load_bus_schedule and self._get_provider_type(self.provider) == 'realtime':
@@ -221,7 +221,7 @@ class BusService:
                         else:
                             logger.warning(f"Pre-warm returned status {response.status_code}: {response.text}")
                     except Exception as e:
-                        logger.warning(f"Failed to pre-warm schedule provider: {e}")
+                                    logger.warning(f"Failed to pre-warm schedule provider: {e}")
 
         # Start health check in background thread
         thread = threading.Thread(target=health_check_task, name="APIHealthCheck")

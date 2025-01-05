@@ -27,6 +27,10 @@ logger = logging.getLogger(__name__)
 
 dotenv.load_dotenv(override=True)
 
+
+fallback_to_schedule = os.getenv("fallback_to_schedule", "false").lower() == "true"
+
+
 def _get_stop_config():
     """
     Get stop configuration from environment variables.
@@ -361,7 +365,7 @@ class BusService:
 
         if not current_backoff.should_retry():
             # Only try fallback if we're a RT provider
-            if provider_type == 'realtime':
+            if provider_type == 'realtime' and fallback_to_schedule:
                 fallback = self._get_fallback_provider()
                 if fallback and self._check_schedule_health():
                     logger.info(f"Switching to fallback provider: {fallback}")

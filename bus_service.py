@@ -155,7 +155,7 @@ class BusService:
 
     def _resolve_base_url(self) -> str:
         """Resolve the base URL, handling .local domains"""
-        base_url = bus_api_base_url.lower()
+        base_url = bus_api_base_url.lower().rstrip('/')
         if '.local' in base_url:
             try:
                 # Extract hostname from URL
@@ -168,12 +168,12 @@ class BusService:
             except Exception as e:
                 logger.warning(f"Could not resolve {hostname}, falling back to IP: {e}")
                 # Fallback to direct IP if resolution fails
-                return "http://127.0.0.1:5001/"
+                return "http://127.0.0.1:5001"
         return base_url
     
     def _resolve_schedule_url(self) -> str:
         """Resolve the schedule URL, handling .local domains"""
-        schedule_url = bus_schedule_url.lower()
+        schedule_url = bus_schedule_url.lower().rstrip('/')
         if '.local' in schedule_url:
             try:
                 # Extract hostname from URL
@@ -186,7 +186,7 @@ class BusService:
             except Exception as e:
                 logger.warning(f"Could not resolve {hostname}, falling back to IP: {e}")
                 # Fallback to direct IP if resolution fails
-                return "http://127.0.0.1:5001/"
+                return "http://127.0.0.1:5001"
         return schedule_url
 
     def _start_health_check(self):
@@ -277,6 +277,8 @@ class BusService:
     def _update_api_urls(self):
         """Update API URLs based on current provider"""
         base = self.schedule_url if self._get_provider_type(self.current_provider) == 'schedule' else self.base_url
+        # Remove trailing slashes from base URL and ensure single slashes in path
+        base = base.rstrip('/')
         self.api_url = f"{base}/api/{self.current_provider}/waiting_times?stop_id={Stop}&download=true"
         self.colors_url = f"{base}/api/{self.current_provider}/colors"
         logger.debug(f"Updated URLs - API: {self.api_url}, Colors: {self.colors_url}")
@@ -327,25 +329,35 @@ class BusService:
         try:
             fallback = self._get_fallback_provider()
             if not fallback:
+                logger.warning("No fallback provider configured")
                 return False
+            logger.info(f"Checking schedule health for provider {fallback}")
             response = requests.get(f"{self.schedule_url}/health", timeout=10)
-            return response.status_code == 200
+            logger.info(f"Schedule health check response: {response.status_code}")
+            if response.status_code != 200:
+                logger.warning(f"Schedule health check failed with status {response.status_code}")
+                return False
+            return True
         except Exception as e:
-            logger.debug(f"Schedule health check failed: {e}")
+            logger.warning(f"Schedule health check failed: {e}")
             return False
 
     def get_waiting_times(self) -> tuple[List[Dict], str, str]:
         """Fetch and process waiting times for our bus lines"""
         # Only check RT if we started with a RT provider
         if self.current_provider != self.provider and self._get_provider_type(self.provider) == 'realtime':
+            logger.info(f"Attempting to switch back to realtime provider {self.provider}")
             success, rt_data = self._try_realtime_provider()
             if success:
                 logger.info("Successfully switched back to realtime provider")
                 return self._process_response_data(rt_data)
+            else:
+                logger.warning("Failed to switch back to realtime provider")
 
         # Get current backoff based on provider type
         provider_type = self._get_provider_type(self.current_provider)
         current_backoff = self._rt_backoff if provider_type == 'realtime' else self._fallback_backoff
+        logger.debug(f"Current provider: {self.current_provider}, type: {provider_type}")
 
         if not current_backoff.should_retry():
             # Only try fallback if we're a RT provider
@@ -358,6 +370,8 @@ class BusService:
                     # Only retry fallback if it's not in backoff
                     if self._fallback_backoff.should_retry():
                         return self.get_waiting_times()
+                    else:
+                        logger.warning("Fallback provider is in backoff state")
             error_type = current_backoff.get_last_error()
             error_msg = {
                 'connection': "Unable to connect to service",
@@ -367,8 +381,12 @@ class BusService:
             return self._get_error_data(), f"{error_msg}. Next attempt at {current_backoff.get_retry_time_str()}", ""
 
         try:
+            logger.info(f"Fetching waiting times from {self.api_url}")
             response = requests.get(self.api_url, timeout=120)
             logger.debug(f"API response time: {response.elapsed.total_seconds():.3f} seconds")
+            logger.debug(f"API response status: {response.status_code}")
+            if response.status_code != 200:
+                logger.warning(f"API response text: {response.text}")
             response.raise_for_status()
             data = response.json()
             
@@ -394,7 +412,7 @@ class BusService:
             # If using realtime provider and failed, try fallback
             if self.current_provider == self.provider:
                 fallback = self._get_fallback_provider()
-                if fallback and self._check_schedule_health():
+                if fallback:
                     logger.info(f"Error with realtime provider, switching to fallback: {fallback}")
                     self.current_provider = fallback
                     self._update_api_urls()

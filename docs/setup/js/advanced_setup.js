@@ -188,7 +188,7 @@ const SETTING_GROUPS = {
                 type: "boolean",
                 label: "Pre-load Bus Schedule",
                 description: "Pre-load bus schedule data on startup to speed up fallback when realtime data is unavailable (experimental)",
-                default: true
+                default: false
             }
         }
     }

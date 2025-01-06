@@ -2,9 +2,9 @@
 
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.27 (2025-01-03)"  # AUTO-INCREMENT
+echo "Version: 0.0.28 (2025-01-06)"  # AUTO-INCREMENT
 echo "----------------------------------------"
-echo "MIT License - Copyright (c) 2024 Bence Damokos"
+echo "MIT License - Copyright (c) 2024-2025 Bence Damokos"
 echo "----------------------------------------"
 
 # Store backup information in a fixed location
@@ -258,7 +258,7 @@ apt-get update
 check_error "Failed to update package list"
 
 # Install dependencies
-apt-get install -y git gh fonts-dejavu watchdog python3-dev network-manager libcairo2-dev pkg-config python3-dev python3-serial
+apt-get install -y git gh fonts-dejavu watchdog python3-dev network-manager libcairo2-dev pkg-config python3-dev python3-serial libmsgpack-dev build-essential
 check_error "Failed to install packages"
 
 # Setup watchdog

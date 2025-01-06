@@ -1,4 +1,4 @@
-# Version: 0.0.13 (2025-01-02) # AUTO-INCREMENT
+# Version: 0.0.14 (2025-01-06) # AUTO-INCREMENT
 # Add this file to pre-commit hook to auto-increment
 
 # Actual requirements below

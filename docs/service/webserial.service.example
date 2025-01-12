@@ -1,5 +1,5 @@
 [Unit]
-# Version: 0.0.3 (2025-01-12) # AUTO-INCREMENT
+# Version: 0.0.6 (2025-01-12) # AUTO-INCREMENT
 Description=WebSerial Configuration Interface
 After=network.target bluetooth.target
 Wants=network.target bluetooth.target

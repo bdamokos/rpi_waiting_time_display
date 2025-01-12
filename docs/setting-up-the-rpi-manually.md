@@ -1,3 +1,7 @@
+---
+layout: default
+title: Setting up the Raspberry Pi (manual setup)
+---
 # Setting up the Raspberry Pi
 
 # Prepare the SD card

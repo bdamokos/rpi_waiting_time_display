@@ -1,4 +1,14 @@
+---
+layout: default
+title: Setting up the Raspberry Pi
+---
 # Setting up the Raspberry Pi
+
+This guide will walk you through the steps to set up the Raspberry Pi for the waiting time display.
+
+It assumes some familiarity with the Raspberry Pi and the command line for the initial setup (step 1), after which the device can be configured via the web interface. (For example, you can pre-setup the device and let the end user just connect to WiFi and configure the display in Step 2).
+
+For advanced users, there is a more manual setup guide [here](./setting-up-the-rpi-manually).
 
 ## Step 1: Initial Setup (Developer)
 
@@ -59,9 +69,8 @@ The script will:
 ### Connect Your Display
 1. Insert the microSD card into your Raspberry Pi (if not already inserted)
 2. Connect your Raspberry Pi to power using the USB cable
-3. Wait for the display to show the setup QR code
-4. Scan the QR code with your phone or visit this page on your computer
-5. Click the "Connect Device" button above
+3. Visit the [setup page](http://raspberrypi.local:8000/setup) in Google Chrome or Edge
+
 
 ### Configure Your Display
 The setup wizard will guide you through:
@@ -78,8 +87,4 @@ After completing the wizard, your display will automatically update and show:
 ![Assembled and configured display](images/hardware_setup_finished_top.png)
 
 # Setting up the backend server
-:warning: **Important:** The backend server needs to be set up for the display to work (otherwise the display will only display the weather). See the [backend server readme](https://github.com/bdamokos/brussels_transit) for more information. If the API keys are not configured, the service will not start.
-
-**Currently the set up script installs the backend server, but it does not configure it.** You need to set up the API keys manually and make sure that the backend server is monitoring the same stops as are requested by your display.
-
-:warning: **Note:** The display requires internet access to show transit times and weather information. Without internet, it will display a QR code to help you connect to WiFi.
+**Important:** The backend server needs to be set up for the display to work (otherwise the display will only display the weather and flights). See the [backend server readme](https://github.com/bdamokos/brussels_transit) for more information. If the API keys are not configured, the service will not start. (If the backend server is set up on the Raspberry Pi, you can use the setup wizard to input the necessary API keys)

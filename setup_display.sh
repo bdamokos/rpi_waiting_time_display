@@ -2,7 +2,7 @@
 
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.28 (2025-01-06)"  # AUTO-INCREMENT
+echo "Version: 0.0.29 (2025-01-12)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024-2025 Bence Damokos"
 echo "----------------------------------------"
@@ -127,7 +127,7 @@ clone_repository() {
     if [ ! -d "$repo_path" ]; then
         echo "Cloning $repo_name repository..."
         cd "$ACTUAL_HOME"
-        su - "$ACTUAL_USER" -c "gh repo clone bdamokos/$repo_name $target_dir"
+        su - "$ACTUAL_USER" -c "git clone https://github.com/bdamokos/$repo_name.git $target_dir"
         check_error "Failed to clone $repo_name"
     else
         echo "$repo_name repository already exists"
@@ -280,9 +280,6 @@ systemctl start watchdog
 
 # Switch to actual user for git operations
 echo "Setting up git..."
-su - $ACTUAL_USER -c "gh auth login"
-check_error "Failed to login to GitHub"
-
 # Clone repositories
 echo "Cloning repositories..."
 cd $ACTUAL_HOME
@@ -344,14 +341,28 @@ read -p "Enter your choice (1-3): " mode_choice
 case $mode_choice in
     1)
         echo "Setting up normal mode..."
-        clone_repository "brussels_transit" ""
+        if [ ! -d "$ACTUAL_HOME/brussels_transit" ]; then
+            echo "Cloning brussels transit repository..."
+            cd "$ACTUAL_HOME"
+            su - "$ACTUAL_USER" -c "git clone https://github.com/bdamokos/brussels_transit.git"
+            check_error "Failed to clone brussels transit"
+        else
+            echo "Brussels transit repository already exists"
+        fi
         setup_service_files "normal"
         su - $ACTUAL_USER -c "source $ACTUAL_HOME/display_env/bin/activate && cd $ACTUAL_HOME/brussels_transit && pip install -r requirements.txt"
         check_error "Failed to install brussels transit requirements"
         ;;
     2)
         echo "Setting up Docker mode..."
-        clone_repository "brussels_transit" ""
+        if [ ! -d "$ACTUAL_HOME/brussels_transit" ]; then
+            echo "Cloning brussels transit repository..."
+            cd "$ACTUAL_HOME"
+            su - "$ACTUAL_USER" -c "git clone https://github.com/bdamokos/brussels_transit.git"
+            check_error "Failed to clone brussels transit"
+        else
+            echo "Brussels transit repository already exists"
+        fi
         setup_service_files "docker"
         # Install Docker if not present
         if ! command -v docker &> /dev/null; then
@@ -375,7 +386,14 @@ case $mode_choice in
         ;;
     *)
         echo "Invalid choice. Defaulting to normal mode..."
-        clone_repository "brussels_transit" ""
+        if [ ! -d "$ACTUAL_HOME/brussels_transit" ]; then
+            echo "Cloning brussels transit repository..."
+            cd "$ACTUAL_HOME"
+            su - "$ACTUAL_USER" -c "git clone https://github.com/bdamokos/brussels_transit.git"
+            check_error "Failed to clone brussels transit"
+        else
+            echo "Brussels transit repository already exists"
+        fi
         setup_service_files "normal"
         ;;
 esac

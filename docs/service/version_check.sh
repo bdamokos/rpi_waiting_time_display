@@ -2,7 +2,7 @@
 
 echo "----------------------------------------"
 echo "Version Check Script"
-echo "Version: 0.0.2 (2025-01-03)"  # AUTO-INCREMENT
+echo "Version: 0.0.3 (2025-01-12)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2025 Bence Damokos"
 echo "----------------------------------------"
@@ -10,8 +10,32 @@ echo "----------------------------------------"
 # Function to get the latest release tag
 get_latest_release() {
     local repo="$1"
-    local latest_release=$(curl -s "https://api.github.com/repos/bdamokos/$repo/releases/latest" | grep -oP '"tag_name": "\K[^"]+')
-    echo "$latest_release"
+    local api_url="https://api.github.com/repos/bdamokos/$repo/releases/latest"
+    
+    # Add user agent to avoid 403 errors
+    local response=$(curl -sL \
+        -H "Accept: application/vnd.github.v3+json" \
+        -H "User-Agent: rpi-display-version-check" \
+        "$api_url")
+    
+    # Check for rate limit
+    if echo "$response" | grep -q "API rate limit exceeded"; then
+        echo "Rate limited. Using git tags instead..."
+        git fetch --tags > /dev/null 2>&1
+        git describe --tags --abbrev=0 2>/dev/null || echo "none"
+        return
+    fi
+    
+    # Extract version from response
+    local latest_release=$(echo "$response" | grep -oP '"tag_name": "\K[^"]+')
+    
+    if [ -z "$latest_release" ]; then
+        echo "Could not fetch release info. Using git tags instead..."
+        git fetch --tags > /dev/null 2>&1
+        git describe --tags --abbrev=0 2>/dev/null || echo "none"
+    else
+        echo "$latest_release"
+    fi
 }
 
 # Function to get the current version
@@ -38,8 +62,8 @@ check_update_needed() {
             local current_version=$(get_current_version "$repo_path")
             local latest_release=$(get_latest_release "$repo_name")
             
-            if [ -z "$latest_release" ]; then
-                echo "Could not fetch latest release information"
+            if [ -z "$latest_release" ] || [ "$latest_release" = "none" ]; then
+                echo "Could not fetch release information"
                 return 1
             fi
             
@@ -52,7 +76,13 @@ check_update_needed() {
             fi
             ;;
         "main")
-            git fetch -q origin main
+            # Try to fetch without auth first
+            if ! git fetch -q origin main 2>/dev/null; then
+                # If fetch fails, try with https
+                git remote set-url origin https://github.com/bdamokos/"$repo_name".git
+                git fetch -q origin main
+            fi
+            
             if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
                 echo "Updates available from main branch"
                 return 0
@@ -82,7 +112,7 @@ perform_update() {
             ;;
         "releases")
             local latest_release=$(get_latest_release "$repo_name")
-            if [ -n "$latest_release" ]; then
+            if [ -n "$latest_release" ] && [ "$latest_release" != "none" ]; then
                 echo "Updating to release $latest_release..."
                 git fetch --tags
                 git checkout "$latest_release"
@@ -92,6 +122,8 @@ perform_update() {
             ;;
         "main")
             echo "Updating to latest main branch..."
+            # Ensure we're using https
+            git remote set-url origin https://github.com/bdamokos/"$repo_name".git
             git reset --hard origin/main
             git pull -v origin main
             return $?

@@ -23,20 +23,34 @@ import threading
 import socket
 import subprocess
 
-# Set up logging
-logging.basicConfig(
-    handlers=[RotatingFileHandler('/home/bence/display_programme/logs/webserial.log', maxBytes=100000, backupCount=3)],
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
-# Add console handler
-console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.INFO)
-console_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
-logging.getLogger().addHandler(console_handler)
+# Create logs directory if it doesn't exist
+log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
+os.makedirs(log_dir, exist_ok=True)
 
+# Set up logging
+log_file = os.path.join(log_dir, 'webserial.log')
+try:
+    logging.basicConfig(
+        handlers=[RotatingFileHandler(log_file, maxBytes=100000, backupCount=3)],
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s'
+    )
+    # Add console handler
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+    logging.getLogger().addHandler(console_handler)
+except Exception as e:
+    # If we can't write to the log file, log to syslog
+    import syslog
+    syslog.syslog(syslog.LOG_ERR, f"Failed to setup file logging: {str(e)}")
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s'
+    )
 
 logger = logging.getLogger(__name__)
+logger.info("WebSerial server starting up...")
 
 class WebSerialServer:
     def __init__(self):
@@ -50,21 +64,44 @@ class WebSerialServer:
     def setup_serial_ports(self):
         """Initialize serial connections"""
         try:
-            # USB Gadget Serial
-            usb_serial = serial.Serial(
-                port='/dev/ttyGS0',  # USB gadget serial port
-                baudrate=115200,
-                bytesize=serial.EIGHTBITS,
-                parity=serial.PARITY_NONE,
-                stopbits=serial.STOPBITS_ONE,
-                timeout=None,
-                xonxoff=False,
-                rtscts=False,
-                dsrdtr=False
-            )
-            self.serial_ports['usb'] = usb_serial
-            self.poll.register(usb_serial.fileno(), select.POLLIN)
-            logger.info("USB Serial connection established")
+            # Wait for USB Gadget Serial (up to 10 seconds)
+            usb_connected = False
+            for _ in range(10):
+                if os.path.exists('/dev/ttyGS0'):
+                    try:
+                        # USB Gadget Serial
+                        usb_serial = serial.Serial(
+                            port='/dev/ttyGS0',  # USB gadget serial port
+                            baudrate=115200,
+                            bytesize=serial.EIGHTBITS,
+                            parity=serial.PARITY_NONE,
+                            stopbits=serial.STOPBITS_ONE,
+                            timeout=None,
+                            xonxoff=False,
+                            rtscts=False,
+                            dsrdtr=False
+                        )
+                        self.serial_ports['usb'] = usb_serial
+                        self.poll.register(usb_serial.fileno(), select.POLLIN)
+                        logger.info("USB Serial connection established")
+                        usb_connected = True
+                        break
+                    except Exception as e:
+                        logger.error(f"Failed to open USB Serial port: {e}")
+                        time.sleep(1)
+                else:
+                    logger.info("Waiting for /dev/ttyGS0...")
+                    time.sleep(1)
+            
+            if not usb_connected:
+                logger.error("USB Gadget device not found. Please ensure the USB gadget module is loaded.")
+                # Try to load the module
+                try:
+                    subprocess.run(['sudo', 'modprobe', 'libcomposite'], check=True)
+                    subprocess.run(['sudo', 'modprobe', 'usb_f_acm'], check=True)
+                    logger.info("USB modules loaded, please wait for device to appear")
+                except Exception as e:
+                    logger.error(f"Failed to load USB modules: {e}")
 
             # Bluetooth Serial (if available)
             try:
@@ -92,9 +129,16 @@ class WebSerialServer:
             except Exception as e:
                 logger.info(f"Bluetooth Serial not available: {e}")
 
+            # If no ports are available, raise an error
+            if not self.serial_ports:
+                raise Exception("No serial ports could be initialized")
+
         except Exception as e:
             logger.error(f"Failed to setup serial ports: {e}")
-            raise
+            # Don't raise the error, let the service continue running and retry later
+            return False
+        
+        return True
 
     def get_local_ip(self):
         """Get the local IP address of the device"""

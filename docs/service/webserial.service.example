@@ -1,5 +1,5 @@
 [Unit]
-# Version: 0.0.2 (2024-12-21) # AUTO-INCREMENT
+# Version: 0.0.3 (2025-01-12) # AUTO-INCREMENT
 Description=WebSerial Configuration Interface
 After=network.target bluetooth.target
 Wants=network.target bluetooth.target
@@ -7,12 +7,20 @@ Wants=network.target bluetooth.target
 [Service]
 Type=simple
 User=pi
-ExecStart=/usr/bin/python3 /home/pi/display_programme/webserial_server.py
+WorkingDirectory=/home/pi/display_programme
+# Run USB gadget setup first
+ExecStartPre=/bin/bash /home/pi/display_programme/docs/service/setup_webserial.sh
+ExecStart=/home/pi/display_env/bin/python3 /home/pi/display_programme/webserial_server.py
 Environment=PYTHONUNBUFFERED=1
 StandardOutput=append:/var/log/webserial.out
 StandardError=append:/var/log/webserial.err
 Restart=on-failure
 RestartSec=5
+
+# Ensure proper permissions
+PermissionsStartOnly=true
+ExecStartPre=/bin/mkdir -p /home/pi/display_programme/logs
+ExecStartPre=/bin/chown -R pi:pi /home/pi/display_programme/logs
 
 [Install]
 WantedBy=multi-user.target
@@ -37,3 +45,5 @@ WantedBy=multi-user.target
 #
 # 7. View logs:
 #    journalctl -u webserial.service -f
+#    tail -f /var/log/webserial.out
+#    tail -f /var/log/webserial.err

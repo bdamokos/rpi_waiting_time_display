@@ -13,7 +13,7 @@ A Raspberry Pi project that displays bus waiting times using an e-Paper display 
 [View detailed features and screenshots →](https://bdamokos.github.io/rpi_waiting_time_display/features/)
 
 ## Quick Start
-1. [Set up your Raspberry Pi](https://bdamokos.github.io/rpi_waiting_time_display/setting-up-the-rpi-webserial/)
+1. [Set up your Raspberry Pi](https://bdamokos.github.io/rpi_waiting_time_display/setting-up-the-rpi-webserial)
 2. Connect your display via USB
 3. Open the [setup interface](https://bdamokos.github.io/rpi_waiting_time_display/setup/) to configure
 

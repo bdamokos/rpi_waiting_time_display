@@ -20,20 +20,25 @@ get_latest_release() {
     
     # Check for rate limit
     if echo "$response" | grep -q "API rate limit exceeded"; then
-        echo "Rate limited. Using git tags instead..."
+        logger "Rate limited. Using git tags instead..."
         git fetch --tags > /dev/null 2>&1
-        git describe --tags --abbrev=0 2>/dev/null || echo "none"
+        local tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "none")
+        logger "Found tag: $tag"
+        echo "$tag"
         return
     fi
     
-    # Extract version from response
-    local latest_release=$(echo "$response" | grep -oP '"tag_name": "\K[^"]+')
+    # Extract version from response (compatible with both BSD and GNU grep)
+    local latest_release=$(echo "$response" | grep -o '"tag_name": "[^"]*"' | cut -d'"' -f4)
     
     if [ -z "$latest_release" ]; then
-        echo "Could not fetch release info. Using git tags instead..."
+        logger "Could not fetch release info. Using git tags instead..."
         git fetch --tags > /dev/null 2>&1
-        git describe --tags --abbrev=0 2>/dev/null || echo "none"
+        local tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "none")
+        logger "Found tag: $tag"
+        echo "$tag"
     else
+        logger "Found release: $latest_release"
         echo "$latest_release"
     fi
 }
@@ -42,7 +47,14 @@ get_latest_release() {
 get_current_version() {
     local repo_path="$1"
     cd "$repo_path"
-    git describe --tags --abbrev=0 2>/dev/null || echo "none"
+    local tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "none")
+    logger "Current version: $tag"
+    echo "$tag"
+}
+
+# Function for consistent logging
+logger() {
+    echo "$1" >&2  # Send to stderr so it doesn't interfere with version output
 }
 
 # Function to check if update is needed
@@ -55,7 +67,7 @@ check_update_needed() {
     
     case "$update_mode" in
         "none")
-            echo "Updates disabled"
+            logger "Updates disabled"
             return 1
             ;;
         "releases")
@@ -63,15 +75,15 @@ check_update_needed() {
             local latest_release=$(get_latest_release "$repo_name")
             
             if [ -z "$latest_release" ] || [ "$latest_release" = "none" ]; then
-                echo "Could not fetch release information"
+                logger "Could not fetch release information"
                 return 1
             fi
             
             if [ "$current_version" != "$latest_release" ]; then
-                echo "Update available: $current_version -> $latest_release"
+                logger "Update available: $current_version -> $latest_release"
                 return 0
             else
-                echo "Already at latest release: $current_version"
+                logger "Already at latest release: $current_version"
                 return 1
             fi
             ;;
@@ -84,15 +96,15 @@ check_update_needed() {
             fi
             
             if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
-                echo "Updates available from main branch"
+                logger "Updates available from main branch"
                 return 0
             else
-                echo "Already up to date with main branch"
+                logger "Already up to date with main branch"
                 return 1
             fi
             ;;
         *)
-            echo "Invalid update mode: $update_mode"
+            logger "Invalid update mode: $update_mode"
             return 1
             ;;
     esac
@@ -113,7 +125,7 @@ perform_update() {
         "releases")
             local latest_release=$(get_latest_release "$repo_name")
             if [ -n "$latest_release" ] && [ "$latest_release" != "none" ]; then
-                echo "Updating to release $latest_release..."
+                logger "Updating to release $latest_release..."
                 git fetch --tags
                 git checkout "$latest_release"
                 return $?
@@ -121,7 +133,7 @@ perform_update() {
             return 1
             ;;
         "main")
-            echo "Updating to latest main branch..."
+            logger "Updating to latest main branch..."
             # Ensure we're using https
             git remote set-url origin https://github.com/bdamokos/"$repo_name".git
             git reset --hard origin/main
@@ -132,4 +144,13 @@ perform_update() {
             return 1
             ;;
     esac
-} 
+}
+
+# Main section to handle direct function calls
+if [ "$1" = "check_update_needed" ] && [ $# -eq 4 ]; then
+    check_update_needed "$2" "$3" "$4"
+    exit $?
+elif [ "$1" = "perform_update" ] && [ $# -eq 4 ]; then
+    perform_update "$2" "$3" "$4"
+    exit $?
+fi 

@@ -258,7 +258,7 @@ apt-get update
 check_error "Failed to update package list"
 
 # Install dependencies
-apt-get install -y git gh fonts-dejavu watchdog python3-dev network-manager libcairo2-dev pkg-config python3-dev python3-serial libmsgpack-dev build-essential
+apt-get install -y git gh fonts-dejavu watchdog python3-dev network-manager libcairo2-dev pkg-config python3-dev python3-serial libmsgpack-dev build-essential fontconfig
 check_error "Failed to install packages"
 
 # Setup watchdog
@@ -570,6 +570,13 @@ fi
 # Download noto font
 echo "Downloading Noto font..."
 
+# Check if fontconfig is available
+if ! command -v fc-cache > /dev/null; then
+    echo "fontconfig not found. Installing..."
+    apt-get install -y fontconfig
+    check_error "Failed to install fontconfig"
+fi
+
 # Create system font directory if it doesn't exist
 sudo mkdir -p /usr/local/share/fonts/noto
 
@@ -595,9 +602,11 @@ fi
 
 # Verify installation
 echo "Verifying Noto font installation..."
-fc-list | grep -i noto
-
-
+if fc-list | grep -i noto; then
+    echo "Noto font verification successful."
+else
+    echo "Warning: Noto font not found in font list. This might affect emoji display."
+fi
 
 # Enable and start services with error checking
 systemctl daemon-reload

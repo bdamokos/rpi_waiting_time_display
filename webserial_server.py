@@ -94,7 +94,7 @@ class WebSerialServer:
                     time.sleep(1)
             
             if not usb_connected:
-                logger.error("USB Gadget device not found. Please ensure the USB gadget module is loaded.")
+                logger.warning("USB Gadget device not found")
                 # Try to load the module
                 try:
                     subprocess.run(['sudo', 'modprobe', 'libcomposite'], check=True)
@@ -104,34 +104,33 @@ class WebSerialServer:
                     logger.error(f"Failed to load USB modules: {e}")
 
             # Bluetooth Serial (if available)
+            bt_connected = False
             try:
-                # Wait for rfcomm0 to be available (up to 5 seconds)
-                for _ in range(5):
-                    if os.path.exists('/dev/rfcomm0'):
-                        break
-                    logger.info("Waiting for /dev/rfcomm0...")
-                    time.sleep(1)
-
-                bt_serial = serial.Serial(
-                    port='/dev/rfcomm0',  # Default Bluetooth serial port
-                    baudrate=115200,
-                    bytesize=serial.EIGHTBITS,
-                    parity=serial.PARITY_NONE,
-                    stopbits=serial.STOPBITS_ONE,
-                    timeout=None,
-                    xonxoff=False,
-                    rtscts=False,
-                    dsrdtr=False
-                )
-                self.serial_ports['bluetooth'] = bt_serial
-                self.poll.register(bt_serial.fileno(), select.POLLIN)
-                logger.info("Bluetooth Serial connection established")
+                # Only wait for rfcomm0 if it exists or appears quickly
+                if os.path.exists('/dev/rfcomm0'):
+                    bt_serial = serial.Serial(
+                        port='/dev/rfcomm0',  # Default Bluetooth serial port
+                        baudrate=115200,
+                        bytesize=serial.EIGHTBITS,
+                        parity=serial.PARITY_NONE,
+                        stopbits=serial.STOPBITS_ONE,
+                        timeout=None,
+                        xonxoff=False,
+                        rtscts=False,
+                        dsrdtr=False
+                    )
+                    self.serial_ports['bluetooth'] = bt_serial
+                    self.poll.register(bt_serial.fileno(), select.POLLIN)
+                    logger.info("Bluetooth Serial connection established")
+                    bt_connected = True
+                else:
+                    logger.info("Bluetooth Serial (rfcomm0) not available")
             except Exception as e:
                 logger.info(f"Bluetooth Serial not available: {e}")
 
-            # If no ports are available, raise an error
+            # Only raise an error if no ports are available
             if not self.serial_ports:
-                raise Exception("No serial ports could be initialized")
+                raise Exception("No serial ports could be initialized - both USB and Bluetooth connections failed")
 
         except Exception as e:
             logger.error(f"Failed to setup serial ports: {e}")

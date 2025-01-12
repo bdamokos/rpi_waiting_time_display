@@ -4,6 +4,8 @@ title: Setting up the Raspberry Pi (manual setup)
 ---
 # Setting up the Raspberry Pi
 
+Use this guide to set up your Raspberry Pi fully manually. You can use the other guide if you prefer to use the built in configuration interface once you have the basic setup done.
+
 # Prepare the SD card
 
 Using Raspberry Pi Imager, download the Raspberry Pi OS Lite (64-bit) or Raspberry Pi OS Desktop (64-bit) image onto a microSD card.

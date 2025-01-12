@@ -8,8 +8,6 @@ Wants=network.target bluetooth.target
 Type=simple
 User=pi
 WorkingDirectory=/home/pi/display_programme
-# Run USB gadget setup first
-ExecStartPre=/bin/bash /home/pi/display_programme/docs/service/setup_webserial.sh
 ExecStart=/home/pi/display_env/bin/python3 /home/pi/display_programme/webserial_server.py
 Environment=PYTHONUNBUFFERED=1
 StandardOutput=append:/var/log/webserial.out
@@ -26,6 +24,9 @@ ExecStartPre=/bin/chown -R pi:pi /home/pi/display_programme/logs
 WantedBy=multi-user.target
 
 # Installation instructions:
+# Note: This service is automatically installed by setup_display.sh
+# These instructions are only needed if you want to install it manually:
+#
 # 1. Make sure to change "pi" to the username of the account you are using, e.g. /home/pi --> /home/your_username
 #
 # 2. Copy this file to /etc/systemd/system/webserial.service:

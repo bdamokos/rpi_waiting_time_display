@@ -9,6 +9,7 @@ title: E-Paper Display Setup
     <title>E-Paper Display Setup</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/transit_setup.css">
     <script>
         // Check if we're on 0.0.0.0:4000 and redirect to localhost:4000
         if (window.location.hostname === '0.0.0.0' && window.location.port === '4000') {
@@ -112,7 +113,8 @@ title: E-Paper Display Setup
 
             <div id="transit-setup" class="step">
                 <h2>Step 7: Transit Configuration</h2>
-                <p>Set up your transit information.</p>
+                <p>Set up your transit information. 
+                    <br><b>Note:</b> API keys for real-time providers (STIB, De Lijn, BKK) should be configured in Step 5: API Keys.</p>
                 <button id="transit-setup-button" class="button">
                     <svg xmlns="http://www.w3.org/2000/svg"
                         viewBox="0 0 512 512"><!--!Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2024 Fonticons, Inc.-->
@@ -257,6 +259,7 @@ title: E-Paper Display Setup
     <script src="js/advanced_setup.js" type="module"></script>
     <script src="js/location_setup.js" type="module"></script>
     <script src="js/nominatim.js" type="module"></script>
+    <script src="js/transit_setup.js"></script>
 </body>
 
 </html>

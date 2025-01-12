@@ -1,5 +1,22 @@
 # Changelog
 
+## [Unreleased](https://github.com/bdamokos/rpi_waiting_time_display/tree/HEAD)
+
+[Full Changelog](https://github.com/bdamokos/rpi_waiting_time_display/compare/v0.2.0...HEAD)
+
+## [v0.2.0](https://github.com/bdamokos/rpi_waiting_time_display/tree/v0.2.0) (2025-01-12)
+
+[Full Changelog](https://github.com/bdamokos/rpi_waiting_time_display/compare/v0.1.1...v0.2.0)
+
+**Closed issues:**
+
+- Finish the configuration wizard [\#26](https://github.com/bdamokos/rpi_waiting_time_display/issues/26)
+
+**Merged pull requests:**
+
+- Bump pillow from 11.0.0 to 11.1.0 [\#32](https://github.com/bdamokos/rpi_waiting_time_display/pull/32) ([dependabot[bot]](https://github.com/apps/dependabot))
+- Bump niquests from 3.12.0 to 3.12.1 [\#31](https://github.com/bdamokos/rpi_waiting_time_display/pull/31) ([dependabot[bot]](https://github.com/apps/dependabot))
+
 ## [v0.1.1](https://github.com/bdamokos/rpi_waiting_time_display/tree/v0.1.1) (2025-01-05)
 
 [Full Changelog](https://github.com/bdamokos/rpi_waiting_time_display/compare/v0.1.0...v0.1.1)

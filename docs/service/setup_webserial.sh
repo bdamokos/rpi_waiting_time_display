@@ -2,7 +2,7 @@
 
 echo "----------------------------------------"
 echo "WebSerial Setup Script"
-echo "Version: 0.0.4 (2025-01-13)"  # AUTO-INCREMENT
+echo "Version: 0.0.6 (2025-01-13)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 
 # Check if running as root
@@ -46,47 +46,45 @@ if [ -d "pi4" ]; then
     if [ -f "UDC" ]; then
         echo "" > UDC
     fi
-    rm -f configs/c.1/acm.usb0
+    # Remove existing symlinks first
+    rm -f configs/c.1/acm.0
+    # Clean up directories if they exist
+    [ -d configs/c.1/strings/0x409 ] && rmdir configs/c.1/strings/0x409
+    [ -d configs/c.1 ] && rmdir configs/c.1
+    [ -d functions/acm.0 ] && rmdir functions/acm.0
+    [ -d strings/0x409 ] && rmdir strings/0x409
     cd ..
-    rmdir pi4 2>/dev/null || true
+    rmdir pi4
 fi
 
 mkdir -p pi4
 cd pi4
 
-# USB IDs
-echo "Configuring USB device parameters..."
-echo 0x1209 > idVendor  # pid.codes VID
-echo 0x0001 > idProduct # Testing PID
-echo 0x0200 > bcdUSB   # USB 2.0
+# USB IDs - using standard CDC ACM values
+echo 0x0483 > idVendor # Standard Test vendor ID
+echo 0x5740 > idProduct # Standard CDC ACM product ID
+echo 0x0200 > bcdUSB # USB 2.0
 echo 0x0100 > bcdDevice # v1.0.0
-
-# Set device class to vendor-specific
-echo 0xFF > bDeviceClass
+echo 0x02 > bDeviceClass # Communications Device Class
 echo 0x00 > bDeviceSubClass
 echo 0x00 > bDeviceProtocol
 
-# Create strings
-echo "Setting up USB device strings..."
+# USB strings
 mkdir -p strings/0x409
 echo "fedcba9876543210" > strings/0x409/serialnumber
 echo "Raspberry Pi" > strings/0x409/manufacturer
-echo "E-Paper Display Setup" > strings/0x409/product
+echo "Pi Zero Serial" > strings/0x409/product
 
 # Create configuration
-echo "Creating USB configuration..."
 mkdir -p configs/c.1/strings/0x409
-echo "Config 1" > configs/c.1/strings/0x409/configuration
+echo "CDC ACM Config" > configs/c.1/strings/0x409/configuration
 echo 250 > configs/c.1/MaxPower
 
-# Create ACM function
-echo "Setting up ACM function..."
-mkdir -p functions/acm.usb0
-ln -s functions/acm.usb0 configs/c.1/
+# Create Serial function
+mkdir -p functions/acm.0
+ln -s functions/acm.0 configs/c.1/
 
 # Enable gadget
-echo "Enabling USB gadget..."
-sleep 2  # Give the system time to initialize the USB controller
 UDC=$(ls /sys/class/udc)
 if [ -n "$UDC" ]; then
     echo "$UDC" > UDC
@@ -95,19 +93,26 @@ EOF
 
 chmod +x /usr/local/bin/setup-usb-gadget.sh
 
-# Create systemd module load configuration
-echo "Creating systemd module load configuration..."
-mkdir -p /etc/systemd/system/systemd-modules-load.service.d/
-cat > /etc/systemd/system/systemd-modules-load.service.d/usb-gadget.conf << 'EOF'
+# Create systemd service (matching the working setup)
+echo "Creating USB gadget service..."
+cat > /etc/systemd/system/usb_serial_gadget.service << 'EOF'
+[Unit]
+Description=USB Serial Gadget
+After=network.target
+
 [Service]
-ExecStartPost=/usr/local/bin/setup-usb-gadget.sh
+Type=oneshot
+ExecStart=/usr/local/bin/setup-usb-gadget.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
 EOF
 
-# Load modules and run initial setup
-echo "Loading modules and running initial setup..."
-modprobe dwc2
-modprobe libcomposite
-/usr/local/bin/setup-usb-gadget.sh
+# Enable and start the service
+systemctl daemon-reload
+systemctl enable usb_serial_gadget.service
+systemctl start usb_serial_gadget.service
 
 # Copy and configure WebSerial service
 echo "Setting up WebSerial service..."

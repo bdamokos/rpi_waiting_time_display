@@ -22,7 +22,7 @@ fi
 
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.32 (2025-01-13)"  # AUTO-INCREMENT
+echo "Version: 0.0.33 (2025-01-13)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024-2025 Bence Damokos"
 echo "----------------------------------------"
@@ -34,6 +34,7 @@ show_usage() {
     echo "  -m, --mode         Setup mode (1=Normal, 2=Docker, 3=Remote) [default: 1]"
     echo "  -u, --update       Update mode (1=Releases, 2=Main, 3=None) [default: 1]"
     echo "  -s, --samba        Setup Samba (y/n) [default: n]"
+    echo "  -p, --password     Samba password (required if samba=y)"
     echo "  -r, --restart      Auto restart after setup (y/n) [default: y]"
     echo "  -y, --unattended   Run in unattended mode with defaults"
     echo "  -h, --help         Show this help message"
@@ -44,20 +45,31 @@ show_usage() {
 while [[ $# -gt 0 ]]; do
     case $1 in
         -m|--mode)
-            SETUP_MODE="$2"
-            shift 2
+            if [ -n "$2" ]; then
+                SETUP_MODE="$2"
+                shift 2
+            else
+                echo "Error: --mode requires a value"
+                show_usage
+            fi
             ;;
         -u|--update)
-            UPDATE_MODE_CHOICE="$2"
-            shift 2
-            ;;
-        -s|--samba)
-            SETUP_SAMBA="$2"
-            shift 2
+            if [ -n "$2" ]; then
+                UPDATE_MODE_CHOICE="$2"
+                shift 2
+            else
+                echo "Error: --update requires a value"
+                show_usage
+            fi
             ;;
         -r|--restart)
-            AUTO_RESTART="$2"
-            shift 2
+            if [ -n "$2" ]; then
+                AUTO_RESTART="$2"
+                shift 2
+            else
+                echo "Error: --restart requires a value"
+                show_usage
+            fi
             ;;
         -y|--unattended)
             UNATTENDED=1
@@ -66,9 +78,36 @@ while [[ $# -gt 0 ]]; do
         -h|--help)
             show_usage
             ;;
+        -s|--samba|-p|--password)
+            # Store these for processing at the end
+            REMAINING_ARGS+=("$1")
+            if [ -n "$2" ]; then
+                REMAINING_ARGS+=("$2")
+                shift
+            fi
+            shift
+            ;;
         *)
             echo "Unknown option: $1"
             show_usage
+            ;;
+    esac
+done
+
+# Process Samba arguments at the end
+for ((i=0; i<${#REMAINING_ARGS[@]}; i++)); do
+    case ${REMAINING_ARGS[i]} in
+        -s|--samba)
+            if [ -n "${REMAINING_ARGS[i+1]}" ] && [[ "${REMAINING_ARGS[i+1]}" != -* ]]; then
+                SETUP_SAMBA="${REMAINING_ARGS[i+1]}"
+                ((i++))
+            fi
+            ;;
+        -p|--password)
+            if [ -n "${REMAINING_ARGS[i+1]}" ] && [[ "${REMAINING_ARGS[i+1]}" != -* ]]; then
+                SAMBA_PASSWORD="${REMAINING_ARGS[i+1]}"
+                ((i++))
+            fi
             ;;
     esac
 done
@@ -154,6 +193,17 @@ if [ -z "$UNATTENDED" ]; then
         echo "Additional features:"
         if confirm "Would you like to set up Samba file sharing? This will allow you to edit files from your computer" "n"; then
             SETUP_SAMBA="yes"
+            if [ -z "$SAMBA_PASSWORD" ]; then
+                echo "Please enter the Samba password you would like to use:"
+                read -s SAMBA_PASSWORD
+                echo "Please confirm the Samba password:"
+                read -s SAMBA_PASSWORD2
+                if [ "$SAMBA_PASSWORD" != "$SAMBA_PASSWORD2" ]; then
+                    echo "Passwords do not match. Samba setup will be disabled."
+                    SETUP_SAMBA="no"
+                    SAMBA_PASSWORD=""
+                fi
+            fi
         else
             SETUP_SAMBA="no"
         fi
@@ -172,6 +222,13 @@ else
     UPDATE_MODE_CHOICE=${UPDATE_MODE_CHOICE:-1}
     SETUP_SAMBA=${SETUP_SAMBA:-"no"}
     AUTO_RESTART=${AUTO_RESTART:-"yes"}
+    
+    # In unattended mode, if Samba is enabled but no password provided, disable it
+    if [ "$SETUP_SAMBA" = "yes" ] && [ -z "$SAMBA_PASSWORD" ]; then
+        echo "Warning: Samba setup requested but no password provided in unattended mode."
+        echo "Disabling Samba setup. Use -p or --password to provide a Samba password."
+        SETUP_SAMBA="no"
+    fi
 fi
 
 # Process update mode choice
@@ -645,7 +702,11 @@ setup_uninstall
 # Setup Samba if selected
 if [ "$SETUP_SAMBA" = "yes" ]; then
     echo "Setting up Samba..."
-    bash "$ACTUAL_HOME/display_programme/docs/service/setup_samba.sh"
+    if [ -n "$SAMBA_PASSWORD" ]; then
+        bash "$ACTUAL_HOME/display_programme/docs/service/setup_samba.sh" --password "$SAMBA_PASSWORD"
+    else
+        bash "$ACTUAL_HOME/display_programme/docs/service/setup_samba.sh"
+    fi
     check_error "Failed to setup Samba"
 fi
 

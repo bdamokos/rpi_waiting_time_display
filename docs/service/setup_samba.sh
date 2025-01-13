@@ -2,10 +2,39 @@
 
 echo "----------------------------------------"
 echo "Samba Setup Script"
-echo "Version: 0.0.3 (2025-01-13)"  # AUTO-INCREMENT
+echo "Version: 0.0.4 (2025-01-13)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024-2025 Bence Damokos"
 echo "----------------------------------------"
+
+# Function to show usage
+show_usage() {
+    echo "Usage: $0 [options]"
+    echo "Options:"
+    echo "  -p, --password     Samba password (for unattended mode)"
+    echo "  -h, --help         Show this help message"
+    exit 1
+}
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -p|--password)
+            if [ -n "$2" ] && [[ "$2" != -* ]]; then
+                SAMBA_PASSWORD="$2"
+                shift
+            fi
+            shift
+            ;;
+        -h|--help)
+            show_usage
+            ;;
+        *)
+            echo "Unknown option: $1"
+            show_usage
+            ;;
+    esac
+done
 
 # Check if script is run as root
 if [ "$EUID" -ne 0 ]; then
@@ -14,8 +43,12 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # Get actual username (not root)
-ACTUAL_USER=$(who am i | awk '{print $1}')
-ACTUAL_HOME=$(eval echo ~$ACTUAL_USER)
+if [ -n "$SUDO_USER" ]; then
+    ACTUAL_USER="$SUDO_USER"
+else
+    ACTUAL_USER=$(logname)
+fi
+ACTUAL_HOME=$(eval echo "~$ACTUAL_USER")
 
 echo "Setting up Samba for user: $ACTUAL_USER"
 echo "Home directory: $ACTUAL_HOME"
@@ -31,9 +64,14 @@ if [ ! -f /etc/samba/smb.conf.backup ]; then
 fi
 
 # Create Samba password for user
-echo "Setting up Samba password for $ACTUAL_USER"
-echo "Please enter the password you want to use for Samba:"
-smbpasswd -a $ACTUAL_USER
+if [ -n "$SAMBA_PASSWORD" ]; then
+    echo "Setting up Samba password from command line..."
+    (echo "$SAMBA_PASSWORD"; echo "$SAMBA_PASSWORD") | smbpasswd -a $ACTUAL_USER -s
+else
+    echo "Setting up Samba password for $ACTUAL_USER"
+    echo "Please enter the password you want to use for Samba:"
+    smbpasswd -a $ACTUAL_USER
+fi
 
 # Modify the [homes] section to allow write access
 sed -i '/\[homes\]/,/^[^#[]/ s/read only = yes/read only = no/' /etc/samba/smb.conf
@@ -60,5 +98,9 @@ echo "Or on macOS/Linux:"
 echo "smb://$(hostname).local/$ACTUAL_USER"
 echo ""
 echo "Username: $ACTUAL_USER"
-echo "Password: (the one you just set)"
+if [ -n "$SAMBA_PASSWORD" ]; then
+    echo "Password: (as provided)"
+else
+    echo "Password: (the one you just set)"
+fi
 echo "----------------------------------------"

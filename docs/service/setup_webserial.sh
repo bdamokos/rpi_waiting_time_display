@@ -37,6 +37,19 @@ echo "Kernel modules loaded successfully"
 # Create gadget
 echo "Creating USB gadget..."
 cd /sys/kernel/config/usb_gadget/
+
+# Clean up any existing gadget
+if [ -d "pi4" ]; then
+    echo "Cleaning up existing gadget configuration..."
+    cd pi4
+    if [ -f "UDC" ]; then
+        echo "" > UDC
+    fi
+    rm -f configs/c.1/acm.usb0
+    cd ..
+    rmdir pi4 2>/dev/null || true
+fi
+
 mkdir -p pi4
 cd pi4
 
@@ -72,11 +85,13 @@ ln -s functions/acm.usb0 configs/c.1/
 
 # Enable gadget
 echo "Enabling USB gadget..."
+sleep 2  # Give the system time to initialize the USB controller
 UDC=$(ls /sys/class/udc)
 if [ -z "$UDC" ]; then
     echo "Error: No USB Device Controller found"
     echo "Available USB controllers:"
     ls -l /sys/class/udc/
+    echo "Please ensure dwc2 module is loaded and working"
     exit 1
 fi
 echo "Found USB Device Controller: $UDC"

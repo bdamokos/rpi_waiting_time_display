@@ -2,7 +2,7 @@
 
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.30 (2025-01-13)"  # AUTO-INCREMENT
+echo "Version: 0.0.31 (2025-01-13)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024-2025 Bence Damokos"
 echo "----------------------------------------"
@@ -247,10 +247,48 @@ ACTUAL_HOME=$(eval echo "~$ACTUAL_USER")
 echo "Setting up for user: $ACTUAL_USER"
 echo "Home directory: $ACTUAL_HOME"
 
+# Check config.txt locations
+CONFIG_FILE="/boot/firmware/config.txt"
+if [ ! -f "$CONFIG_FILE" ]; then
+    CONFIG_FILE="/boot/config.txt"
+    if [ ! -f "$CONFIG_FILE" ]; then
+        echo "Error: Could not find config.txt in /boot/firmware/ or /boot/"
+        exit 1
+    fi
+fi
+echo "Using config file: $CONFIG_FILE"
+
+# Configure boot options
+echo "Configuring boot options..."
+NEED_REBOOT=0
+
 # Enable SPI interface
 echo "Enabling SPI interface..."
 raspi-config nonint do_spi 0
 check_error "Failed to enable SPI"
+
+# Enable watchdog
+echo "Setting up watchdog..."
+if ! grep -q "dtparam=watchdog=on" "$CONFIG_FILE"; then
+    echo "dtparam=watchdog=on" >> "$CONFIG_FILE"
+    NEED_REBOOT=1
+fi
+
+# Enable dwc2 overlay for USB gadget support
+echo "Enabling dwc2 overlay..."
+if ! grep -q "^dtoverlay=dwc2$" "$CONFIG_FILE"; then
+    echo "dtoverlay=dwc2" >> "$CONFIG_FILE"
+    NEED_REBOOT=1
+fi
+
+if [ $NEED_REBOOT -eq 1 ]; then
+    echo "----------------------------------------"
+    echo "Boot configuration has been updated."
+    echo "A reboot will be required to apply these changes."
+    echo "The script will continue with the rest of the setup,"
+    echo "and will offer to reboot at the end."
+    echo "----------------------------------------"
+fi
 
 # Install required packages
 echo "Installing required packages..."

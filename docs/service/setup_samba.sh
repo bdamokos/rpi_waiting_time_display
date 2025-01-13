@@ -2,9 +2,9 @@
 
 echo "----------------------------------------"
 echo "Samba Setup Script"
-echo "Version: 0.0.2 (2024-12-05)"  # AUTO-INCREMENT
+echo "Version: 0.0.3 (2025-01-13)"  # AUTO-INCREMENT
 echo "----------------------------------------"
-echo "MIT License - Copyright (c) 2024 Bence Damokos"
+echo "MIT License - Copyright (c) 2024-2025 Bence Damokos"
 echo "----------------------------------------"
 
 # Check if script is run as root

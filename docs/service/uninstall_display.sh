@@ -2,9 +2,9 @@
 
 echo "----------------------------------------"
 echo "Display Programme Uninstall Script"
-echo "Version: 0.0.3 (2024-12-31)"  # AUTO-INCREMENT
+echo "Version: 0.0.4 (2025-01-13)"  # AUTO-INCREMENT
 echo "----------------------------------------"
-echo "MIT License - Copyright (c) 2024 Bence Damokos"
+echo "MIT License - Copyright (c) 2024-2025 Bence Damokos"
 echo "----------------------------------------"
 
 # Function to prompt for yes/no

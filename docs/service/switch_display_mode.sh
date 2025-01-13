@@ -7,9 +7,9 @@
 
 echo "----------------------------------------"
 echo "Switching display mode script"
-echo "Version: 0.0.1 (2024-12-04)"  # AUTO-INCREMENT
+echo "Version: 0.0.2 (2025-01-13)"  # AUTO-INCREMENT
 echo "----------------------------------------"
-echo "MIT License - Copyright (c) 2024 Bence Damokos"
+echo "MIT License - Copyright (c) 2024-2025 Bence Damokos"
 echo "----------------------------------------"
 
 # Constants

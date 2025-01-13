@@ -6,9 +6,9 @@
 # chmod +x ~/start_display.sh
 echo "----------------------------------------"
 echo "Starting display service script (Docker Version)"
-echo "Version: 0.0.9 (2025-01-04)"  # AUTO-INCREMENT
+echo "Version: 0.0.10 (2025-01-13)"  # AUTO-INCREMENT
 echo "----------------------------------------"
-echo "MIT License - Copyright (c) 2024 Bence Damokos"
+echo "MIT License - Copyright (c) 2024-2025 Bence Damokos"
 echo "----------------------------------------"
 
 # Disable watchdog service if it exists

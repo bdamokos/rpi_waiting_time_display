@@ -7,6 +7,184 @@ echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024-2025 Bence Damokos"
 echo "----------------------------------------"
 
+# Function to show usage
+show_usage() {
+    echo "Usage: $0 [options]"
+    echo "Options:"
+    echo "  -m, --mode         Setup mode (1=Normal, 2=Docker, 3=Remote) [default: 1]"
+    echo "  -u, --update       Update mode (1=Releases, 2=Main, 3=None) [default: 1]"
+    echo "  -s, --samba        Setup Samba (y/n) [default: n]"
+    echo "  -r, --restart      Auto restart after setup (y/n) [default: y]"
+    echo "  -y, --unattended   Run in unattended mode with defaults"
+    echo "  -h, --help         Show this help message"
+    exit 1
+}
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -m|--mode)
+            SETUP_MODE="$2"
+            shift 2
+            ;;
+        -u|--update)
+            UPDATE_MODE_CHOICE="$2"
+            shift 2
+            ;;
+        -s|--samba)
+            SETUP_SAMBA="$2"
+            shift 2
+            ;;
+        -r|--restart)
+            AUTO_RESTART="$2"
+            shift 2
+            ;;
+        -y|--unattended)
+            UNATTENDED=1
+            shift
+            ;;
+        -h|--help)
+            show_usage
+            ;;
+        *)
+            echo "Unknown option: $1"
+            show_usage
+            ;;
+    esac
+done
+
+# Check if running as root
+if [ "$EUID" -ne 0 ]; then
+    echo "Please run as root (sudo)"
+    exit 1
+fi
+
+# Get actual username
+if [ -n "$SUDO_USER" ]; then
+    ACTUAL_USER="$SUDO_USER"
+else
+    ACTUAL_USER=$(logname)
+fi
+ACTUAL_HOME=$(eval echo "~$ACTUAL_USER")
+
+echo "Setting up for user: $ACTUAL_USER"
+echo "Home directory: $ACTUAL_HOME"
+
+# Function to prompt for yes/no with default
+confirm() {
+    local prompt="$1"
+    local default="${2:-n}"  # Default to 'n' if not specified
+    local default_upper=$(echo $default | tr '[:lower:]' '[:upper:]')
+    local other=$(if [ "$default" = "y" ]; then echo "n"; else echo "y"; fi)
+    local other_upper=$(echo $other | tr '[:lower:]' '[:upper:]')
+    
+    if [ -n "$UNATTENDED" ] && [ -n "$default" ]; then
+        [ "$default" = "y" ]
+        return
+    fi
+    
+    read -p "$prompt [${default_upper}/${other}] " response
+    case "$response" in
+        [yY][eE][sS]|[yY]) 
+            return 0
+            ;;
+        [nN][oO]|[nN])
+            return 1
+            ;;
+        "")
+            [ "$default" = "y" ]
+            return
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+if [ -z "$UNATTENDED" ]; then
+    # Initial Configuration
+    echo "----------------------------------------"
+    echo "Initial Configuration"
+    echo "----------------------------------------"
+
+    # Setup mode selection if not provided
+    if [ -z "$SETUP_MODE" ]; then
+        echo "Please select setup mode:"
+        echo "1) Normal mode (local backend)"
+        echo "2) Docker mode (containerized backend)"
+        echo "3) Remote server mode (external backend)"
+        read -p "Enter your choice (1-3) [1]: " SETUP_MODE
+    fi
+    SETUP_MODE=${SETUP_MODE:-1}
+
+    # Update mode selection if not provided
+    if [ -z "$UPDATE_MODE_CHOICE" ]; then
+        echo "----------------------------------------"
+        echo "Please select update mode:"
+        echo "1) Releases only (recommended, more stable)"
+        echo "2) All updates (main branch, may be unstable)"
+        echo "3) No updates (manual updates only)"
+        read -p "Enter your choice (1-3) [1]: " UPDATE_MODE_CHOICE
+    fi
+    UPDATE_MODE_CHOICE=${UPDATE_MODE_CHOICE:-1}
+
+    # Additional features if not provided
+    if [ -z "$SETUP_SAMBA" ]; then
+        echo "----------------------------------------"
+        echo "Additional features:"
+        if confirm "Would you like to set up Samba file sharing? This will allow you to edit files from your computer" "n"; then
+            SETUP_SAMBA="yes"
+        else
+            SETUP_SAMBA="no"
+        fi
+    fi
+
+    if [ -z "$AUTO_RESTART" ]; then
+        if confirm "Would you like to restart automatically after setup?" "y"; then
+            AUTO_RESTART="yes"
+        else
+            AUTO_RESTART="no"
+        fi
+    fi
+else
+    # Set defaults for unattended mode
+    SETUP_MODE=${SETUP_MODE:-1}
+    UPDATE_MODE_CHOICE=${UPDATE_MODE_CHOICE:-1}
+    SETUP_SAMBA=${SETUP_SAMBA:-"no"}
+    AUTO_RESTART=${AUTO_RESTART:-"yes"}
+fi
+
+# Process update mode choice
+case $UPDATE_MODE_CHOICE in
+    2)
+        UPDATE_MODE="main"
+        echo "Selected: All updates (main branch)"
+        ;;
+    3)
+        UPDATE_MODE="none"
+        echo "Selected: No automatic updates"
+        ;;
+    *)
+        UPDATE_MODE="releases"
+        echo "Selected: Releases only"
+        ;;
+esac
+
+echo "----------------------------------------"
+echo "Configuration Summary:"
+echo "Setup Mode: $SETUP_MODE"
+echo "Update Mode: $UPDATE_MODE"
+echo "Setup Samba: $SETUP_SAMBA"
+echo "Auto Restart: $AUTO_RESTART"
+echo "----------------------------------------"
+
+if [ -z "$UNATTENDED" ]; then
+    if ! confirm "Would you like to proceed with these settings?" "y"; then
+        echo "Setup cancelled by user"
+        exit 1
+    fi
+fi
+
 # Store backup information in a fixed location
 BACKUP_DIR="/opt/display_setup_backup"
 BACKUP_MANIFEST="$BACKUP_DIR/manifest.txt"
@@ -44,8 +222,9 @@ cleanup() {
     rm -f /etc/systemd/system/display.service
     systemctl daemon-reload
     
-    # Remove installed packages (optional)
-    if confirm "Would you like to remove installed packages?"; then
+    # Remove installed packages if selected
+    if [ "$REMOVE_PACKAGES" = "yes" ]; then
+        echo "Removing installed packages..."
         apt-get remove -y git gh fonts-dejavu watchdog python3-dev
     fi
     

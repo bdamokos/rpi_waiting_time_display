@@ -2,7 +2,7 @@
 
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.31 (2025-01-13)"  # AUTO-INCREMENT
+echo "Version: 0.0.32 (2025-01-13)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024-2025 Bence Damokos"
 echo "----------------------------------------"
@@ -548,28 +548,9 @@ su - $ACTUAL_USER -c "chmod +x $ACTUAL_HOME/display_programme/docs/service/unins
 su - $ACTUAL_USER -c "cp $ACTUAL_HOME/display_programme/docs/service/switch_display_mode.sh $ACTUAL_HOME/switch_display_mode.sh"
 su - $ACTUAL_USER -c "chmod +x $ACTUAL_HOME/switch_display_mode.sh"
 
-# Replace the Docker mode question with a mode selection menu
-echo "Please select setup mode:"
-echo "1) Normal mode (local backend)"
-echo "2) Docker mode (containerized backend)"
-echo "3) Remote server mode (external backend)"
-read -p "Enter your choice (1-3): " mode_choice
-
-case $mode_choice in
-    1)
-        echo "Setting up normal mode..."
-        if [ ! -d "$ACTUAL_HOME/brussels_transit" ]; then
-            echo "Cloning brussels transit repository..."
-            cd "$ACTUAL_HOME"
-            su - "$ACTUAL_USER" -c "git clone https://github.com/bdamokos/brussels_transit.git"
-            check_error "Failed to clone brussels transit"
-        else
-            echo "Brussels transit repository already exists"
-        fi
-        setup_service_files "normal"
-        su - $ACTUAL_USER -c "source $ACTUAL_HOME/display_env/bin/activate && cd $ACTUAL_HOME/brussels_transit && pip install -r requirements.txt"
-        check_error "Failed to install brussels transit requirements"
-        ;;
+# Main installation process
+# Use the already selected SETUP_MODE
+case $SETUP_MODE in
     2)
         echo "Setting up Docker mode..."
         if [ ! -d "$ACTUAL_HOME/brussels_transit" ]; then
@@ -602,7 +583,7 @@ case $mode_choice in
         setup_service_files "remote"
         ;;
     *)
-        echo "Invalid choice. Defaulting to normal mode..."
+        echo "Setting up normal mode..."
         if [ ! -d "$ACTUAL_HOME/brussels_transit" ]; then
             echo "Cloning brussels transit repository..."
             cd "$ACTUAL_HOME"
@@ -612,6 +593,8 @@ case $mode_choice in
             echo "Brussels transit repository already exists"
         fi
         setup_service_files "normal"
+        su - $ACTUAL_USER -c "source $ACTUAL_HOME/display_env/bin/activate && cd $ACTUAL_HOME/brussels_transit && pip install -r requirements.txt"
+        check_error "Failed to install brussels transit requirements"
         ;;
 esac
 

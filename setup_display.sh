@@ -13,6 +13,11 @@ if [ -f "$RESUME_FILE" ]; then
     # Skip to WebSerial setup
     setup_webserial
     
+    # Clean up the resume service
+    systemctl disable display-setup-resume.service
+    rm -f /etc/systemd/system/display-setup-resume.service
+    systemctl daemon-reload
+    
     # Continue with the rest of the setup
     echo "Continuing with remaining setup tasks..."
     

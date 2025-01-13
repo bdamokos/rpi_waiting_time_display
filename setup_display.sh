@@ -1,5 +1,25 @@
 #!/bin/bash
 
+# Check if this is a resume after reboot
+RESUME_FILE="/tmp/display_setup_resume"
+if [ -f "$RESUME_FILE" ]; then
+    # Load saved variables
+    source "$RESUME_FILE"
+    echo "----------------------------------------"
+    echo "Resuming setup after reboot..."
+    echo "----------------------------------------"
+    rm -f "$RESUME_FILE"
+    
+    # Skip to WebSerial setup
+    setup_webserial
+    
+    # Continue with the rest of the setup
+    echo "Continuing with remaining setup tasks..."
+    
+    # Rest of the script continues...
+    exit 0
+fi
+
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
 echo "Version: 0.0.32 (2025-01-13)"  # AUTO-INCREMENT
@@ -455,15 +475,24 @@ fi
 
 # Enable dwc2 overlay for USB gadget support
 echo "Enabling dwc2 overlay..."
+DWC2_ADDED=0
 if ! grep -q "^dtoverlay=dwc2$" "$CONFIG_FILE"; then
     echo "dtoverlay=dwc2" >> "$CONFIG_FILE"
     NEED_REBOOT=1
+    DWC2_ADDED=1
 fi
 
 if [ $NEED_REBOOT -eq 1 ]; then
     echo "----------------------------------------"
     echo "Boot configuration has been updated."
-    echo "A reboot will be required to apply these changes."
+    if [ $DWC2_ADDED -eq 1 ]; then
+        echo "The dwc2 module has been enabled and requires a reboot before WebSerial setup."
+        echo "The script will continue with other setup tasks,"
+        echo "but WebSerial setup will be skipped until next reboot."
+        SKIP_WEBSERIAL=1
+    else
+        echo "A reboot will be required to apply the hardware configuration changes."
+    fi
     echo "The script will continue with the rest of the setup,"
     echo "and will offer to reboot at the end."
     echo "----------------------------------------"
@@ -837,10 +866,16 @@ setup_webserial() {
     fi
 }
 
-# After mode selection, install Webserial support
-
-setup_webserial
-
+# After mode selection, install Webserial support if not skipped
+if [ "$SKIP_WEBSERIAL" != "1" ]; then
+    setup_webserial
+else
+    echo "----------------------------------------"
+    echo "WebSerial setup has been skipped because dwc2 module was just enabled."
+    echo "Please rerun 'sudo bash $ACTUAL_HOME/display_programme/docs/service/setup_webserial.sh'"
+    echo "after the system reboots to complete WebSerial setup."
+    echo "----------------------------------------"
+fi
 
 # Install Bluetooth WebSerial support (does not necessarily work)
 
@@ -895,4 +930,47 @@ else
     else
         echo "Setup complete. A reboot is recommended but not required."
     fi
+fi
+
+# Before the reboot, save variables and create resume marker
+if [ $DWC2_ADDED -eq 1 ]; then
+    echo "----------------------------------------"
+    echo "Saving setup state and rebooting..."
+    echo "Setup will automatically continue after reboot."
+    echo "----------------------------------------"
+    
+    # Save variables for resume
+    cat > "$RESUME_FILE" << EOF
+ACTUAL_USER="$ACTUAL_USER"
+ACTUAL_HOME="$ACTUAL_HOME"
+SETUP_MODE="$SETUP_MODE"
+UPDATE_MODE="$UPDATE_MODE"
+SETUP_SAMBA="$SETUP_SAMBA"
+AUTO_RESTART="$AUTO_RESTART"
+UNATTENDED="$UNATTENDED"
+EOF
+    
+    # Create systemd service to resume setup after reboot
+    cat > /etc/systemd/system/display-setup-resume.service << EOF
+[Unit]
+Description=Resume Display Setup
+After=network.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=no
+ExecStart=/bin/bash $ACTUAL_HOME/display_programme/setup_display.sh
+User=root
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    
+    systemctl enable display-setup-resume.service
+    
+    # Reboot
+    echo "Rebooting in 5 seconds..."
+    sleep 5
+    reboot
+    exit 0
 fi

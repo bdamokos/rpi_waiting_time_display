@@ -2,7 +2,7 @@
 
 echo "----------------------------------------"
 echo "WebSerial Setup Script"
-echo "Version: 0.0.0 (2024-12-20)"
+echo "Version: 0.0.2 (2025-01-13)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 
 # Check if running as root
@@ -24,10 +24,20 @@ echo "Home directory: $ACTUAL_HOME"
 
 # Load required modules
 echo "Loading kernel modules..."
+echo "Loading dwc2..."
+if ! modprobe dwc2; then
+    echo "Error: Failed to load dwc2 module"
+    echo "Please ensure dwc2 is enabled in config.txt and reboot first"
+    exit 1
+fi
+
+echo "Loading libcomposite..."
 if ! modprobe libcomposite; then
     echo "Error: Failed to load libcomposite module"
     exit 1
 fi
+
+echo "Loading usb_f_acm..."
 if ! modprobe usb_f_acm; then
     echo "Error: Failed to load usb_f_acm module"
     exit 1

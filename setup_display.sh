@@ -600,29 +600,6 @@ esac
 
 su - $ACTUAL_USER -c "chmod +x $ACTUAL_HOME/start_display.sh"
 
-# Ask for update mode
-echo "----------------------------------------"
-echo "Please select update mode:"
-echo "1) Releases only (recommended, more stable)"
-echo "2) All updates (main branch, may be unstable)"
-echo "3) No updates (manual updates only)"
-read -p "Enter your choice (1-3) [1]: " update_choice
-case $update_choice in
-    2)
-        UPDATE_MODE="main"
-        echo "Selected: All updates (main branch)"
-        ;;
-    3)
-        UPDATE_MODE="none"
-        echo "Selected: No automatic updates"
-        ;;
-    *)
-        UPDATE_MODE="releases"
-        echo "Selected: Releases only"
-        ;;
-esac
-echo "----------------------------------------"
-
 # Create .env file
 if [ ! -f "$ACTUAL_HOME/display_programme/.env" ]; then
     echo "Creating .env file..."
@@ -636,8 +613,8 @@ fi
 
 setup_uninstall
 
-# Ask about Samba setup
-if confirm "Would you like to set up Samba file sharing? This will allow you to edit files from your computer"; then
+# Setup Samba if selected
+if [ "$SETUP_SAMBA" = "yes" ]; then
     echo "Setting up Samba..."
     bash "$ACTUAL_HOME/display_programme/docs/service/setup_samba.sh"
     check_error "Failed to setup Samba"
@@ -903,18 +880,19 @@ echo "   nano $ACTUAL_HOME/display_programme/.env"
 echo ""
 echo "You can also edit your settings at http://$(hostname -I | cut -d' ' -f1).local:5002/debug/env or http://$(hostname).local:5002/debug/env once your Pi restarts." 
 echo ""
-echo "The application is now starting with empty settings."
-echo ""
 echo "To uninstall in the future, run: sudo ~/uninstall_display.sh"
 echo "You will find this readme at: https://github.com/bdamokos/rpi_waiting_time_display"
 echo "----------------------------------------"
 
-
-
-# Offer to restart now or later
-if confirm "Would you like to restart your Raspberry Pi now?"; then
-    echo "Restarting Raspberry Pi..."
+if [ "$AUTO_RESTART" = "yes" ]; then
+    echo "Restarting system in 5 seconds..."
+    sleep 5
     reboot
 else
-    echo "You can restart your Raspberry Pi later to complete the setup."
+    if [ $NEED_REBOOT -eq 1 ]; then
+        echo "IMPORTANT: A reboot is required to apply the hardware configuration changes."
+        echo "Please restart your system when convenient."
+    else
+        echo "Setup complete. A reboot is recommended but not required."
+    fi
 fi

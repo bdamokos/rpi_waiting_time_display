@@ -95,10 +95,12 @@ EOF
 
 chmod +x /usr/local/bin/setup-usb-gadget.sh
 
-# Create modprobe configuration
-echo "Creating modprobe configuration..."
-cat > /etc/modprobe.d/usb-gadget.conf << 'EOF'
-install libcomposite /sbin/modprobe dwc2; /sbin/modprobe -i libcomposite; /usr/local/bin/setup-usb-gadget.sh
+# Create systemd module load configuration
+echo "Creating systemd module load configuration..."
+mkdir -p /etc/systemd/system/systemd-modules-load.service.d/
+cat > /etc/systemd/system/systemd-modules-load.service.d/usb-gadget.conf << 'EOF'
+[Service]
+ExecStartPost=/usr/local/bin/setup-usb-gadget.sh
 EOF
 
 # Load modules and run initial setup

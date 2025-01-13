@@ -2,7 +2,7 @@
 
 echo "----------------------------------------"
 echo "WebSerial Setup Script"
-echo "Version: 0.0.2 (2025-01-13)"  # AUTO-INCREMENT
+echo "Version: 0.0.4 (2025-01-13)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 
 # Check if running as root
@@ -22,27 +22,18 @@ ACTUAL_HOME=$(eval echo "~$ACTUAL_USER")
 echo "Setting up for user: $ACTUAL_USER"
 echo "Home directory: $ACTUAL_HOME"
 
-# Load required modules
-echo "Loading kernel modules..."
-echo "Loading dwc2..."
-if ! modprobe dwc2; then
-    echo "Error: Failed to load dwc2 module"
-    echo "Please ensure dwc2 is enabled in config.txt and reboot first"
-    exit 1
-fi
+# Add required modules to /etc/modules
+echo "Adding required modules to /etc/modules..."
+for module in dwc2 libcomposite; do
+    if ! grep -q "^$module$" /etc/modules; then
+        echo "$module" >> /etc/modules
+    fi
+done
 
-echo "Loading libcomposite..."
-if ! modprobe libcomposite; then
-    echo "Error: Failed to load libcomposite module"
-    exit 1
-fi
-
-echo "Loading usb_f_acm..."
-if ! modprobe usb_f_acm; then
-    echo "Error: Failed to load usb_f_acm module"
-    exit 1
-fi
-echo "Kernel modules loaded successfully"
+# Create USB gadget configuration script
+echo "Creating USB gadget configuration script..."
+cat > /usr/local/bin/setup-usb-gadget.sh << 'EOF'
+#!/bin/bash
 
 # Create gadget
 echo "Creating USB gadget..."
@@ -97,24 +88,26 @@ ln -s functions/acm.usb0 configs/c.1/
 echo "Enabling USB gadget..."
 sleep 2  # Give the system time to initialize the USB controller
 UDC=$(ls /sys/class/udc)
-if [ -z "$UDC" ]; then
-    echo "Error: No USB Device Controller found"
-    echo "Available USB controllers:"
-    ls -l /sys/class/udc/
-    echo "Please ensure dwc2 module is loaded and working"
-    exit 1
+if [ -n "$UDC" ]; then
+    echo "$UDC" > UDC
 fi
-echo "Found USB Device Controller: $UDC"
+EOF
 
-if ! echo "$UDC" > UDC; then
-    echo "Error: Failed to enable USB gadget with controller $UDC"
-    echo "Current USB gadget state:"
-    cat UDC
-    exit 1
-fi
-echo "USB gadget enabled successfully"
+chmod +x /usr/local/bin/setup-usb-gadget.sh
 
-# Copy and configure WebSerial service with correct username
+# Create modprobe configuration
+echo "Creating modprobe configuration..."
+cat > /etc/modprobe.d/usb-gadget.conf << 'EOF'
+install libcomposite /sbin/modprobe dwc2; /sbin/modprobe -i libcomposite; /usr/local/bin/setup-usb-gadget.sh
+EOF
+
+# Load modules and run initial setup
+echo "Loading modules and running initial setup..."
+modprobe dwc2
+modprobe libcomposite
+/usr/local/bin/setup-usb-gadget.sh
+
+# Copy and configure WebSerial service
 echo "Setting up WebSerial service..."
 SERVICE_FILE="/etc/systemd/system/webserial.service"
 EXAMPLE_FILE="$ACTUAL_HOME/display_programme/docs/service/webserial.service.example"

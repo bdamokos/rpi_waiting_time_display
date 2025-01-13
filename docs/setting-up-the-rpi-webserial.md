@@ -48,13 +48,10 @@ The hardware setup is quite straightforward:
 curl -H "Cache-Control: no-cache" -O https://raw.githubusercontent.com/bdamokos/rpi_waiting_time_display/main/setup_display.sh
 # Make it executable
 chmod +x setup_display.sh
-```
-![Fast Setup Step 2](images/fast_setup_step2.png) 
-``` bash
 # Run the setup script
 sudo ./setup_display.sh
 ```
-
+![Fast Setup Step 2](images/fast_setup_step2.png) 
 The script will:
 - Enable SPI interface
 - Install all required packages

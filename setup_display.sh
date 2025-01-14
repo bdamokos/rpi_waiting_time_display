@@ -8,8 +8,22 @@ if [ -f "$RESUME_FILE" ]; then
     echo "----------------------------------------"
     echo "Resuming setup after reboot..."
     echo "----------------------------------------"
-    rm -f "$RESUME_FILE"
-    
+
+    # Verify user information is loaded
+    if [ -z "$ACTUAL_USER" ] || [ -z "$ACTUAL_HOME" ]; then
+        echo "Error: Required user information not found in resume file"
+        exit 1
+    fi
+
+    # Verify the user exists
+    if ! id "$ACTUAL_USER" >/dev/null 2>&1; then
+        echo "Error: User $ACTUAL_USER does not exist"
+        exit 1
+    fi
+
+    echo "Resuming setup for user: $ACTUAL_USER"
+    echo "Home directory: $ACTUAL_HOME"
+
     # Skip to WebSerial setup
     setup_webserial
     
@@ -27,7 +41,7 @@ fi
 
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.33 (2025-01-13)"  # AUTO-INCREMENT
+echo "Version: 0.0.34 (2025-01-14)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024-2025 Bence Damokos"
 echo "----------------------------------------"
@@ -1026,6 +1040,9 @@ After=network.target
 Type=oneshot
 RemainAfterExit=no
 ExecStart=/bin/bash $ACTUAL_HOME/display_programme/setup_display.sh
+Environment="ACTUAL_USER=$ACTUAL_USER"
+Environment="ACTUAL_HOME=$ACTUAL_HOME"
+Environment="SUDO_USER=$ACTUAL_USER"
 User=root
 
 [Install]

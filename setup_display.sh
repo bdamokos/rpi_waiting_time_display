@@ -2,7 +2,7 @@
 
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.38 (2025-01-14)"  # AUTO-INCREMENT
+echo "Version: 0.0.39 (2025-01-14)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024-2025 Bence Damokos"
 echo "----------------------------------------"
@@ -161,9 +161,9 @@ if [ -z "$UNATTENDED" ]; then
         echo "----------------------------------------"
         echo "Please select display type:"
         echo "# Display settings (If you don't know what to use, try: epd2in13g_V2 for 4-color displays, epd2in13_V4 for black and white displays)"
-        read -p "Enter display type [epd2in13g_V2]: " DISPLAY_MODEL
+        read -p "Enter display type [epd2in13_V4]: " DISPLAY_MODEL
     fi
-    DISPLAY_MODEL=${DISPLAY_MODEL:-"epd2in13g_V2"}
+    DISPLAY_MODEL=${DISPLAY_MODEL:-"epd2in13_V4"}
 
     # Update mode selection if not provided
     if [ -z "$UPDATE_MODE_CHOICE" ]; then
@@ -211,7 +211,7 @@ else
     UPDATE_MODE_CHOICE=${UPDATE_MODE_CHOICE:-1}
     SETUP_SAMBA=${SETUP_SAMBA:-"no"}
     AUTO_RESTART=${AUTO_RESTART:-"yes"}
-    DISPLAY_MODEL=${DISPLAY_MODEL:-"epd2in13g_V2"}
+    DISPLAY_MODEL=${DISPLAY_MODEL:-"epd2in13_V4"}
     
     # In unattended mode, if Samba is enabled but no password provided, disable it
     if [ "$SETUP_SAMBA" = "yes" ] && [ -z "$SAMBA_PASSWORD" ]; then

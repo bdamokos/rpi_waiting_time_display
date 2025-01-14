@@ -78,7 +78,7 @@ const services = {
     transit: {
         name: 'Transit Information',
         description: 'Display transit schedules and delays',
-        config_type: 'transit_env',
+        config_type: 'display_env',
         requires_api_key: true,
         enabled_key: 'transit_enabled',
         api_keys: [
@@ -209,7 +209,7 @@ window.startServiceSetup = async function() {
                 const enabledKey = service.enabled_key || `${id}_enabled`;
                 const response = await window.setupDevice.send(JSON.stringify({
                     command: 'config_get',
-                    config_type: 'display_env',
+                    config_type: service.config_type,
                     key: enabledKey
                 }));
                 if (response.status === 'success') {
@@ -589,7 +589,7 @@ window.toggleService = async function(serviceId, enabled) {
                     const enabledKey = srv.enabled_key || `${id}_enabled`;
                     const response = await window.setupDevice.send(JSON.stringify({
                         command: 'config_get',
-                        config_type: 'display_env',
+                        config_type: srv.config_type,
                         key: enabledKey
                     }));
                     enabledServices[id] = response.status === 'success' && 
@@ -614,7 +614,7 @@ window.toggleService = async function(serviceId, enabled) {
         const enabledKey = service.enabled_key || `${serviceId}_enabled`;
         const response = await window.setupDevice.send(JSON.stringify({
             command: 'config_set',
-            config_type: 'display_env',
+            config_type: service.config_type,
             key: enabledKey,
             value: enabled.toString()
         }));

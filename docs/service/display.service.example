@@ -1,5 +1,5 @@
 [Unit]
-# Version: 0.0.1 (2024-12-21) # AUTO-INCREMENT
+# Version: 0.0.2 (2025-01-14) # AUTO-INCREMENT
 Description=E-Paper Display Service
 After=network.target
 StartLimitIntervalSec=0
@@ -14,6 +14,8 @@ ExecStop=/bin/kill -SIGTERM $MAINPID
 KillMode=mixed
 KillSignal=SIGTERM
 TimeoutStopSec=20
+StandardOutput=append:/var/log/display/display.out
+StandardError=append:/var/log/display/display.err
 Restart=always
 RestartSec=10
 
@@ -39,4 +41,6 @@ WantedBy=multi-user.target
 #    sudo systemctl status display.service
 #
 # 7. View logs:
-#    journalctl -u display.service -f 
+#    journalctl -u display.service -f
+#    tail -f /var/log/display/display.out
+#    tail -f /var/log/display/display.err 

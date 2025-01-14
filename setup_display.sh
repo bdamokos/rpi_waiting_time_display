@@ -2,7 +2,7 @@
 
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.39 (2025-01-14)"  # AUTO-INCREMENT
+echo "Version: 0.0.40 (2025-01-14)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024-2025 Bence Damokos"
 echo "----------------------------------------"
@@ -689,6 +689,39 @@ EOF
     sed 's/^/# /' "$ACTUAL_HOME/display_programme/.env.example" >> "$ACTUAL_HOME/display_programme/.env"
     echo "Please edit the .env file with your settings (Lines starting with # are comments, to enable a setting, remove the #):"
     echo "nano $ACTUAL_HOME/display_programme/.env"
+fi
+
+# Set correct permissions for files and directories
+echo "Setting up correct permissions..."
+# Set ownership of all files in display_programme to the actual user
+chown -R $ACTUAL_USER:$ACTUAL_USER "$ACTUAL_HOME/display_programme"
+check_error "Failed to set ownership of display_programme directory"
+
+# Set ownership of all files in brussels_transit to the actual user
+if [ -d "$ACTUAL_HOME/brussels_transit" ]; then
+    chown -R $ACTUAL_USER:$ACTUAL_USER "$ACTUAL_HOME/brussels_transit"
+    check_error "Failed to set ownership of brussels_transit directory"
+fi
+
+# Create log directories with correct permissions
+mkdir -p /var/log/display
+chown $ACTUAL_USER:$ACTUAL_USER /var/log/display
+chmod 755 /var/log/display
+
+# Create and set permissions for specific log files
+touch /var/log/display/display.out /var/log/display/display.err
+chown $ACTUAL_USER:$ACTUAL_USER /var/log/display/display.out /var/log/display/display.err
+chmod 644 /var/log/display/display.out /var/log/display/display.err
+
+# Set permissions for config files
+chmod 644 "$ACTUAL_HOME/display_programme/.env"*
+chmod 644 "$ACTUAL_HOME/display_programme/requirements.txt"
+
+# Set permissions for executable scripts
+chmod +x "$ACTUAL_HOME/display_programme/docs/service/"*.sh
+chmod +x "$ACTUAL_HOME/start_display.sh"
+if [ -f "$ACTUAL_HOME/switch_display_mode.sh" ]; then
+    chmod +x "$ACTUAL_HOME/switch_display_mode.sh"
 fi
 
 setup_uninstall

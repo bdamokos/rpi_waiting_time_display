@@ -2,7 +2,7 @@
 
 echo "----------------------------------------"
 echo "WebSerial Setup Script"
-echo "Version: 0.0.6 (2025-01-13)"  # AUTO-INCREMENT
+echo "Version: 0.0.8 (2025-01-14)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 
 # Check if running as root
@@ -129,6 +129,20 @@ if [ -f "$EXAMPLE_FILE" ]; then
     # Copy the modified file to systemd
     cp "$TEMP_FILE" "$SERVICE_FILE"
     rm "$TEMP_FILE"
+    
+    # Create log directories with correct permissions
+    echo "Setting up log directories..."
+    mkdir -p /var/log/webserial
+    chown $ACTUAL_USER:$ACTUAL_USER /var/log/webserial
+    chmod 755 /var/log/webserial
+    
+    # Create and set permissions for log files
+    touch /var/log/webserial/webserial.out /var/log/webserial/webserial.err
+    chown $ACTUAL_USER:$ACTUAL_USER /var/log/webserial/webserial.out /var/log/webserial/webserial.err
+    chmod 644 /var/log/webserial/webserial.out /var/log/webserial/webserial.err
+    
+    # Set permissions for USB gadget script
+    chmod 755 /usr/local/bin/setup-usb-gadget.sh
     
     # Enable and start service
     echo "Configuring systemd service..."

@@ -1,47 +1,8 @@
 #!/bin/bash
 
-# Check if this is a resume after reboot
-RESUME_FILE="/var/lib/display_setup_resume"
-if [ -f "$RESUME_FILE" ]; then
-    # Load saved variables
-    source "$RESUME_FILE"
-    echo "----------------------------------------"
-    echo "Resuming setup after reboot..."
-    echo "----------------------------------------"
-
-    # Verify user information is loaded
-    if [ -z "$ACTUAL_USER" ] || [ -z "$ACTUAL_HOME" ]; then
-        echo "Error: Required user information not found in resume file"
-        exit 1
-    fi
-
-    # Verify the user exists
-    if ! id "$ACTUAL_USER" >/dev/null 2>&1; then
-        echo "Error: User $ACTUAL_USER does not exist"
-        exit 1
-    fi
-
-    echo "Resuming setup for user: $ACTUAL_USER"
-    echo "Home directory: $ACTUAL_HOME"
-
-    # Skip to WebSerial setup
-    setup_webserial
-    
-    # Clean up the resume service
-    systemctl disable display-setup-resume.service
-    rm -f /etc/systemd/system/display-setup-resume.service
-    systemctl daemon-reload
-    
-    # Continue with the rest of the setup
-    echo "Continuing with remaining setup tasks..."
-    
-    # Rest of the script continues...
-    exit 0
-fi
-
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.36 (2025-01-14)"  # AUTO-INCREMENT
+echo "Version: 0.0.38 (2025-01-14)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024-2025 Bence Damokos"
 echo "----------------------------------------"
@@ -726,7 +687,7 @@ display_model=$DISPLAY_MODEL
 EOF
     # Copy the example file as a reference, but commented out
     sed 's/^/# /' "$ACTUAL_HOME/display_programme/.env.example" >> "$ACTUAL_HOME/display_programme/.env"
-    echo "Please edit the .env file with your settings:"
+    echo "Please edit the .env file with your settings (Lines starting with # are comments, to enable a setting, remove the #):"
     echo "nano $ACTUAL_HOME/display_programme/.env"
 fi
 
@@ -1014,64 +975,27 @@ echo "You will find this readme at: https://github.com/bdamokos/rpi_waiting_time
 echo "----------------------------------------"
 
 if [ "$AUTO_RESTART" = "yes" ]; then
+    if [ $DWC2_ADDED -eq 1 ]; then
+        echo "----------------------------------------"
+        echo "The dwc2 module has been enabled and requires a reboot."
+        echo "After reboot, please run:"
+        echo "sudo bash $ACTUAL_HOME/display_programme/docs/service/setup_webserial.sh"
+        echo "to complete the WebSerial setup."
+        echo "----------------------------------------"
+    fi
     echo "Restarting system in 5 seconds..."
     sleep 5
     reboot
 else
     if [ $NEED_REBOOT -eq 1 ]; then
         echo "IMPORTANT: A reboot is required to apply the hardware configuration changes."
+        if [ $DWC2_ADDED -eq 1 ]; then
+            echo "After reboot, please run:"
+            echo "sudo bash $ACTUAL_HOME/display_programme/docs/service/setup_webserial.sh"
+            echo "to complete the WebSerial setup."
+        fi
         echo "Please restart your system when convenient."
     else
         echo "Setup complete. A reboot is recommended but not required."
     fi
-fi
-
-# Before the reboot, save variables and create resume marker
-if [ $DWC2_ADDED -eq 1 ]; then
-    echo "----------------------------------------"
-    echo "Saving setup state and rebooting..."
-    echo "Setup will automatically continue after reboot."
-    echo "----------------------------------------"
-    
-    # Save variables for resume
-    mkdir -p /var/lib
-    cat > "$RESUME_FILE" << EOF
-ACTUAL_USER="$ACTUAL_USER"
-ACTUAL_HOME="$ACTUAL_HOME"
-SETUP_MODE="$SETUP_MODE"
-UPDATE_MODE="$UPDATE_MODE"
-SETUP_SAMBA="$SETUP_SAMBA"
-AUTO_RESTART="$AUTO_RESTART"
-UNATTENDED="$UNATTENDED"
-DISPLAY_MODEL="$DISPLAY_MODEL"
-EOF
-    chmod 600 "$RESUME_FILE"  # Secure the file since it might contain sensitive data
-    
-    # Create systemd service to resume setup after reboot
-    cat > /etc/systemd/system/display-setup-resume.service << EOF
-[Unit]
-Description=Resume Display Setup
-After=network.target
-
-[Service]
-Type=oneshot
-RemainAfterExit=no
-ExecStart=/bin/bash $ACTUAL_HOME/display_programme/setup_display.sh
-Environment="ACTUAL_USER=$ACTUAL_USER"
-Environment="ACTUAL_HOME=$ACTUAL_HOME"
-Environment="SUDO_USER=$ACTUAL_USER"
-User=root
-
-[Install]
-WantedBy=multi-user.target
-EOF
-    
-    # Make sure the service is enabled and will start on boot
-    systemctl enable display-setup-resume.service
-    
-    # Reboot
-    echo "Rebooting in 5 seconds..."
-    sleep 5
-    reboot
-    exit 0
 fi

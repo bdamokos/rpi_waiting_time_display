@@ -12,8 +12,6 @@ Using Raspberry Pi Imager, download the Raspberry Pi OS Lite (64-bit) or Raspber
 
 ![Raspberry Pi Imager](images/rpi_imager_1.png)
 
-
-
 Under settings:
 - Enable SSH
 - Set up username and password
@@ -37,7 +35,6 @@ The hardware setup is quite straightforward:
 
 - Without a case, you just need to press the display into the Raspberry Pi, making sure that you seat the screen firmly onto the pins (the bottom of the display's board should more or less touch the top of the Raspberry Pi's board), and plug in the microSD card.
 
-
 # Get the Raspberry Pi assembled and powered on
 
 Once the Raspberry Pi is assembled and powered on, connect to it with SSH.
@@ -60,8 +57,14 @@ sudo ./setup_display.sh
 ```
 ![Fast Setup Step 2](images/fast_setup_step2.png) 
 
+The script will guide you through several configuration options:
+- Setup mode (Normal/Docker/Remote)
+- Display type (e.g., epd2in13g_V2 for 4-color displays, epd2in13_V4 for black and white displays)
+- Update mode (Releases/Main/None)
+- Optional Samba file sharing setup
+- Auto-restart preference
 
-The script will:
+The script will then:
 - Enable SPI interface
 - Install all required packages
 - Set up watchdog
@@ -69,14 +72,36 @@ The script will:
 - Set up virtual environment
 - Install requirements
 - Configure and start the service
+- Set up WebSerial support (may require a reboot)
+
+If the script needs to enable WebSerial support, it will:
+1. Enable the required hardware module
+2. Reboot the system
+3. After reboot, you'll need to run:
+```bash
+sudo bash ~/display_programme/docs/service/setup_webserial.sh
+```
+to complete the WebSerial setup.
+
 ![Fast Setup Step 3 - Setup Complete](images/fast_setup_step3.png)
+
 After running the script, you only need to:
-1. Edit your .env file with your settings (the script will start a web interface to help you with that)
-2. Reboot the Raspberry Pi (the script will also do that for you)
+1. Edit your .env file with your settings (you can do this in two ways):
+   - Using the web interface at http://raspberrypi.local:5002/debug/env
+   - Manually editing the file: `nano ~/display_programme/.env`
+   - Using the webserial interface at https://bdamokos.github.io/rpi_waiting_time_display/setup/
+2. Reboot the Raspberry Pi (if not done automatically by the script)
 
 ![Assembled and configured display](images/hardware_setup_finished_top.png)
 
 # Setting up the backend server
-:warning: **Important:** The backend server needs to be set up for the display to work (otherwise the display will only display the weather). See the [backend server readme](https://github.com/bdamokos/brussels_transit) for more information. If the API keys are not configured, the service will not start.
+:warning: **Important:** The backend server needs to be set up for the display to work (otherwise the display will only display the weather and flights). See the [backend server readme](https://github.com/bdamokos/brussels_transit) for more information. If the API keys are not configured, the service will not start. (Some basic setup, like the API keys, can be done through the [webserial interface](https://bdamokos.github.io/rpi_waiting_time_display/setup/) if the backend server is set up on the Raspberry Pi.)
 
-**Currently the set up script installs the backend server, but it does not configure it.** You need to set up the API keys manually and make sure that the backend server is monitoring the same stops as are requested by your display.
+The setup script will install the backend server based on your chosen setup mode:
+- Normal mode: Installs directly on the Raspberry Pi
+- Docker mode: Sets up in a Docker container
+- Remote mode: Requires you to set up the backend server separately
+
+You'll need to configure the API keys and stops either through:
+- The web interface at http://raspberrypi.local:5002/debug/env
+- Manually editing the .env file

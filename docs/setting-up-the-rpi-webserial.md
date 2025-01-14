@@ -52,7 +52,15 @@ chmod +x setup_display.sh
 sudo ./setup_display.sh
 ```
 ![Fast Setup Step 2](images/fast_setup_step2.png) 
-The script will:
+
+The script will guide you through several configuration options:
+- Setup mode (Normal/Docker/Remote)
+- Display type (e.g., epd2in13g_V2 for 4-color displays, epd2in13_V4 for black and white displays)
+- Update mode (Releases/Main/None)
+- Optional Samba file sharing setup
+- Auto-restart preference
+
+The script will then:
 - Enable SPI interface
 - Install all required packages
 - Set up watchdog
@@ -60,6 +68,16 @@ The script will:
 - Set up virtual environment
 - Install requirements
 - Configure and start the service
+- Set up WebSerial support (will require a reboot)
+
+If the script needs to enable WebSerial support, it will:
+1. Enable the required hardware module
+2. Reboot the system
+3. After reboot, you'll need to run:
+```bash
+sudo bash ~/display_programme/docs/service/setup_webserial.sh
+```
+to complete the WebSerial setup.
 
 ## Step 2: Final Setup (End User)
 
@@ -67,7 +85,6 @@ The script will:
 1. Insert the microSD card into your Raspberry Pi (if not already inserted)
 2. Connect your Raspberry Pi to power using the USB cable
 3. Visit the [setup page](http://raspberrypi.local:8000/setup) in Google Chrome or Edge
-
 
 ### Configure Your Display
 The setup wizard will guide you through:

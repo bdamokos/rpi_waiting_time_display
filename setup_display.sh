@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Check if this is a resume after reboot
-RESUME_FILE="/tmp/display_setup_resume"
+RESUME_FILE="/var/lib/display_setup_resume"
 if [ -f "$RESUME_FILE" ]; then
     # Load saved variables
     source "$RESUME_FILE"
@@ -1020,6 +1020,7 @@ if [ $DWC2_ADDED -eq 1 ]; then
     echo "----------------------------------------"
     
     # Save variables for resume
+    mkdir -p /var/lib
     cat > "$RESUME_FILE" << EOF
 ACTUAL_USER="$ACTUAL_USER"
 ACTUAL_HOME="$ACTUAL_HOME"
@@ -1029,6 +1030,7 @@ SETUP_SAMBA="$SETUP_SAMBA"
 AUTO_RESTART="$AUTO_RESTART"
 UNATTENDED="$UNATTENDED"
 EOF
+    chmod 600 "$RESUME_FILE"  # Secure the file since it might contain sensitive data
     
     # Create systemd service to resume setup after reboot
     cat > /etc/systemd/system/display-setup-resume.service << EOF
@@ -1049,6 +1051,7 @@ User=root
 WantedBy=multi-user.target
 EOF
     
+    # Make sure the service is enabled and will start on boot
     systemctl enable display-setup-resume.service
     
     # Reboot

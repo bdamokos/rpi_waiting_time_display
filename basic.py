@@ -271,8 +271,9 @@ class DisplayManager:
         self.min_refresh_interval = int(os.getenv("refresh_minimal_time", 30))
         self.flight_check_interval = int(os.getenv("flight_check_interval", 10))
         self.flights_enabled = os.getenv("flights_enabled", "false").lower() == "true"
-        self.coordinates_lat = float(os.getenv('Coordinates_LAT'))
-        self.coordinates_lng = float(os.getenv('Coordinates_LNG'))
+        # Default to Brussels coordinates if not set
+        self.coordinates_lat = float(os.getenv('Coordinates_LAT', '50.8503'))
+        self.coordinates_lng = float(os.getenv('Coordinates_LNG', '4.3517'))
         self.flight_getter = None
         self.in_flight_mode = False
         self.flight_mode_start = None

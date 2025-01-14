@@ -28,9 +28,9 @@ def create_weather_provider(
     Raises:
         ValueError: If provider_name is invalid or coordinates are missing
     """
-    # Use environment variables if coordinates not provided
-    lat = lat or os.getenv('Coordinates_LAT')
-    lon = lon or os.getenv('Coordinates_LNG')
+    # Use environment variables if coordinates not provided - default to Brussels
+    lat = lat or os.getenv('Coordinates_LAT', 50.8503)
+    lon = lon or os.getenv('Coordinates_LNG', 4.3517)
     unit = unit or os.getenv('weather_unit', 'celsius').lower()
     
     # Convert unit string to enum

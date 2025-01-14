@@ -78,6 +78,7 @@ If the script needs to enable WebSerial support, it will:
 sudo bash ~/display_programme/docs/service/setup_webserial.sh
 ```
 to complete the WebSerial setup.
+4. Reboot your device again. Once it boots up, you can access the WebSerial interface at https://bdamokos.github.io/rpi_waiting_time_display/setup/
 
 ## Step 2: Final Setup (End User)
 

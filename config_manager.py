@@ -30,6 +30,18 @@ class ConfigManager:
             'transit_env': self.transit_dir / 'env_backups',
             'transit_local': self.transit_dir / 'app' / 'config' / 'backups'
         }
+        
+        # Create necessary directories
+        self.display_dir.mkdir(parents=True, exist_ok=True)
+        self.transit_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create empty config files if they don't exist
+        for config_file in self.config_files.values():
+            if not config_file.exists() and not str(config_file).endswith('example'):
+                config_file.parent.mkdir(parents=True, exist_ok=True)
+                config_file.touch()
+                logger.debug(f"Created empty config file: {config_file}")
+        
         self._init_backup_dirs()
 
     def _init_backup_dirs(self):
@@ -226,15 +238,21 @@ class ConfigManager:
                 raise ValueError(f"Unknown config type: {config_type}")
 
             file_path = self.config_files[config_type]
+            logger.debug(f"Updating config file: {file_path}")
+            logger.debug(f"New content: {content}")
+            
             backup_dir = self.backup_dirs.get(config_type)
+            logger.debug(f"Backup directory: {backup_dir}")
 
             # Ensure parent directory exists
             file_path.parent.mkdir(parents=True, exist_ok=True)
+            logger.debug(f"Parent directory exists: {file_path.parent}")
 
             # Create backup if needed
             if backup_dir:
                 # Create backup directory if it doesn't exist
-                backup_dir.mkdir(parents=True, exist_ok=True);
+                backup_dir.mkdir(parents=True, exist_ok=True)
+                logger.debug(f"Backup directory exists: {backup_dir}")
 
                 # Check if we should create a backup
                 should_backup = self._should_create_backup()
@@ -258,8 +276,12 @@ class ConfigManager:
                     logger.debug("Backup not created: within same session")
 
             # Write new content
-            file_path.write_text(content)
-            logger.debug(f"Updated config file: {file_path}")
+            try:
+                file_path.write_text(content)
+                logger.debug(f"Successfully wrote content to {file_path}")
+            except Exception as e:
+                logger.error(f"Failed to write content to {file_path}: {e}")
+                raise
 
             # Rotate backups after writing new content
             if backup_dir:
@@ -295,7 +317,7 @@ class ConfigManager:
             return True
 
         except Exception as e:
-            logger.error(f"Error updating config {config_type}: {e}")
+            logger.error(f"Error updating config {config_type}: {e}", exc_info=True)
             return False
 
     def get_value(self, config_type: str, key: str) -> Optional[str]:
@@ -310,8 +332,13 @@ class ConfigManager:
     def set_value(self, config_type: str, key: str, value: str) -> bool:
         """Set a specific value in a configuration file"""
         try:
+            logger.debug(f"Setting {key}={value} in {config_type}")
             content, variables = self.read_config(config_type)
+            logger.debug(f"Current content: {content}")
+            logger.debug(f"Current variables: {variables}")
+            
             variables[key] = value
+            logger.debug(f"Updated variables: {variables}")
 
             # Reconstruct file content
             if config_type.endswith('_env'):
@@ -321,7 +348,10 @@ class ConfigManager:
             else:
                 raise ValueError(f"Unsupported config type: {config_type}")
 
-            return self.update_config(config_type, new_content)
+            logger.debug(f"New content: {new_content}")
+            success = self.update_config(config_type, new_content)
+            logger.debug(f"Update {'successful' if success else 'failed'}")
+            return success
 
         except Exception as e:
             logger.error(f"Error setting value {key}={value} in {config_type}: {e}")

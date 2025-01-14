@@ -79,6 +79,7 @@ const services = {
         name: 'Transit Information',
         description: 'Display transit schedules and delays',
         config_type: 'display_env',
+        api_config_type: 'transit_env',
         requires_api_key: true,
         enabled_key: 'transit_enabled',
         api_keys: [
@@ -360,7 +361,7 @@ window.startApiSetup = async function() {
                     for (const apiKey of service.api_keys) {
                         const keyResponse = await window.setupDevice.send(JSON.stringify({
                             command: 'config_get',
-                            config_type: service.config_type,
+                            config_type: service.api_config_type || service.config_type,
                             key: apiKey.name
                         }));
                         apiKeyStates[apiKey.name] = keyResponse.status === 'success' ? keyResponse.value : '';
@@ -370,7 +371,7 @@ window.startApiSetup = async function() {
                 else if (service.requires_api_key && service.api_key_name) {
                     const keyResponse = await window.setupDevice.send(JSON.stringify({
                         command: 'config_get',
-                        config_type: service.config_type,
+                        config_type: service.api_config_type || service.config_type,
                         key: service.api_key_name
                     }));
                     apiKeyStates[service.api_key_name] = keyResponse.status === 'success' ? keyResponse.value : '';
@@ -380,7 +381,7 @@ window.startApiSetup = async function() {
                 else if (service.optional_api?.api_key_name) {
                     const optKeyResponse = await window.setupDevice.send(JSON.stringify({
                         command: 'config_get',
-                        config_type: service.config_type,
+                        config_type: service.api_config_type || service.config_type,
                         key: service.optional_api.api_key_name
                     }));
                     apiKeyStates[service.optional_api.api_key_name] = optKeyResponse.status === 'success' ? optKeyResponse.value : '';
@@ -658,7 +659,7 @@ window.updateApiKey = async function(serviceId, keyName, value) {
 
             const response = await window.setupDevice.send(JSON.stringify({
                 command: 'config_set',
-                config_type: service.config_type,
+                config_type: service.api_config_type || service.config_type,
                 key: keyName,
                 value: value
             }));
@@ -681,7 +682,7 @@ window.updateApiKey = async function(serviceId, keyName, value) {
 
             const response = await window.setupDevice.send(JSON.stringify({
                 command: 'config_set',
-                config_type: service.config_type,
+                config_type: service.api_config_type || service.config_type,
                 key: apiKeyName,
                 value: value
             }));

@@ -41,7 +41,7 @@ fi
 
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.35 (2025-01-14)"  # AUTO-INCREMENT
+echo "Version: 0.0.36 (2025-01-14)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024-2025 Bence Damokos"
 echo "----------------------------------------"
@@ -196,13 +196,13 @@ if [ -z "$UNATTENDED" ]; then
     SETUP_MODE=${SETUP_MODE:-1}
 
     # Display type selection if not provided
-    if [ -z "$DISPLAY_TYPE" ]; then
+    if [ -z "$DISPLAY_MODEL" ]; then
         echo "----------------------------------------"
         echo "Please select display type:"
         echo "# Display settings (If you don't know what to use, try: epd2in13g_V2 for 4-color displays, epd2in13_V4 for black and white displays)"
-        read -p "Enter display type [epd2in13g_V2]: " DISPLAY_TYPE
+        read -p "Enter display type [epd2in13g_V2]: " DISPLAY_MODEL
     fi
-    DISPLAY_TYPE=${DISPLAY_TYPE:-"epd2in13g_V2"}
+    DISPLAY_MODEL=${DISPLAY_MODEL:-"epd2in13g_V2"}
 
     # Update mode selection if not provided
     if [ -z "$UPDATE_MODE_CHOICE" ]; then
@@ -250,7 +250,7 @@ else
     UPDATE_MODE_CHOICE=${UPDATE_MODE_CHOICE:-1}
     SETUP_SAMBA=${SETUP_SAMBA:-"no"}
     AUTO_RESTART=${AUTO_RESTART:-"yes"}
-    DISPLAY_TYPE=${DISPLAY_TYPE:-"epd2in13_V4"}
+    DISPLAY_MODEL=${DISPLAY_MODEL:-"epd2in13g_V2"}
     
     # In unattended mode, if Samba is enabled but no password provided, disable it
     if [ "$SETUP_SAMBA" = "yes" ] && [ -z "$SAMBA_PASSWORD" ]; then
@@ -282,7 +282,7 @@ echo "Setup Mode: $SETUP_MODE"
 echo "Update Mode: $UPDATE_MODE"
 echo "Setup Samba: $SETUP_SAMBA"
 echo "Auto Restart: $AUTO_RESTART"
-echo "Display Type: $DISPLAY_TYPE"
+echo "Display Type: $DISPLAY_MODEL"
 echo "----------------------------------------"
 
 if [ -z "$UNATTENDED" ]; then
@@ -722,7 +722,7 @@ if [ ! -f "$ACTUAL_HOME/display_programme/.env" ]; then
     # Create with initial settings
     cat > "$ACTUAL_HOME/display_programme/.env" << EOF
 UPDATE_MODE=$UPDATE_MODE
-DISPLAY_TYPE=$DISPLAY_TYPE
+display_model=$DISPLAY_MODEL
 EOF
     # Copy the example file as a reference, but commented out
     sed 's/^/# /' "$ACTUAL_HOME/display_programme/.env.example" >> "$ACTUAL_HOME/display_programme/.env"
@@ -1043,7 +1043,7 @@ UPDATE_MODE="$UPDATE_MODE"
 SETUP_SAMBA="$SETUP_SAMBA"
 AUTO_RESTART="$AUTO_RESTART"
 UNATTENDED="$UNATTENDED"
-DISPLAY_TYPE="$DISPLAY_TYPE"
+DISPLAY_MODEL="$DISPLAY_MODEL"
 EOF
     chmod 600 "$RESUME_FILE"  # Secure the file since it might contain sensitive data
     

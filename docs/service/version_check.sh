@@ -2,7 +2,7 @@
 
 echo "----------------------------------------"
 echo "Version Check Script"
-echo "Version: 0.0.3 (2025-01-12)"  # AUTO-INCREMENT
+echo "Version: 0.0.4 (2025-01-16)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2025 Bence Damokos"
 echo "----------------------------------------"
@@ -118,6 +118,9 @@ perform_update() {
     
     cd "$repo_path"
     
+    # Store current version before update
+    local old_version=$(get_current_version)
+    
     case "$update_mode" in
         "none")
             return 0
@@ -128,6 +131,14 @@ perform_update() {
                 logger "Updating to release $latest_release..."
                 git fetch --tags
                 git checkout "$latest_release"
+                # If this is the display_programme repository and update succeeded
+                if [ "$repo_name" = "rpi_waiting_time_display" ] && [ $? -eq 0 ]; then
+                    local new_version=$(get_current_version)
+                    if [ "$old_version" != "$new_version" ]; then
+                        logger "Version changed from $old_version to $new_version, running upgrade script..."
+                        sudo bash "$repo_path/docs/service/upgrade.sh"
+                    fi
+                fi
                 return $?
             fi
             return 1
@@ -138,6 +149,14 @@ perform_update() {
             git remote set-url origin https://github.com/bdamokos/"$repo_name".git
             git reset --hard origin/main
             git pull -v origin main
+            # If this is the display_programme repository and update succeeded
+            if [ "$repo_name" = "rpi_waiting_time_display" ] && [ $? -eq 0 ]; then
+                local new_version=$(get_current_version)
+                if [ "$old_version" != "$new_version" ]; then
+                    logger "Version changed from $old_version to $new_version, running upgrade script..."
+                    sudo bash "$repo_path/docs/service/upgrade.sh"
+                fi
+            fi
             return $?
             ;;
         *)

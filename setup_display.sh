@@ -2,7 +2,7 @@
 
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.40 (2025-01-14)"  # AUTO-INCREMENT
+echo "Version: 0.0.41 (2025-01-16)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024-2025 Bence Damokos"
 echo "----------------------------------------"
@@ -579,6 +579,11 @@ echo "Cloning repositories..."
 cd $ACTUAL_HOME
 clone_repository "rpi_waiting_time_display" "display_programme"
 check_error "Failed to clone display programme"
+
+# After repository setup, run upgrade script
+echo "Running system upgrades..."
+sudo bash "$ACTUAL_HOME/display_programme/docs/service/upgrade.sh"
+check_error "Failed to run upgrade script"
 
 # Setup virtual environment
 echo "Setting up virtual environment..."

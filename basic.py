@@ -263,7 +263,8 @@ class DisplayManager:
         self.in_weather_mode = False
         self.weather_manager = WeatherManager()
         self.bus_manager = BusManager()
-        self.bus_manager.bus_service.set_epd(epd)  # Set the EPD object for the bus service
+        if transit_enabled and self.bus_manager and self.bus_manager.bus_service:
+            self.bus_manager.bus_service.set_epd(epd)  # Set the EPD object for the bus service
         self._display_lock = threading.Lock()
         self._check_data_thread = None
         self._flight_thread = None
@@ -502,9 +503,10 @@ class DisplayManager:
         """Schedule the next update and prefetch times"""
         current_time = datetime.now()
         self.next_update_time = current_time + timedelta(seconds=self.display_interval)
-        self.next_prefetch_time = self.next_update_time - timedelta(seconds=self.prefetch_offset)
+        if transit_enabled:
+            self.next_prefetch_time = self.next_update_time - timedelta(seconds=self.prefetch_offset)
+            logger.debug(f"Next prefetch scheduled for {self.next_prefetch_time.strftime('%H:%M:%S')}")
         logger.debug(f"Next update scheduled for {self.next_update_time.strftime('%H:%M:%S')}")
-        logger.debug(f"Next prefetch scheduled for {self.next_prefetch_time.strftime('%H:%M:%S')}")
 
     def _check_display_updates(self):
         """Continuously check for updates and switch modes as needed"""
@@ -539,7 +541,7 @@ class DisplayManager:
                         continue
 
                 # Check if it's time to prefetch data
-                if current_time >= self.next_prefetch_time:
+                if transit_enabled and current_time >= self.next_prefetch_time:
                     logger.debug("Prefetching bus data...")
                     self.bus_manager.fetch_data()
 
@@ -547,9 +549,9 @@ class DisplayManager:
                 if current_time >= self.next_update_time:
                     logger.debug("Updating display...")
                     weather_data = self.weather_manager.get_weather_data() if weather_enabled else None
-                    valid_bus_data = self.bus_manager.get_valid_bus_data()
+                    valid_bus_data = self.bus_manager.get_valid_bus_data() if transit_enabled else None
                     error_message = None
-                    stop_name = self.bus_manager.get_stop_name()
+                    stop_name = self.bus_manager.get_stop_name() if transit_enabled else None
 
                     with self._display_lock:
                         # Check if we have any bus data at all

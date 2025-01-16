@@ -580,19 +580,39 @@ def draw_weather_display(epd, weather_data, last_weather_data=None, set_base_ima
             draw.text((text_positions[idx], forecast_y_pos), 
                     forecast_text, font=font_medium, fill=BLACK)
 
-    # Generate and draw QR code (larger size)
-    qr = qrcode.QRCode(version=1, box_size=2, border=1)
-    qr_code_address = os.getenv("weather_mode_qr_code_address", "http://raspberrypi.local:5002/debug")
-    qr.add_data(qr_code_address)
-    qr.make(fit=True)
-    qr_img = qr.make_image(fill_color="black", back_color="white")
-    qr_img = qr_img.convert('RGB')
+    # Generate and draw QR code (larger size) or Raspberry Pi logo
+    qr_code_address = os.getenv("weather_mode_qr_code_address")
+    if qr_code_address:
+        qr = qrcode.QRCode(version=1, box_size=2, border=1)
+        qr.add_data(qr_code_address)
+        qr.make(fit=True)
+        qr_img = qr.make_image(fill_color="black", back_color="white")
+        qr_img = qr_img.convert('RGB')
 
-    # Scale QR code to defined size
-    qr_img = qr_img.resize((QR_SIZE, QR_SIZE))
-    qr_x = Himage.width - QR_SIZE - MARGIN
-    qr_y = MARGIN
-    Himage.paste(qr_img, (qr_x, qr_y))
+        # Scale QR code to defined size
+        qr_img = qr_img.resize((QR_SIZE, QR_SIZE))
+        qr_x = Himage.width - QR_SIZE - MARGIN
+        qr_y = MARGIN
+        Himage.paste(qr_img, (qr_x, qr_y))
+    else:
+        # Load and display Raspberry Pi logo instead
+        try:
+            logo_path = Path(__file__).parent / "icons" / "Brand raspberrypi.png"
+            logo_img = Image.open(logo_path)
+            
+            # Calculate position to center the 46x46 logo in the QR code space
+            logo_x = Himage.width - QR_SIZE - MARGIN + (QR_SIZE - 46) // 2
+            logo_y = MARGIN + (QR_SIZE - 46) // 2
+            
+            # Convert logo to match display mode if needed
+            if epd.is_bw_display:
+                logo_img = logo_img.convert('1')
+            else:
+                logo_img = logo_img.convert('RGB')
+                
+            Himage.paste(logo_img, (logo_x, logo_y))
+        except Exception as e:
+            logger.error(f"Error loading Raspberry Pi logo: {e}")
 
     # Draw time under QR code
     current_time = datetime.now().strftime("%H:%M")

@@ -190,7 +190,7 @@ const SETTING_GROUPS = {
                 description: "Pre-load bus schedule data on startup to speed up fallback when realtime data is unavailable (experimental)",
                 default: false
             },
-            fallbackfallback_to_schedule_mode: { type: "boolean", label: "Fall back to schedule mode", description: "Fall back to schedule mode for realtime providers", default: false }
+            fallback_to_schedule_mode: { type: "boolean", label: "Fall back to schedule mode", description: "Fall back to schedule mode for realtime providers", default: false }
 
         }
     }

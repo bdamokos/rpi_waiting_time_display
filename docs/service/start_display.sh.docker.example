@@ -6,7 +6,7 @@
 # chmod +x ~/start_display.sh
 echo "----------------------------------------"
 echo "Starting display service script (Docker Version)"
-echo "Version: 0.0.10 (2025-01-13)"  # AUTO-INCREMENT
+echo "Version: 0.0.11 (2025-01-16)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024-2025 Bence Damokos"
 echo "----------------------------------------"
@@ -18,6 +18,24 @@ if systemctl list-unit-files | grep -q watchdog.service; then
     sudo systemctl disable watchdog.service
     echo "Watchdog service disabled."
 fi
+echo "----------------------------------------"
+
+# Create log directories if they don't exist
+echo "Checking log directories..."
+if [ ! -d "/var/log/display" ]; then
+    echo "Creating display log directory..."
+    sudo mkdir -p /var/log/display
+    sudo chown $USER:$USER /var/log/display
+    sudo chmod 755 /var/log/display
+fi
+
+if [ ! -f "/var/log/display/display.out" ] || [ ! -f "/var/log/display/display.err" ]; then
+    echo "Creating display log files..."
+    sudo touch /var/log/display/display.out /var/log/display/display.err
+    sudo chown $USER:$USER /var/log/display/display.out /var/log/display/display.err
+    sudo chmod 644 /var/log/display/display.out /var/log/display/display.err
+fi
+echo "Log directories and files are ready."
 echo "----------------------------------------"
 
 # Function to check and update a service file if needed

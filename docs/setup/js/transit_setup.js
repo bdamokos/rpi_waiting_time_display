@@ -252,7 +252,7 @@ async function saveTransitConfig(provider) {
         return;
     }
 
-    // Config for display_env
+    // Collect all config values
     let displayConfig = {
         'Stops': stopId
     };
@@ -319,13 +319,15 @@ async function saveTransitConfig(provider) {
     }
 
     try {
-        // Save display configuration
-        await window.setupDevice.send(JSON.stringify({
-            command: 'config_set',
-            config_type: 'display_env',
-            key: 'transit_setup',
-            value: displayConfig
-        }));
+        // Save each config value individually
+        for (const [key, value] of Object.entries(displayConfig)) {
+            await window.setupDevice.send(JSON.stringify({
+                command: 'config_set',
+                config_type: 'display_env',
+                key: key,
+                value: value
+            }));
+        }
 
         showMessage('Transit configuration saved successfully');
         

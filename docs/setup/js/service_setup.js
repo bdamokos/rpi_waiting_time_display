@@ -657,46 +657,19 @@ window.updateApiKey = async function(serviceId, keyName, value) {
                 throw new Error('API key configuration not found');
             }
 
-            // For transit service, handle transit_setup differently
-            if (serviceId === 'transit' && keyName === 'transit_setup') {
-                try {
-                    // Parse the transit setup JSON
-                    const transitConfig = JSON.parse(value);
-                    
-                    // Save each key-value pair individually
-                    for (const [key, val] of Object.entries(transitConfig)) {
-                        const response = await window.setupDevice.send(JSON.stringify({
-                            command: 'config_set',
-                            config_type: service.config_type,
-                            key: key,
-                            value: val
-                        }));
-                        
-                        if (response.status !== 'success') {
-                            throw new Error(`Failed to update ${key}`);
-                        }
-                    }
-                    
-                    window.showMessage('Updated transit configuration');
-                    return true;
-                } catch (e) {
-                    throw new Error(`Invalid transit configuration: ${e.message}`);
-                }
-            } else {
-                // Handle regular API keys
-                const response = await window.setupDevice.send(JSON.stringify({
-                    command: 'config_set',
-                    config_type: service.api_config_type || service.config_type,
-                    key: keyName,
-                    value: value
-                }));
+            // For transit service API keys, use transit_env
+            const response = await window.setupDevice.send(JSON.stringify({
+                command: 'config_set',
+                config_type: service.api_config_type || service.config_type,
+                key: keyName,
+                value: value
+            }));
 
-                if (response.status === 'success') {
-                    window.showMessage(`Updated ${apiKey.label}`);
-                    return true;
-                } else {
-                    throw new Error(response.message || 'Failed to update API key');
-                }
+            if (response.status === 'success') {
+                window.showMessage(`Updated ${apiKey.label}`);
+                return true;
+            } else {
+                throw new Error(response.message || 'Failed to update API key');
             }
         }
         // Handle single API key

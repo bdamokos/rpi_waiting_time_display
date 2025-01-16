@@ -168,7 +168,8 @@ title: E-Paper Display Setup
                         started) and to change any of the settings not included in this setup wizard.</p>
                     <p>If your display fails to start, you can try to SSH into the device and use the command
                         <code>sudo systemctl restart display.service</code> to restart the display service or
-                        <code>journalctl -u display.service -f</code> to see the logs.</p>
+                        <code>journalctl -u display.service -f</code> to see the  service logs.</p>
+                        <p>If you want to see the standard outputs and errors, try <code>tail -f /var/log/display/display.out</code> and <code>tail -f /var/log/display/display.out.</p>
                     <p>If all else fails, you can reinstall the display using the instructions on <a
                             href="https://bdamokos.github.io/rpi_waiting_time_display">GitHub</a>.</p>
                 </div>

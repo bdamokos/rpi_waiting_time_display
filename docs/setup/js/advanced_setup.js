@@ -377,24 +377,40 @@ window.saveAdvancedSettings = async function (event) {
                 if (!input) continue;
 
                 let value;
+                let wasCleared = false;
+
                 switch (setting.type) {
                     case 'boolean':
                         value = input.checked;
                         break;
                     case 'number':
-                        value = parseInt(input.value);
+                        // Check if the field was explicitly cleared
+                        if (input.value.trim() === '' && currentSettings[key] !== undefined) {
+                            wasCleared = true;
+                        } else if (input.value.trim() !== '') {
+                            const numValue = parseInt(input.value);
+                            if (!isNaN(numValue)) {
+                                value = numValue;
+                            }
+                        }
                         break;
                     default:
-                        value = input.value;
+                        // Check if the field was explicitly cleared
+                        if (input.value.trim() === '' && currentSettings[key] !== undefined) {
+                            wasCleared = true;
+                        } else if (input.value.trim() !== '') {
+                            value = input.value;
+                        }
                 }
 
-                if (currentSettings[key] !== value) {
+                // Save if we have a new value or if the field was explicitly cleared
+                if (wasCleared || (value !== undefined && currentSettings[key] !== value)) {
                     savePromises.push(
                         window.setupDevice.send(JSON.stringify({
                             command: 'config_set',
                             config_type: 'display_env',
                             key: key,
-                            value: value
+                            value: wasCleared ? '' : value
                         }))
                     );
                 }

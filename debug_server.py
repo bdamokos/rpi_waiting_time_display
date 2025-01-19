@@ -15,7 +15,8 @@ logger = logging.getLogger(__name__)
 
 # Load environment variables
 dotenv.load_dotenv(override=True)
-DEBUG_PORT = int(os.getenv("debug_port", "5002"))
+debug_port_value = os.getenv("debug_port", "5002")
+DEBUG_PORT = int(debug_port_value) if debug_port_value and debug_port_value.lower() != "none" else 5002
 DEBUG_ENABLED = os.getenv("debug_port_enabled", "false").lower() == "true"
 FIRST_RUN = os.getenv("first_run", "false").lower() == "true"
 

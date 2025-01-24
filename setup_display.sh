@@ -2,7 +2,7 @@
 
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.41 (2025-01-16)"  # AUTO-INCREMENT
+echo "Version: 0.0.42 (2025-01-24)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024-2025 Bence Damokos"
 echo "----------------------------------------"
@@ -659,8 +659,8 @@ case $SETUP_MODE in
         echo "----------------------------------------"
         echo "Remote server mode selected. You will need to:"
         echo "1. Set up your remote backend server"
-        echo "2. Edit your .env file to set BUS_API_URL to point to your remote server"
-        echo "   For example: BUS_API_URL=https://your-server:5001"
+        echo "2. Edit your .env file to set BUS_API_BASE_URL to point to your remote server"
+        echo "   For example: BUS_API_BASE_URL=https://your-server:5001"
         echo "----------------------------------------"
         setup_service_files "remote"
         ;;

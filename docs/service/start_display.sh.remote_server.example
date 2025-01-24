@@ -6,7 +6,7 @@
 # chmod +x ~/start_display.sh
 echo "----------------------------------------"
 echo "Starting display service script"
-echo "Version: 0.0.11 (2025-01-16)"  # AUTO-INCREMENT
+echo "Version: 0.0.12 (2025-01-24)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024-2025 Bence Damokos"
 echo "----------------------------------------"
@@ -265,7 +265,7 @@ trap cleanup SIGTERM SIGINT
 
 # Add this function before starting the display program
 check_backend() {
-    local base_url=$(grep "^BUS_API_URL=" $HOME/display_programme/.env | cut -d '=' -f2)
+    local base_url=$(grep "^BUS_API_BASE_URL=" $HOME/display_programme/.env | cut -d '=' -f2)
     # Remove any trailing slash and add /health
     base_url="${base_url%/}"
     local health_url="${base_url}/health"

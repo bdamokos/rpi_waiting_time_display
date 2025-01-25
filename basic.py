@@ -192,7 +192,7 @@ class BusManager:
             'error_message': None if transit_enabled else "Transit display is disabled",
             'stop_name': None
         }
-        self.last_update = None
+        self.last_update = None  # Track when we last fetched data
         self._lock = threading.Lock()
         logger.info("BusManager initialized" + (" (disabled)" if not transit_enabled else ""))
 
@@ -263,9 +263,11 @@ class DisplayManager:
         self.in_weather_mode = False
         self.weather_manager = WeatherManager()
         self.bus_manager = BusManager()
+        self.prefetch_done = False  # Flag to track if we've prefetched for the next update
         if transit_enabled and self.bus_manager and self.bus_manager.bus_service:
             self.bus_manager.bus_service.set_epd(epd)  # Set the EPD object for the bus service
         self._display_lock = threading.Lock()
+        self._prefetch_lock = threading.Lock()  # Add lock for prefetch operations
         self._check_data_thread = None
         self._flight_thread = None
         self._stop_event = threading.Event()
@@ -542,8 +544,17 @@ class DisplayManager:
 
                 # Check if it's time to prefetch data
                 if transit_enabled and current_time >= self.next_prefetch_time:
-                    logger.debug("Prefetching bus data...")
-                    self.bus_manager.fetch_data()
+                    with self._prefetch_lock:
+                        if not self.prefetch_done:  # Check flag under lock
+                            logger.debug("Prefetching bus data...")
+                            try:
+                                self.bus_manager.fetch_data()
+                                self.prefetch_done = True
+                                logger.debug("Prefetch completed successfully")
+                            except Exception as e:
+                                logger.error(f"Prefetch failed: {e}")
+                                # Don't set prefetch_done to False here - we'll try again next cycle
+                                # We want to avoid infinite retry loops within the same cycle
 
                 # Check if it's time to update display
                 if current_time >= self.next_update_time:
@@ -594,6 +605,10 @@ class DisplayManager:
 
                     # Schedule next update cycle
                     self._schedule_next_update()
+                    # Reset prefetch flag for next cycle after display update is complete
+                    with self._prefetch_lock:
+                        self.prefetch_done = False
+                        logger.debug("Reset prefetch flag for next cycle")
 
             except Exception as e:
                 logger.error(f"Error in display update checker: {e}")

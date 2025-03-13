@@ -23,6 +23,9 @@ DISPLAY_SCREEN_ROTATION = int(os.getenv('screen_rotation', 90))
 flight_altitude_convert_feet = True if os.getenv('flight_altitude_convert_feet', 'false').lower() == 'true' else False
 display_lock = return_display_lock()
 
+# Read AeroAPI base URL from environment or use default FlightAware URL
+AEROAPI_BASE_URL = os.getenv('AEROAPI_BASE_URL', 'https://aeroapi.flightaware.com/aeroapi')
+
 # Create a cached session specifically for flight requests
 flight_session = CachedSession(
     'flight_cache',
@@ -30,7 +33,7 @@ flight_session = CachedSession(
     expire_after=3600,  # Cache expires after 1 hour
     urls_expire_after={
         'https://api.adsb.one/v2/point': 0,  # Do not cache ADS-B API calls
-        'https://aeroapi.flightaware.com/aeroapi/account/usage': 0,  # Do not cache usage endpoint check
+        f'{AEROAPI_BASE_URL}/account/usage': 0,  # Do not cache usage endpoint check
     }
 )
 
@@ -223,7 +226,7 @@ def _aeroapi_get_data(endpoint, url_params=None, call_params=None):
         return None
 
     try:
-        api_base_url = "https://aeroapi.flightaware.com/aeroapi"
+        api_base_url = AEROAPI_BASE_URL
         headers = {
             "x-apikey": aeroapi_key,
             "Content-Type": "application/json"

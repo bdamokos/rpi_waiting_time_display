@@ -30,6 +30,12 @@ const SETTING_GROUPS = {
                 label: "Flight Display Update Interval (seconds)",
                 description: "How often to update the display when tracking a flight. Uses fast mode if supported.",
                 default: 5
+            },
+            AEROAPI_BASE_URL: {
+                type: "text",
+                label: "AeroAPI Base URL",
+                description: "API endpoint for AeroAPI",
+                default: "https://aeroapi.flightaware.com/aeroapi"
             }
         }
     },

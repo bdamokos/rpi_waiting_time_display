@@ -25,6 +25,8 @@ display_lock = return_display_lock()
 
 # Read AeroAPI base URL from environment or use default FlightAware URL
 AEROAPI_BASE_URL = os.getenv('AEROAPI_BASE_URL', 'https://aeroapi.flightaware.com/aeroapi')
+# Ensure the base URL doesn't end with a slash to prevent double slashes in requests
+AEROAPI_BASE_URL = AEROAPI_BASE_URL.rstrip('/')
 
 # Create a cached session specifically for flight requests
 flight_session = CachedSession(

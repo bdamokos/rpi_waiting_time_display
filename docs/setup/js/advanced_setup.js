@@ -383,40 +383,45 @@ window.saveAdvancedSettings = async function (event) {
                 if (!input) continue;
 
                 let value;
-                let wasCleared = false;
+                let shouldSave = false;
 
                 switch (setting.type) {
                     case 'boolean':
                         value = input.checked;
+                        shouldSave = currentSettings[key] !== value;
                         break;
                     case 'number':
-                        // Check if the field was explicitly cleared
-                        if (input.value.trim() === '' && currentSettings[key] !== undefined) {
-                            wasCleared = true;
-                        } else if (input.value.trim() !== '') {
+                        if (input.value.trim() === '') {
+                            // If field was cleared and had a previous value, we should save to remove it
+                            shouldSave = currentSettings[key] !== undefined;
+                            value = null;
+                        } else {
                             const numValue = parseInt(input.value);
                             if (!isNaN(numValue)) {
                                 value = numValue;
+                                shouldSave = currentSettings[key] !== value;
                             }
                         }
                         break;
                     default:
-                        // Check if the field was explicitly cleared
-                        if (input.value.trim() === '' && currentSettings[key] !== undefined) {
-                            wasCleared = true;
-                        } else if (input.value.trim() !== '') {
+                        if (input.value.trim() === '') {
+                            // If field was cleared and had a previous value, we should save to remove it
+                            shouldSave = currentSettings[key] !== undefined;
+                            value = null;
+                        } else {
                             value = input.value;
+                            shouldSave = currentSettings[key] !== value;
                         }
                 }
 
-                // Save if we have a new value or if the field was explicitly cleared
-                if (wasCleared || (value !== undefined && currentSettings[key] !== value)) {
+                // Save if we're removing a value or if the value has changed
+                if (shouldSave) {
                     savePromises.push(
                         window.setupDevice.send(JSON.stringify({
                             command: 'config_set',
                             config_type: 'display_env',
                             key: key,
-                            value: wasCleared ? '' : value
+                            value: value
                         }))
                     );
                 }

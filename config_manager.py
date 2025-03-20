@@ -329,7 +329,7 @@ class ConfigManager:
             logger.error(f"Error getting value {key} from {config_type}: {e}")
             return None
 
-    def set_value(self, config_type: str, key: str, value: str) -> bool:
+    def set_value(self, config_type: str, key: str, value: Optional[str]) -> bool:
         """Set a specific value in a configuration file"""
         try:
             logger.debug(f"Setting {key}={value} in {config_type}")
@@ -337,8 +337,13 @@ class ConfigManager:
             logger.debug(f"Current content: {content}")
             logger.debug(f"Current variables: {variables}")
             
-            variables[key] = value
-            logger.debug(f"Updated variables: {variables}")
+            # Handle null values by removing the key
+            if value is None:
+                variables.pop(key, None)
+                logger.debug(f"Removed key {key} due to null value")
+            else:
+                variables[key] = value
+                logger.debug(f"Updated variables: {variables}")
 
             # Reconstruct file content
             if config_type.endswith('_env'):

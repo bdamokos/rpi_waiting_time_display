@@ -42,7 +42,7 @@ rpi-gpio==0.7.1
     # via -r requirements.in
 spidev==3.6
     # via -r requirements.in
-typing-extensions==4.12.2
+typing-extensions==4.13.1
     # via qrcode
 urllib3==2.3.0
     # via

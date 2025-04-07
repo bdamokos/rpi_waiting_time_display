@@ -58,6 +58,6 @@ skyfield>=1.49
 humanize>=4.11.0
 pyserial>=3.5
 flask-cors==5.0.1
-pydantic==2.10.6
+pydantic==2.11.2
 cairosvg==2.7.1
 niquests==3.14.0

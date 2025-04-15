@@ -25,6 +25,9 @@ display_lock = return_display_lock()
 
 # Read AeroAPI base URL from environment or use default FlightAware URL
 AEROAPI_BASE_URL = os.getenv('AEROAPI_BASE_URL', 'https://aeroapi.flightaware.com/aeroapi')
+# Ensure the base URL ends with /aeroapi
+if not AEROAPI_BASE_URL.endswith('/aeroapi'):
+    AEROAPI_BASE_URL = f"{AEROAPI_BASE_URL.rstrip('/')}/aeroapi"
 # Ensure the base URL doesn't end with a slash to prevent double slashes in requests
 AEROAPI_BASE_URL = AEROAPI_BASE_URL.rstrip('/')
 
@@ -233,25 +236,34 @@ def _aeroapi_get_data(endpoint, url_params=None, call_params=None):
             "x-apikey": aeroapi_key,
             "Content-Type": "application/json"
         }
-        if url_params and call_params:
-            response = flight_session.get(f"{api_base_url}/{endpoint}/{url_params}?{call_params}", headers=headers)
-        elif call_params:
-            response = flight_session.get(f"{api_base_url}/{endpoint}?{call_params}", headers=headers)
-        elif url_params:
-            response = flight_session.get(f"{api_base_url}/{endpoint}/{url_params}", headers=headers)
-        else:
-            response = flight_session.get(f"{api_base_url}/{endpoint}", headers=headers)
+        
+        # Build the URL properly
+        request_url = f"{api_base_url}/{endpoint}"
+        if url_params:
+            request_url += f"/{url_params}"
+        if call_params:
+            # Ensure we're using ? for query parameters, not / for path parameters
+            request_url += f"?{call_params}"
+        
+        logger.debug(f"Making AeroAPI request to: {request_url}")
+        response = flight_session.get(request_url, headers=headers)
+        
+        # Log response details
+        logger.debug(f"AeroAPI response status: {response.status_code}")
+        if response.status_code != 200:
+            logger.warning(f"AeroAPI error response: {response.text}")
         
         if response.status_code == 200:
             _aeroapi_backoff.update_backoff_state(True)
             return response.json()
         else:
             _aeroapi_backoff.update_backoff_state(False)
+            logger.error(f"AeroAPI request failed with status {response.status_code}")
             return None
 
     except Exception as e:
         _aeroapi_backoff.update_backoff_state(False)
-        logger.error(f"Error in AeroAPI request: {e}")
+        logger.error(f"Error in AeroAPI request: {str(e)}", exc_info=True)
         return None
 
 def aeroapi_get_data(endpoint, url_params=None, call_params=None):
@@ -268,6 +280,8 @@ def aeroapi_get_data(endpoint, url_params=None, call_params=None):
     if aeroapi_get_usage():
         logger.debug(f"Getting data from AeroAPI endpoint: {endpoint}")
         return _aeroapi_get_data(endpoint, url_params, call_params)
+    return None
+
 aeroapi_usage_data = []
 
 def aeroapi_get_usage():

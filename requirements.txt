@@ -40,7 +40,7 @@ requests==2.32.3
     # via -r requirements.in
 rpi-gpio==0.7.1
     # via -r requirements.in
-spidev==3.6
+spidev==3.7
     # via -r requirements.in
 typing-extensions==4.13.2
     # via qrcode

@@ -373,26 +373,36 @@ def aeroapi_get_flight(callsign):
         
 def aeroapi_get_operator(operator_code_iata):
     logger.debug(f"Getting operator data for {operator_code_iata}")
+    
+    # Check if operators.json exists and read its content
+    if os.path.exists('operators.json'):
+        with open('operators.json', 'r') as file:
+            cached_operators = json.load(file)
+    else:
+        cached_operators = {}
+
+    # Check if the operator is already cached
+    if operator_code_iata in cached_operators:
+        logger.debug(f"Using cached operator data for {operator_code_iata}")
+        cached_data = cached_operators[operator_code_iata]
+        # Handle both old string format and new dict format
+        if isinstance(cached_data, dict):
+            operator_name = cached_data.get('name', '')
+            operator_shortname = cached_data.get('shortname', '')
+            if len(operator_name) > 15 and operator_shortname:
+                return operator_shortname
+            return operator_name
+        else:
+            # Old format - just return the string
+            return cached_data
+
+    # Not cached, make API call
     operator_data = aeroapi_get_data("operators", operator_code_iata)
     if operator_data:
         operator_code = operator_data.get('iata', '')
         operator_name = operator_data.get('name', '')
         operator_shortname = operator_data.get('shortname', '')
 
-        
-        # Check if operators.json exists and read its content
-        if os.path.exists('operators.json'):
-            with open('operators.json', 'r') as file:
-                cached_operators = json.load(file)
-        else:
-            cached_operators = {}
-
-        # Check if the operator is already cached
-        if operator_code in cached_operators:
-            return cached_operators[operator_code]
-
-        # Cache the new operator data
-        cached_operators[operator_code] = operator_name
         operator_info = {
             "icao": operator_data.get('icao', None),
             "iata": operator_data.get('iata', None),
@@ -408,11 +418,11 @@ def aeroapi_get_operator(operator_code_iata):
         }
         
         # Cache the new operator data
-        cached_operators[operator_code] = operator_info
+        cached_operators[operator_code_iata] = operator_info
         with open('operators.json', 'w') as file:
             json.dump(cached_operators, file)
-        logger.debug(f"Operator name set for {operator_code}: {operator_name}")
-        if len(operator_name) > 15:
+        logger.debug(f"Operator name set for {operator_code_iata}: {operator_name}")
+        if len(operator_name) > 15 and operator_shortname:
             return operator_shortname
         return operator_name
     return None

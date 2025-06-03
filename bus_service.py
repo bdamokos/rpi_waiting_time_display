@@ -954,7 +954,7 @@ def select_lines_to_display(bus_data: List[Dict]) -> List[Dict]:
     return [line['original_data'] for line in selected]
 
 def update_display(epd, weather_data: WeatherData = None, bus_data=None, error_message=None, stop_name=None, first_run=False, set_base_image=False):
-    """Update the display with new weather and waiting timesdata"""
+    """Update the display with new weather and waiting time data"""
     MARGIN = 6
 
     # Handle different color definitions

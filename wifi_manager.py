@@ -64,7 +64,14 @@ def cleanup_captive_portal():
         logger.error(f"Error cleaning up captive portal: {e}")
 
 def is_connected():
-    """Check if the Pi is connected to a Wi-Fi network (excluding our own hotspot)."""
+    """Check if the Pi is connected to a Wi-Fi network.
+
+    The function returns ``True`` when connected to a Wi-Fi network that is not
+    the configured hotspot.  When running outside of a Raspberry Pi
+    environment, the connection status is determined by the value of the
+    ``mock_connected_ssid`` environment variable, which simulates a connected
+    network during development.
+    """
     if is_running_on_pi():
         try:
             # Force English language output by setting LC_ALL=C

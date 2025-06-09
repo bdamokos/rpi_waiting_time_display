@@ -36,7 +36,7 @@ python-dotenv==1.1.0
     # via -r requirements.in
 qrcode==8.2
     # via -r requirements.in
-requests==2.32.3
+requests==2.32.4
     # via -r requirements.in
 rpi-gpio==0.7.1
     # via -r requirements.in

@@ -4,7 +4,7 @@
 # Actual requirements below
 --extra-index-url https://www.piwheels.org/simple
 
-certifi==2025.4.26
+certifi==2025.6.15
     # via
     #   -r requirements.in
     #   requests

@@ -57,7 +57,7 @@ requests-cache >= 1.2.1
 skyfield>=1.49
 humanize>=4.11.0
 pyserial>=3.5
-flask-cors==6.0.0
+flask-cors==6.0.1
 pydantic==2.11.7
 cairosvg==2.8.2
 niquests==3.14.1

@@ -32,7 +32,7 @@ pillow==11.3.0
     #   waveshare-epd
 pypng==0.20220715.0
     # via qrcode
-python-dotenv==1.1.0
+python-dotenv==1.1.1
     # via -r requirements.in
 qrcode==8.2
     # via -r requirements.in

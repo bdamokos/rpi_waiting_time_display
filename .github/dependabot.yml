@@ -8,4 +8,4 @@ updates:
   - package-ecosystem: "pip" # Using pip for Python dependencies
     directory: "/" # Location of package manifests
     schedule:
-      interval: "weekly"
+      interval: "monthly"

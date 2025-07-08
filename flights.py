@@ -56,6 +56,39 @@ flight_check_interval = int(os.getenv('flight_check_interval', 10))
 aeroapi_enabled = os.getenv("aeroapi_enabled", "false").lower() == "true"
 aeroapi_key = os.getenv("aeroapi_key")
 aeroapi_enable_paid_usage = os.getenv("aeroapi_enable_paid_usage", "false").lower() == "true"
+aeroapi_active_hours = os.getenv("aeroapi_active_hours", "0-24")
+
+
+def is_aeroapi_active():
+    """Check if the current time is within the configured active hours for AeroAPI calls"""
+    if not aeroapi_active_hours:
+        return True
+    
+    import datetime
+    current_hour = datetime.datetime.now().hour
+    
+    # Handle multiple time periods separated by commas
+    time_periods = aeroapi_active_hours.split(',')
+    
+    for period in time_periods:
+        period = period.strip()
+        if '-' in period:
+            start_hour, end_hour = map(int, period.split('-'))
+            # Handle wrap-around (e.g., 22-6 means 10PM to 6AM)
+            if start_hour <= end_hour:
+                # Normal range (e.g., 8-18 means 8AM to 6PM inclusive)
+                if start_hour <= current_hour <= end_hour:
+                    return True
+            else:
+                # Wrap-around range (e.g., 22-6 means 10PM to 6AM inclusive)
+                if current_hour >= start_hour or current_hour <= end_hour:
+                    return True
+        else:
+            # Single hour
+            if current_hour == int(period):
+                return True
+    
+    return False
 
 
 @lru_cache(maxsize=1024)
@@ -274,9 +307,17 @@ def aeroapi_get_data(endpoint, url_params=None, call_params=None):
     if not aeroapi_key and aeroapi_enabled:
         logger.error("AeroAPI key not found, please set the key in the .env file")
         return None
+    
+    # Always allow account endpoint for usage checking
     if endpoint == "account":
         #logger.debug("Checking AeroAPI usage")
         return _aeroapi_get_data(endpoint, url_params, call_params)
+    
+    # Check if we're in active hours before making API calls
+    if not is_aeroapi_active():
+        logger.debug("AeroAPI calls are disabled outside of active hours")
+        return None
+    
     if aeroapi_get_usage():
         logger.debug(f"Getting data from AeroAPI endpoint: {endpoint}")
         return _aeroapi_get_data(endpoint, url_params, call_params)

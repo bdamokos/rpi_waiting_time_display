@@ -36,6 +36,12 @@ const SETTING_GROUPS = {
                 label: "AeroAPI Base URL",
                 description: "API endpoint for AeroAPI",
                 default: "https://aeroapi.flightaware.com/aeroapi"
+            },
+            aeroapi_active_hours: {
+                type: "text",
+                label: "AeroAPI Active Hours",
+                description: "Time periods when AeroAPI calls are allowed (e.g., '8-18' for 8AM-6PM, '8-10,14-16,20-22' for multiple periods, '22-6' for 10PM-6AM). Use '0-24' for always active.",
+                default: "0-24"
             }
         }
     },

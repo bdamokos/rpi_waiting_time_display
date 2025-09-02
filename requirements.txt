@@ -22,7 +22,7 @@ idna==3.10
     # via
     #   -r requirements.in
     #   requests
-jetson-gpio==2.1.9
+jetson-gpio==2.1.11
     # via waveshare-epd
 lgpio==0.2.2.0
     # via -r requirements.in

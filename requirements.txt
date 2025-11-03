@@ -18,7 +18,7 @@ colorzero==2.0
     #   gpiozero
 gpiozero==2.0.1
     # via -r requirements.in
-idna==3.10
+idna==3.11
     # via
     #   -r requirements.in
     #   requests

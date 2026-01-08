@@ -44,7 +44,7 @@ spidev==3.8
     # via -r requirements.in
 typing-extensions==4.15.0
     # via qrcode
-urllib3==2.6.2
+urllib3==2.6.3
     # via
     #   -r requirements.in
     #   requests

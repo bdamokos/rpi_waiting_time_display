@@ -1,4 +1,4 @@
-# Version: 0.0.20 (2025-09-04) # AUTO-INCREMENT
+# Version: 0.0.21 (2026-01-09) # AUTO-INCREMENT
 # Add this file to pre-commit hook to auto-increment
 
 # Actual requirements below
@@ -44,7 +44,7 @@ spidev==3.8
     # via -r requirements.in
 typing-extensions==4.15.0
     # via qrcode
-urllib3==2.6.3
+urllib3>=2.6.3
     # via
     #   -r requirements.in
     #   requests
@@ -52,12 +52,16 @@ waveshare-epd @ git+https://github.com/waveshare/e-Paper.git@ecdd8cf#subdirector
     # via -r requirements.in
 
 flask>=3.1.1
-werkzeug>=3.1.4
+werkzeug>=3.1.5
+jinja2>=3.1.6
 requests-cache >= 1.2.1
 skyfield>=1.49
 humanize>=4.11.0
 pyserial>=3.5
-flask-cors==6.0.2
-pydantic==2.11.9
+flask-cors>=6.0.0
+cryptography>=44.0.1
+filelock>=3.20.1
+h11>=0.16.0
+pydantic==2.11.7
 cairosvg==2.8.2
 niquests==3.16.1

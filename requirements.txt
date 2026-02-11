@@ -64,4 +64,4 @@ filelock>=3.20.1
 h11>=0.16.0
 pydantic==2.11.7
 cairosvg==2.8.2
-niquests==3.16.1
+niquests==3.17.0

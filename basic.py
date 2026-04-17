@@ -290,6 +290,8 @@ class DisplayManager:
         self.iss_tracker = None
         self._iss_thread = None
         self.in_iss_mode = False
+        self.iss_mode_start_time = None
+        self.iss_mode_max_seconds = int(os.getenv("iss_mode_max_seconds", "3600"))
         self.prefetch_offset = 10  # seconds before display update to fetch new data
         self.display_interval = DISPLAY_REFRESH_INTERVAL
         self.next_update_time = None
@@ -368,15 +370,20 @@ class DisplayManager:
                     self.in_flight_mode = False
                     self.flight_mode_start = None
             self.in_iss_mode = True
+            self.iss_mode_start_time = datetime.now()
             
         def on_pass_end():
             self.in_iss_mode = False
+            self.iss_mode_start_time = None
             self._force_display_update()
 
         try:
             self.iss_tracker.run(self.epd, on_pass_start, on_pass_end)
         except Exception as e:
             logger.error(f"Error in ISS tracker: {e}")
+            self.in_iss_mode = False
+            self.iss_mode_start_time = None
+            self._force_display_update()
 
     def _can_enter_flight_mode(self, current_time):
         """Check if we can enter flight mode based on cooldown"""
@@ -518,6 +525,15 @@ class DisplayManager:
         while not self._stop_event.is_set():
             try:
                 if self.in_iss_mode:
+                    if self.iss_mode_start_time:
+                        time_in_iss_mode = (datetime.now() - self.iss_mode_start_time).total_seconds()
+                        if time_in_iss_mode >= self.iss_mode_max_seconds:
+                            logger.warning(f"ISS mode watchdog triggered after {time_in_iss_mode:.1f}s (max {self.iss_mode_max_seconds}s) - forcing exit from ISS mode")
+                            self.in_iss_mode = False
+                            self.iss_mode_start_time = None
+                            self._force_display_update()
+                            time.sleep(1)
+                            continue
                     # Skip normal updates during ISS passes
                     time.sleep(1)
                     continue

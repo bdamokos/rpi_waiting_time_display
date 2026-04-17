@@ -106,8 +106,11 @@ class ISSTracker:
         while time() < end_time and not self.stop_event.is_set():
             is_visible, position = is_iss_near(Coordinates_LAT, Coordinates_LNG, debug=True)
             if position:
-                display_iss_info(epd, position)
-                logger.debug(f"Updated display with position: {position}")
+                try:
+                    display_iss_info(epd, position)
+                    logger.debug(f"Updated display with position: {position}")
+                except Exception as e:
+                    logger.error(f"Error updating ISS display: {e}")
             
             self.stop_event.wait(self.iss_check_interval)
         
@@ -130,9 +133,13 @@ class ISSTracker:
                 if current_time >= current_pass['risetime']:
                     if on_pass_start:
                         on_pass_start()
-                    self.monitor_pass(current_pass, epd)
-                    if on_pass_end:
-                        on_pass_end()
+                    try:
+                        self.monitor_pass(current_pass, epd)
+                    except Exception as e:
+                        logger.error(f"Error monitoring ISS pass: {e}")
+                    finally:
+                        if on_pass_end:
+                            on_pass_end()
                 else:
                     # Sleep until next pass
                     sleep_time = current_pass['risetime'] - current_time

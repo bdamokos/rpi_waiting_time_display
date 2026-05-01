@@ -1,6 +1,6 @@
 #As certain packages don't seem to work, these ones should be available in a dev environment on a Mac
 certifi>=2024.12.14
-charset-normalizer>=3.4.0
+charset-normalizer>=3.4.7
 colorzero>=2.0
 gpiozero>=2.0.1
 idna>=3.10

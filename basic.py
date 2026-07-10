@@ -336,8 +336,17 @@ class DisplayManager:
         
     def start(self):
         logger.info("Starting display manager components...")
-        # Start weather manager
-        self.weather_manager.start()
+        scheduled_mode = self._scheduled_mode(datetime.now())
+        # Token views do not depend on weather. Warm it in the background so a
+        # slow provider cannot delay the first scheduled token render.
+        if scheduled_mode == "token":
+            threading.Thread(
+                target=self.weather_manager.start,
+                name="WeatherManagerStarter",
+                daemon=True,
+            ).start()
+        else:
+            self.weather_manager.start()
         
         # Initialize flight monitoring if enabled
         if self.flights_enabled:
@@ -347,9 +356,11 @@ class DisplayManager:
         # Initialize ISS tracking if enabled
         self.initialize_iss_tracking()
         
-        # Get initial bus data
-        self.bus_manager.fetch_data()
-        time.sleep(2)
+        # Token views do not depend on transit either. The normal update loop
+        # will prefetch it when a transit or automatic window becomes active.
+        if scheduled_mode != "token":
+            self.bus_manager.fetch_data()
+            time.sleep(2)
         
         # Force first display update
         self._force_display_update()
@@ -614,7 +625,11 @@ class DisplayManager:
                         continue
 
                 # Check if it's time to prefetch data
-                if transit_enabled and current_time >= self.next_prefetch_time:
+                if (
+                    transit_enabled
+                    and self._scheduled_mode(current_time) != "token"
+                    and current_time >= self.next_prefetch_time
+                ):
                     with self._prefetch_lock:
                         if not self.prefetch_done:  # Check flag under lock
                             logger.debug("Prefetching bus data...")

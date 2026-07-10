@@ -1,3 +1,5 @@
+import atexit
+import shutil
 import pytest
 from pathlib import Path
 import os
@@ -6,6 +8,7 @@ import tempfile
 # Keep imports such as log_config and dotenv away from a developer's real home.
 TEST_HOME = Path(tempfile.mkdtemp(prefix="rpi-waiting-time-display-tests-"))
 os.environ["HOME"] = str(TEST_HOME)
+atexit.register(shutil.rmtree, TEST_HOME, ignore_errors=True)
 
 @pytest.fixture
 def mock_env_vars():

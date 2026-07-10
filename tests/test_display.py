@@ -1,8 +1,8 @@
 import pytest
 from PIL import Image
 from display_adapter import DisplayAdapter, MockDisplay, return_display_lock
+from threading import Lock
 from unittest.mock import patch
-from _thread import LockType
 import os
 
 @pytest.fixture
@@ -84,7 +84,7 @@ def test_display_lock():
     """Test display lock functionality"""
     lock = return_display_lock()
     assert lock is not None
-    assert isinstance(lock, LockType)
+    assert isinstance(lock, type(Lock()))
     
     # Test that the same lock is returned on subsequent calls
     lock2 = return_display_lock()

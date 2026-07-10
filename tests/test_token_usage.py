@@ -28,10 +28,10 @@ SAMPLE = {
 
 def test_schedule_selects_day_and_overnight_ranges():
     schedule = DisplaySchedule(
-        "transit@06:00-09:00,token@09:00-22:00,weather@22:00-06:00"
+        "transit@06:00-10:00,token@10:00-22:00,weather@22:00-06:00"
     )
-    assert schedule.mode_at(datetime(2026, 7, 10, 8, 59)) == "transit"
-    assert schedule.mode_at(datetime(2026, 7, 10, 9, 0)) == "token"
+    assert schedule.mode_at(datetime(2026, 7, 10, 9, 59)) == "transit"
+    assert schedule.mode_at(datetime(2026, 7, 10, 10, 0)) == "token"
     assert schedule.mode_at(datetime(2026, 7, 10, 23, 0)) == "weather"
     assert schedule.mode_at(datetime(2026, 7, 10, 5, 59)) == "weather"
 

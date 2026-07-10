@@ -17,7 +17,7 @@ default and does not change existing installations until
 midnight. For example:
 
 ```dotenv
-display_schedule=transit@06:00-09:00,token@09:00-22:00,weather@22:00-06:00
+display_schedule=transit@06:00-10:00,token@10:00-22:00,weather@22:00-06:00
 token_usage_view_duration=300
 token_usage_views=month,limits
 token_usage_fallback_mode=transit

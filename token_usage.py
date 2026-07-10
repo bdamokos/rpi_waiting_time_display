@@ -220,7 +220,7 @@ class TokenUsageClient:
 def configured_schedule() -> DisplaySchedule:
     value = os.getenv(
         "display_schedule",
-        "transit@06:00-09:00,token@09:00-22:00,weather@22:00-06:00",
+        "transit@06:00-10:00,token@10:00-22:00,weather@22:00-06:00",
     )
     try:
         return DisplaySchedule(value)

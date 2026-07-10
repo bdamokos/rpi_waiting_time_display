@@ -94,6 +94,7 @@ class TokenUsageSnapshot:
     daily: List[DailyUsage]
     month_cost_usd: float
     month_tokens: int
+    active: bool = False
     currency: str = "USD"
     stale: bool = False
 
@@ -127,6 +128,9 @@ class TokenUsageSnapshot:
             month_tokens=int(
                 month.get("total_tokens", sum(day.total_tokens for day in daily))
             ),
+            # Missing activity information fails closed: token views are only
+            # eligible when the source explicitly reports current activity.
+            active=payload.get("active") is True,
             currency=str(payload.get("currency") or "USD"),
         )
 
@@ -187,6 +191,9 @@ class TokenUsageClient:
                 return None
             payload = json.loads(self.cache_file.read_text(encoding="utf-8"))
             snapshot = TokenUsageSnapshot.from_dict(payload)
+            # A cached response can preserve usage totals, but it cannot prove
+            # that Codex is still active while the source is unavailable.
+            snapshot.active = False
             snapshot.stale = True
             return snapshot
         except (OSError, ValueError, TypeError, json.JSONDecodeError):

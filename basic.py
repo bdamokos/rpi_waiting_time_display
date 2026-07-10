@@ -317,11 +317,22 @@ class DisplayManager:
     def _scheduled_mode(self, current_time):
         if not self.token_usage_client.enabled:
             return "auto"
-        return self.display_schedule.mode_at(current_time)
+        scheduled_mode = self.display_schedule.mode_at(current_time)
+        if scheduled_mode != "token":
+            return scheduled_mode
+        snapshot = self.token_usage_client.get_snapshot()
+        if snapshot and snapshot.active and not snapshot.stale:
+            return "token"
+        return self._token_fallback_mode()
+
+    @staticmethod
+    def _token_fallback_mode():
+        mode = os.getenv("token_usage_fallback_mode", "transit").strip().lower()
+        return mode if mode in {"auto", "transit", "weather"} else "transit"
 
     def _draw_token_usage(self, current_time):
         snapshot = self.token_usage_client.get_snapshot()
-        if not snapshot:
+        if not snapshot or not snapshot.active or snapshot.stale:
             return False
         view = token_view_at(current_time, self.token_views)
         set_base_image = self.current_display_mode != "token" or self.current_token_view != view
@@ -513,7 +524,7 @@ class DisplayManager:
                     self.last_display_update = current_time
                     return
                 if scheduled_mode == "token":
-                    scheduled_mode = os.getenv("token_usage_fallback_mode", "transit").strip().lower()
+                    scheduled_mode = self._token_fallback_mode()
                 bus_data, error_message, stop_name = self.bus_manager.get_bus_data()
                 weather_data = self.weather_manager.get_weather_data() if weather_enabled else None
                 
@@ -658,9 +669,7 @@ class DisplayManager:
                                 logger.info("Token usage display updated successfully")
                                 scheduled_mode = "rendered"
                             else:
-                                scheduled_mode = os.getenv(
-                                    "token_usage_fallback_mode", "transit"
-                                ).strip().lower()
+                                scheduled_mode = self._token_fallback_mode()
                         # Check if we have any bus data at all
                         if scheduled_mode == "rendered":
                             pass

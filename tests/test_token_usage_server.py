@@ -1,7 +1,9 @@
-from tools.token_usage_server import SnapshotBuilder
+import os
+
+from tools.token_usage_server import RecentJsonActivity, SnapshotBuilder
 
 
-def test_bridge_normalizes_and_removes_identity_fields(monkeypatch):
+def test_bridge_normalizes_and_removes_identity_fields(monkeypatch, tmp_path):
     usage = [
         {
             "provider": "codex",
@@ -25,7 +27,11 @@ def test_bridge_normalizes_and_removes_identity_fields(monkeypatch):
             ],
         }
     ]
-    builder = SnapshotBuilder("codexbar", 300)
+    activity_file = tmp_path / "session.jsonl"
+    activity_file.write_text("{}\n", encoding="utf-8")
+    builder = SnapshotBuilder(
+        "codexbar", 300, RecentJsonActivity([tmp_path], 300)
+    )
 
     def fake_run(*arguments):
         return usage if arguments[0] == "usage" else cost
@@ -36,8 +42,46 @@ def test_bridge_normalizes_and_removes_identity_fields(monkeypatch):
     serialized = str(snapshot).lower()
     assert snapshot["limits"]["primary"]["used_percent"] == 25
     assert snapshot["month_to_date"]["cost_usd"] == 12.5
+    assert snapshot["active"] is True
     assert "email" not in serialized
     assert "project" not in serialized
+
+
+def test_recent_json_activity_uses_modification_window(tmp_path):
+    session = tmp_path / "sessions" / "session.jsonl"
+    session.parent.mkdir()
+    session.write_text("{}\n", encoding="utf-8")
+    detector = RecentJsonActivity([session.parent], 300)
+
+    os.utime(session, (699, 699))
+    assert detector.is_active(now=1000) is False
+    os.utime(session, (700, 700))
+    assert detector.is_active(now=1000) is True
+
+
+def test_activity_is_rechecked_while_usage_metrics_are_cached(monkeypatch):
+    class ActivityDetector:
+        def __init__(self):
+            self.active = True
+
+        def is_active(self):
+            return self.active
+
+    detector = ActivityDetector()
+    builder = SnapshotBuilder("codexbar", 300, detector)
+    monkeypatch.setattr(
+        builder,
+        "_run",
+        lambda *arguments: (
+            [{"usage": {}}]
+            if arguments[0] == "usage"
+            else [{"currencyCode": "USD", "daily": []}]
+        ),
+    )
+
+    assert builder.build()["active"] is True
+    detector.active = False
+    assert builder.build()["active"] is False
 
 
 class _JulyDatetime:

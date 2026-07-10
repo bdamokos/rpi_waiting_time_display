@@ -24,8 +24,10 @@ token_usage_fallback_mode=transit
 ```
 
 Supported modes are `auto`, `transit`, `weather`, and `token`. When token data
-is unavailable, `token_usage_fallback_mode` is used. The last good response is
-cached for `token_usage_max_stale_seconds`; stale views are visibly marked.
+is unavailable or does not explicitly report `active: true`,
+`token_usage_fallback_mode` is used. The last good response is cached for
+`token_usage_max_stale_seconds`, but cached activity is never trusted: Codex
+views disappear when the live source is unavailable.
 
 ## Data sources
 
@@ -49,6 +51,13 @@ TOKEN_USAGE_SERVER_TOKEN_FILE=~/.config/token-display/token \
   python tools/token_usage_server.py --host 0.0.0.0 --port 8765
 ```
 
+By default the example bridge reports Codex as active when a `.json` or
+`.jsonl` file below `$CODEX_HOME/sessions` (or `~/.codex/sessions`) was modified
+in the last five minutes. Use `--activity-path` (repeatable) for another session
+location and `--activity-window-seconds` to change the window. Activity is
+rechecked on every request even while the more expensive usage totals are
+cached.
+
 Listening beyond loopback is refused unless a bearer token is configured. The
 bridge returns only the display fields below; account email, account ID, OAuth
 tokens, session names, and project paths are not exposed.
@@ -59,6 +68,7 @@ tokens, session names, and project paths are not exposed.
 {
   "schema_version": 1,
   "generated_at": "2026-01-15T12:00:00+01:00",
+  "active": true,
   "currency": "USD",
   "limits": {
     "primary": {"used_percent": 25, "resets_at": "2026-01-15T16:00:00Z"},

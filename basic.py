@@ -21,6 +21,13 @@ import math
 from flights import check_flights, gather_flights_within_radius, update_display_with_flights, enhance_flight_data
 from threading import Lock, Event
 from PIL import Image
+from token_display import draw_month_usage, draw_usage_limits
+from token_usage import (
+    TokenUsageClient,
+    configured_schedule,
+    configured_token_views,
+    token_view_at,
+)
 
 logger = logging.getLogger(__name__)
 # Set logging level for PIL.PngImagePlugin and urllib3.connectionpool to warning
@@ -296,9 +303,36 @@ class DisplayManager:
         self.display_interval = DISPLAY_REFRESH_INTERVAL
         self.next_update_time = None
         self.next_prefetch_time = None
+        self.token_usage_client = TokenUsageClient()
+        self.display_schedule = configured_schedule()
+        self.token_views = configured_token_views()
+        self.current_display_mode = None
+        self.current_token_view = None
         logger.info(f"DisplayManager initialized with min refresh interval: {self.min_refresh_interval}s")
         logger.info(f"DisplayManager initialized with coordinates: {self.coordinates_lat}, {self.coordinates_lng}")
         logger.info(f"DisplayManager initialized with flight mode duration: {self.flight_mode_duration}s")
+        if self.token_usage_client.enabled:
+            logger.info("Token usage display enabled with views: %s", ", ".join(self.token_views))
+
+    def _scheduled_mode(self, current_time):
+        if not self.token_usage_client.enabled:
+            return "auto"
+        return self.display_schedule.mode_at(current_time)
+
+    def _draw_token_usage(self, current_time):
+        snapshot = self.token_usage_client.get_snapshot()
+        if not snapshot:
+            return False
+        view = token_view_at(current_time, self.token_views)
+        set_base_image = self.current_display_mode != "token" or self.current_token_view != view
+        if view == "month":
+            draw_month_usage(self.epd, snapshot, set_base_image=set_base_image)
+        else:
+            draw_usage_limits(self.epd, snapshot, set_base_image=set_base_image)
+        self.current_display_mode = "token"
+        self.current_token_view = view
+        self.in_weather_mode = False
+        return True
         
     def start(self):
         logger.info("Starting display manager components...")
@@ -462,6 +496,13 @@ class DisplayManager:
         logger.info("Forcing initial display update...")
         try:
             with self._display_lock:
+                current_time = datetime.now()
+                scheduled_mode = self._scheduled_mode(current_time)
+                if scheduled_mode == "token" and self._draw_token_usage(current_time):
+                    self.last_display_update = current_time
+                    return
+                if scheduled_mode == "token":
+                    scheduled_mode = os.getenv("token_usage_fallback_mode", "transit").strip().lower()
                 bus_data, error_message, stop_name = self.bus_manager.get_bus_data()
                 weather_data = self.weather_manager.get_weather_data() if weather_enabled else None
                 
@@ -471,12 +512,22 @@ class DisplayManager:
                 ]
                 
                 # Check if we have any bus data at all
-                if not bus_data and not error_message and weather_enabled and weather_data:
+                if scheduled_mode == "weather" and weather_enabled and weather_data:
+                    logger.info("Initial display: scheduled weather mode")
+                    draw_weather_display(
+                        self.epd,
+                        weather_data,
+                        set_base_image=self.current_display_mode != "weather",
+                    )
+                    self.in_weather_mode = True
+                    self.current_display_mode = "weather"
+                elif not bus_data and not error_message and weather_enabled and weather_data:
                     logger.info("Initial display: no bus data available, showing weather data")
                     if not self.in_weather_mode:
                         # We're switching to weather mode, set base image for partial updates
                         self.in_weather_mode = True
                         draw_weather_display(self.epd, weather_data, set_base_image=True)
+                        self.current_display_mode = "weather"
                     else:
                         draw_weather_display(self.epd, weather_data)
                 elif valid_bus_data and not error_message:
@@ -485,16 +536,20 @@ class DisplayManager:
                         # We're switching from weather mode, set base image for partial updates
                         self.in_weather_mode = False
                         update_display(self.epd, weather_data, valid_bus_data, error_message, stop_name, set_base_image=True)
+                        self.current_display_mode = "transit"
                     else:
                         update_display(self.epd, weather_data, valid_bus_data, error_message, stop_name)
+                        self.current_display_mode = "transit"
                 elif weather_enabled and weather_data:
                     logger.info("Initial display: showing weather data")
                     if not self.in_weather_mode:
                         # We're switching to weather mode, set base image for partial updates
                         self.in_weather_mode = True
                         draw_weather_display(self.epd, weather_data, set_base_image=True)
+                        self.current_display_mode = "weather"
                     else:
                         draw_weather_display(self.epd, weather_data)
+                        self.current_display_mode = "weather"
                 else:
                     logger.warning("No valid data for initial display")
                 
@@ -581,13 +636,38 @@ class DisplayManager:
                     stop_name = self.bus_manager.get_stop_name() if transit_enabled else None
 
                     with self._display_lock:
+                        scheduled_mode = self._scheduled_mode(current_time)
+                        if scheduled_mode == "token":
+                            if self._draw_token_usage(current_time):
+                                self.last_display_update = datetime.now()
+                                logger.info("Token usage display updated successfully")
+                                scheduled_mode = "rendered"
+                            else:
+                                scheduled_mode = os.getenv(
+                                    "token_usage_fallback_mode", "transit"
+                                ).strip().lower()
                         # Check if we have any bus data at all
-                        if not valid_bus_data and not error_message and weather_enabled and weather_data:
+                        if scheduled_mode == "rendered":
+                            pass
+                        elif scheduled_mode == "weather" and weather_enabled and weather_data:
+                            logger.info("Updating scheduled weather display...")
+                            draw_weather_display(
+                                self.epd,
+                                weather_data,
+                                set_base_image=self.current_display_mode != "weather",
+                            )
+                            self.in_weather_mode = True
+                            self.current_display_mode = "weather"
+                            self.last_weather_data = weather_data
+                            self.last_weather_update = current_time
+                            self.last_display_update = datetime.now()
+                        elif not valid_bus_data and not error_message and weather_enabled and weather_data:
                             logger.info("No bus data available, switching to weather mode...")
                             if not self.in_weather_mode:
                                 # We're switching to weather mode, set base image for partial updates
                                 self.in_weather_mode = True
                                 draw_weather_display(self.epd, weather_data, set_base_image=True)
+                                self.current_display_mode = "weather"
                             else:
                                 draw_weather_display(self.epd, weather_data)
                             self.last_weather_data = weather_data
@@ -601,8 +681,17 @@ class DisplayManager:
                                 # We're switching from weather mode, set base image for partial updates
                                 self.in_weather_mode = False
                                 update_display(self.epd, weather_data, valid_bus_data, error_message, stop_name, set_base_image=True)
+                                self.current_display_mode = "transit"
                             else:
-                                update_display(self.epd, weather_data, valid_bus_data, error_message, stop_name)
+                                update_display(
+                                    self.epd,
+                                    weather_data,
+                                    valid_bus_data,
+                                    error_message,
+                                    stop_name,
+                                    set_base_image=self.current_display_mode != "transit",
+                                )
+                                self.current_display_mode = "transit"
                             self.last_display_update = datetime.now()
                             self.update_count += 1
                             logger.info("Bus display updated successfully")
@@ -612,6 +701,7 @@ class DisplayManager:
                                 # We're switching to weather mode, set base image for partial updates
                                 self.in_weather_mode = True
                                 draw_weather_display(self.epd, weather_data, set_base_image=True)
+                                self.current_display_mode = "weather"
                             else:
                                 draw_weather_display(self.epd, weather_data)
                             self.last_weather_data = weather_data

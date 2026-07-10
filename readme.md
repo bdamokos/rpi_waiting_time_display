@@ -9,6 +9,7 @@ A Raspberry Pi project that displays bus waiting times using an e-Paper display 
 - 📡 Easy WiFi setup via QR code (needs further testing) or by plugging the display to your computer and using the setup page on the [website](https://bdamokos.github.io/rpi_waiting_time_display/setup/)
 - ✈️ Optional: Overhead flight tracking
 - 🛰️ Optional: ISS tracking when visible
+- 📊 Optional: Scheduled token-usage dashboards with month-to-date estimates and remaining-capacity bars
 
 [View detailed features and screenshots →](https://bdamokos.github.io/rpi_waiting_time_display/features/)
 
@@ -43,7 +44,6 @@ Basic setup (Raspberry Pi Zero 2W + display): **~€60**
 - Certain included data and assets are under a specific license:
   - [Font Awesome Free](https://fontawesome.com) - Icons used in the setup interface under the [Font Awesome Free License](https://fontawesome.com/license/free), icons used in the display under Creative Commons Attribution 4.0 International License
   - [Open-Meteo](https://open-meteo.com/) - Weather data under a [Creative Commons Attribution 4.0 International License](https://creativecommons.org/licenses/by/4.0/)
-
 
 
 

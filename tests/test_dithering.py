@@ -225,8 +225,6 @@ def test_color_ratios():
         for _, ratio in colors_with_ratios:
             assert 0 <= ratio <= 1, f"Individual ratio should be between 0 and 1 for {hex_color}"
     
-    return results
-
 if __name__ == "__main__":
     # Save images in a permanent test_output directory
     output_dir = "test_output"
@@ -271,4 +269,4 @@ if __name__ == "__main__":
                 for color, ratio in colors_with_ratios:
                     f.write(f"  {color}: {ratio:.2f}\n")
             
-    print(f"\nTest results have been saved to the '{output_dir}' directory.") 
+    print(f"\nTest results have been saved to the '{output_dir}' directory.")

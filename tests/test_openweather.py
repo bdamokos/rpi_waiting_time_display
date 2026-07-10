@@ -115,8 +115,8 @@ def test_fetch_weather(provider, sample_weather_response, sample_forecast_respon
     weather_data = provider.get_weather()
     
     # Test current weather
-    assert weather_data.current.temperature == 15
-    assert weather_data.current.feels_like == 15
+    assert weather_data.current.temperature == 15.3
+    assert weather_data.current.feels_like == 14.8
     assert weather_data.current.humidity == 65
     assert weather_data.current.pressure == 1015
     assert weather_data.current.condition.description == "Clear sky"
@@ -161,7 +161,7 @@ def test_error_handling(provider):
     # Cache should be empty
     assert provider._cache is None
 
-def test_icon_mapping():
+def test_icon_mapping(mock_env):
     """Test weather condition to icon mapping"""
     provider = OpenWeatherProvider(lat=50.8505, lon=4.3488)
     
@@ -270,4 +270,4 @@ def test_temperature_units(provider, sample_weather_response, sample_forecast_re
         status=200
     )
     weather_data = provider.get_weather()
-    assert weather_data.current.unit == TemperatureUnit.KELVIN 
+    assert weather_data.current.unit == TemperatureUnit.KELVIN

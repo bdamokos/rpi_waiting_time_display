@@ -1,163 +1,126 @@
-import pytest
-import responses
 from datetime import datetime, timedelta
-import os
-import json
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from bus_service import BusService, _parse_lines
-from unittest.mock import patch, MagicMock
-import re
+
+
+def make_response(*, status=200, data=None, error=None):
+    response = MagicMock()
+    response.status_code = status
+    response.text = ""
+    response.elapsed.total_seconds.return_value = 0.01
+    response.json.return_value = data
+    response.raise_for_status.side_effect = error
+    return response
+
 
 @pytest.fixture
 def bus_service(mock_env_vars):
-    """Fixture providing a BusService instance"""
-    with patch.dict(os.environ, mock_env_vars, clear=True):
+    with (
+        patch.dict("os.environ", mock_env_vars, clear=True),
+        patch("bus_service.Stop", mock_env_vars["Stops"]),
+        patch("bus_service.Lines", mock_env_vars["Lines"]),
+        patch("bus_service.bus_api_base_url", mock_env_vars["BUS_API_BASE_URL"]),
+        patch("bus_service.bus_schedule_url", mock_env_vars["BUS_API_BASE_URL"]),
+        patch.object(BusService, "_start_health_check"),
+    ):
         return BusService()
 
-@pytest.fixture
-def mock_responses():
-    """Fixture to mock API responses using the responses library"""
-    with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps:
-        yield rsps
 
-@pytest.mark.parametrize("lines_input,expected", [
-    ("64", ["64"]),
-    ("64,59", ["64", "59"]),
-    ("64 59", ["64", "59"]),
-    ("64, 59", ["64", "59"]),
-    ([59, 64], ["59", "64"]),
-    (["59", "64"], ["59", "64"]),
-    ("", []),
-    (None, []),
-])
+@pytest.mark.parametrize(
+    "lines_input,expected",
+    [
+        ("64", ["64"]),
+        ("64,59", ["64", "59"]),
+        ("64 59", ["64", "59"]),
+        ("64, 59", ["64", "59"]),
+        ([59, 64], ["59", "64"]),
+        (["59", "64"], ["59", "64"]),
+        ("", []),
+        (None, []),
+    ],
+)
 def test_parse_lines(lines_input, expected):
-    """Test line number parsing with different input formats"""
     if isinstance(lines_input, (list, tuple)):
         result = [str(x) for x in lines_input]
-        assert sorted(result) == sorted(expected)
     else:
-        with patch.dict(os.environ, {'Lines': str(lines_input) if lines_input is not None else ''}, clear=True):
-            result = _parse_lines(lines_input)
-            assert sorted(result) == sorted(expected)
+        result = _parse_lines(lines_input)
+    assert sorted(result) == sorted(expected)
+
 
 def test_bus_service_initialization(bus_service, mock_env_vars):
-    """Test BusService initialization"""
-    assert bus_service.base_url.rstrip('/').replace('localhost', '127.0.0.1') == mock_env_vars["BUS_API_BASE_URL"].rstrip('/')
+    assert bus_service.base_url == mock_env_vars["BUS_API_BASE_URL"].rstrip("/")
     assert bus_service.provider == mock_env_vars["Provider"]
-    assert bus_service.stop_id == "F00583"
-    assert isinstance(bus_service.lines_of_interest, list)
+    assert bus_service.stop_id == mock_env_vars["Stops"]
+    assert bus_service.lines_of_interest == ["64"]
 
-@responses.activate
-def test_get_waiting_times_success(bus_service, mock_responses, sample_bus_response):
-    """Test successful waiting times retrieval"""
-    # Mock the API health check
-    mock_responses.add(
-        responses.GET,
-        "http://localhost:5001/health",
-        json={"status": "ok"},
-        status=200
-    )
 
-    # Mock the API response
-    mock_responses.add(
-        responses.GET,
-        "http://localhost:5001/api/test_provider/waiting_times/",
-        json={"stops": {bus_service.stop_id: sample_bus_response}},
-        status=200
-    )
+def test_get_waiting_times_success(bus_service, sample_bus_response):
+    response = make_response(data={"stops": {bus_service.stop_id: sample_bus_response}})
 
-    departures, error, stop_name = bus_service.get_waiting_times()
-    
-    assert departures is not None
-    assert len(departures) > 0
+    with patch("bus_service.requests.get", return_value=response) as request:
+        departures, error, stop_name = bus_service.get_waiting_times()
+
+    request.assert_called_once_with(bus_service.api_url, timeout=120)
     assert error is None
     assert stop_name == "Test Stop"
     assert departures[0]["line"] == "64"
     assert departures[0]["times"] == ["5"]
 
-@responses.activate
-def test_get_waiting_times_error(bus_service, mock_responses):
-    """Test waiting times retrieval with API error"""
-    # Mock the API health check
-    mock_responses.add(
-        responses.GET,
-        "http://localhost:5001/health",
-        json={"status": "error"},
-        status=500
-    )
 
-    # First failure
-    departures, error, stop_name = bus_service.get_waiting_times()
-    assert departures is not None  # Should return error data
-    assert error == "API not available"
-    assert stop_name == ""
-    assert bus_service._consecutive_failures == 1
-    assert bus_service._next_retry_time is not None
+def test_get_waiting_times_backoff_and_recovery(bus_service, sample_bus_response):
+    failure = make_response(status=500, error=RuntimeError("API unavailable"))
 
-    # Get initial backoff time
-    first_retry = bus_service._next_retry_time
+    with patch("bus_service.requests.get", return_value=failure) as request:
+        departures, error, stop_name = bus_service.get_waiting_times()
 
-    # Second failure
-    departures, error, stop_name = bus_service.get_waiting_times()
-    assert "Backing off until" in error
-    assert bus_service._consecutive_failures == 1  # Shouldn't increment because we're in backoff
-    assert bus_service._next_retry_time == first_retry  # Should keep same retry time
+        assert departures
+        assert error == "Service error"
+        assert stop_name == ""
+        assert bus_service._fallback_backoff.get_failure_count() == 1
 
-    # Simulate waiting past backoff time
-    bus_service._next_retry_time = datetime.now() - timedelta(seconds=1)
+        first_retry = bus_service._fallback_backoff._next_retry_time
+        _departures, error, _stop_name = bus_service.get_waiting_times()
+        assert "Next attempt at" in error
+        assert request.call_count == 1
 
-    # Third failure
-    departures, error, stop_name = bus_service.get_waiting_times()
-    assert bus_service._consecutive_failures == 2
-    assert bus_service._next_retry_time > first_retry  # Should have a later retry time
+        bus_service._fallback_backoff._next_retry_time = datetime.now() - timedelta(
+            seconds=1
+        )
+        bus_service.get_waiting_times()
+        assert bus_service._fallback_backoff.get_failure_count() == 2
+        assert bus_service._fallback_backoff._next_retry_time > first_retry
 
-    # Test successful response resets backoff
-    mock_responses.replace(
-        responses.GET,
-        "http://localhost:5001/health",
-        json={"status": "ok"},
-        status=200
-    )
-    mock_responses.add(
-        responses.GET,
-        "http://localhost:5001/api/test_provider/waiting_times/",
-        json={"stops": {bus_service.stop_id: {"name": "Test Stop", "lines": {}}}},
-        status=200
-    )
+        success = make_response(
+            data={"stops": {bus_service.stop_id: sample_bus_response}}
+        )
+        request.return_value = success
+        bus_service._fallback_backoff._next_retry_time = datetime.now() - timedelta(
+            seconds=1
+        )
+        bus_service.get_waiting_times()
 
-    # Simulate waiting past backoff time
-    bus_service._next_retry_time = datetime.now() - timedelta(seconds=1)
+    assert bus_service._fallback_backoff.get_failure_count() == 0
+    assert bus_service._fallback_backoff._next_retry_time is None
 
-    # Should reset on success
-    departures, error, stop_name = bus_service.get_waiting_times()
-    assert bus_service._consecutive_failures == 0
-    assert bus_service._next_retry_time is None
 
-def test_get_line_color(bus_service):
-    """Test line color determination"""
-    # Test with a known line number
-    primary_color, secondary_color, ratio = bus_service.get_line_color("64")
-    assert primary_color in ['black', 'white', 'red', 'yellow']
-    assert secondary_color in ['black', 'white', 'red', 'yellow']
-    assert 0 <= ratio <= 1
+def test_get_line_color_without_display(bus_service):
+    colors = bus_service.get_line_color("64")
 
-@responses.activate
-def test_get_api_health(bus_service, mock_responses):
-    """Test API health check"""
-    # Test successful health check
-    mock_responses.add(
-        responses.GET,
-        "http://localhost:5001/health",
-        json={"status": "ok"},
-        status=200
-    )
-    assert bus_service.get_api_health() is True
+    assert colors == [("black", 0.7), ("white", 0.3)]
 
-    # Test failed health check
-    mock_responses.replace(
-        responses.GET,
-        "http://localhost:5001/health",
-        json={"status": "error"},
-        status=500
-    )
-    assert bus_service.get_api_health() is False 
+
+def test_get_api_health(bus_service):
+    with patch(
+        "bus_service.requests.get",
+        return_value=make_response(status=200, data={"status": "ok"}),
+    ):
+        assert bus_service.get_api_health() is True
+
+    with patch(
+        "bus_service.requests.get",
+        return_value=make_response(status=500, data={"status": "error"}),
+    ):
+        assert bus_service.get_api_health() is False

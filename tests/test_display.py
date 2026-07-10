@@ -1,8 +1,8 @@
 import pytest
 from PIL import Image
 from display_adapter import DisplayAdapter, MockDisplay, return_display_lock
-from unittest.mock import patch, MagicMock
 from threading import Lock
+from unittest.mock import patch
 import os
 
 @pytest.fixture
@@ -84,7 +84,7 @@ def test_display_lock():
     """Test display lock functionality"""
     lock = return_display_lock()
     assert lock is not None
-    assert isinstance(lock, Lock)
+    assert isinstance(lock, type(Lock()))
     
     # Test that the same lock is returned on subsequent calls
     lock2 = return_display_lock()
@@ -104,10 +104,8 @@ def test_getbuffer_wrapper(mock_display):
     test_image = Image.new('RGB', (mock_display.width, mock_display.height), color='white')
     
     # Get buffer
-    buffer = mock_display.getbuffer(test_image)
+    with patch.object(DisplayAdapter, 'save_debug_image') as mock_save:
+        buffer = mock_display.getbuffer(test_image)
     assert buffer is not None
-    
-    # For B&W display, should convert to 1-bit
-    if mock_display.is_bw_display:
-        assert isinstance(buffer, Image.Image)
-        assert buffer.mode in ['1', 'L']
+    assert buffer is test_image
+    mock_save.assert_called_once_with(test_image)

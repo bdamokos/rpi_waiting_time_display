@@ -18,7 +18,7 @@ colorzero==2.0
     #   gpiozero
 gpiozero==2.0.1
     # via -r requirements.in
-idna==3.11
+idna==3.15
     # via
     #   -r requirements.in
     #   requests
@@ -32,7 +32,7 @@ pillow==12.2.0
     #   waveshare-epd
 pypng==0.20220715.0
     # via qrcode
-python-dotenv==1.2.1
+python-dotenv==1.2.2
     # via -r requirements.in
 qrcode==8.2
     # via -r requirements.in

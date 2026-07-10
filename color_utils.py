@@ -1,8 +1,7 @@
 from functools import lru_cache
 
 
-@lru_cache(maxsize=1024)
-def find_optimal_colors(pixel_rgb, epd):
+def _find_optimal_colors(pixel_rgb, epd):
     """Find optimal combination of available colors to represent an RGB value"""
     r, g, b = pixel_rgb[:3]
 
@@ -117,3 +116,18 @@ def find_optimal_colors(pixel_rgb, epd):
 
     # Default fallback
     return [('black', 0.6), ('white', 0.4)]
+
+
+@lru_cache(maxsize=1024)
+def find_optimal_colors(pixel_rgb, epd):
+    """Return a normalized display-color mix for an RGB value."""
+    colors_with_ratios = _find_optimal_colors(pixel_rgb, epd)
+    total_ratio = sum(ratio for _, ratio in colors_with_ratios)
+
+    if total_ratio <= 0:
+        return [('black', 1.0)]
+
+    return [
+        (color, ratio / total_ratio)
+        for color, ratio in colors_with_ratios
+    ]

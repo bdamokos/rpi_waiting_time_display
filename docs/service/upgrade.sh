@@ -95,6 +95,13 @@ if version_gt "0.0.40" "$LAST_VERSION"; then
 fi
 
 # Add new version blocks here for future upgrades
+if version_gt "0.0.44" "$LAST_VERSION"; then
+    echo "Applying version 0.0.44 log guard upgrade..."
+    chmod +x "$ACTUAL_HOME/display_programme/docs/service/limit_log_size.sh"
+    "$ACTUAL_HOME/display_programme/docs/service/limit_log_size.sh"
+    echo "Version 0.0.44 log guard upgrade completed."
+fi
+
 # Example:
 # if version_gt "0.0.41" "$LAST_VERSION"; then
 #     echo "Applying version 0.0.41 upgrades..."
@@ -103,4 +110,4 @@ fi
 
 # Update the version file
 echo "$CURRENT_VERSION" > "$VERSION_FILE"
-echo "Upgrade completed successfully." 
+echo "Upgrade completed successfully."

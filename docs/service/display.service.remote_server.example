@@ -1,5 +1,5 @@
 [Unit]
-# Version: 0.0.1 (2024-12-21) # AUTO-INCREMENT
+# Version: 0.0.3 (2026-07-10) # AUTO-INCREMENT
 Description=E-Paper Display Service
 After=network.target
 StartLimitIntervalSec=0
@@ -14,6 +14,11 @@ ExecStop=/bin/kill -SIGTERM $MAINPID
 KillMode=mixed
 KillSignal=SIGTERM
 TimeoutStopSec=20
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=rpi-display
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=1000
 Restart=always
 RestartSec=10
 
@@ -39,4 +44,4 @@ WantedBy=multi-user.target
 #    sudo systemctl status display.service
 #
 # 7. View logs:
-#    journalctl -u display.service -f 
+#    journalctl -u display.service -f

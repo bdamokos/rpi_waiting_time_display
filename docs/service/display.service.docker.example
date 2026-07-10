@@ -1,5 +1,5 @@
 [Unit]
-# Version: 0.0.1 (2024-12-21) # AUTO-INCREMENT
+# Version: 0.0.3 (2026-07-10) # AUTO-INCREMENT
 Description=E-Paper Display Service (Docker Version)
 After=network.target docker.service
 Requires=docker.service
@@ -11,11 +11,14 @@ WorkingDirectory=/home/pi
 ExecStart=/home/pi/start_display.sh
 Restart=always
 RestartSec=30
-StandardOutput=append:/var/log/display_service.log
-StandardError=append:/var/log/display_service.log
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=rpi-display
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=1000
 
 # Give the service 30 seconds to stop gracefully
 TimeoutStopSec=30
 
 [Install]
-WantedBy=multi-user.target 
+WantedBy=multi-user.target

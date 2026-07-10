@@ -6,7 +6,7 @@
 # chmod +x ~/start_display.sh
 echo "----------------------------------------"
 echo "Starting display service script"
-echo "Version: 0.0.23 (2025-01-16)"  # AUTO-INCREMENT
+echo "Version: 0.0.24 (2026-07-10)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024-2025 Bence Damokos"
 echo "----------------------------------------"
@@ -36,6 +36,7 @@ if [ ! -f "/var/log/display/display.out" ] || [ ! -f "/var/log/display/display.e
     sudo chmod 644 /var/log/display/display.out /var/log/display/display.err
 fi
 echo "Log directories and files are ready."
+"$HOME/display_programme/docs/service/limit_log_size.sh"
 echo "----------------------------------------"
 
 # Function to check and update a service file if needed

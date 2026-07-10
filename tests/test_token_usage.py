@@ -62,6 +62,21 @@ def test_file_client_reads_and_caches_snapshot(tmp_path, monkeypatch):
     assert client.get_snapshot() is snapshot
 
 
+def test_client_discards_cache_after_maximum_stale_age(tmp_path, monkeypatch):
+    source = tmp_path / "snapshot.json"
+    cache = tmp_path / "cache.json"
+    source.write_text(json.dumps(SAMPLE), encoding="utf-8")
+    monkeypatch.setenv("token_usage_enabled", "true")
+    monkeypatch.setenv("token_usage_source", "file")
+    monkeypatch.setenv("token_usage_file", str(source))
+    monkeypatch.setenv("token_usage_cache_file", str(cache))
+    monkeypatch.setenv("token_usage_max_stale_seconds", "0")
+    client = TokenUsageClient()
+    assert client.get_snapshot() is not None
+    source.unlink()
+    assert client.get_snapshot(force=True) is None
+
+
 def test_view_rotation_uses_configured_duration(monkeypatch):
     monkeypatch.setenv("token_usage_view_duration", "300")
     views = ["month", "limits"]

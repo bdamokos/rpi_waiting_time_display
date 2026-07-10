@@ -209,7 +209,9 @@ class TokenUsageClient:
             self._write_cache(payload)
         except Exception as exc:
             logger.warning("Token usage source unavailable: %s", exc)
-            self._snapshot = self._snapshot or self._load_stale_cache()
+            # Reload from disk even when an in-memory value exists so the
+            # configured maximum stale age is always enforced.
+            self._snapshot = self._load_stale_cache()
             if self._snapshot:
                 self._snapshot.stale = True
         return self._snapshot

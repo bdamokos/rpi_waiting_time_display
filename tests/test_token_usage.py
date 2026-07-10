@@ -1,5 +1,6 @@
 import json
 from datetime import datetime
+from types import SimpleNamespace
 
 import pytest
 
@@ -13,6 +14,7 @@ from token_usage import (
 
 SAMPLE = {
     "generated_at": "2026-07-10T12:00:00+02:00",
+    "active": True,
     "currency": "USD",
     "limits": {
         "primary": {"used_percent": 18, "resets_at": "2026-07-10T15:00:00Z"},
@@ -43,9 +45,40 @@ def test_invalid_schedule_is_rejected():
 
 def test_snapshot_reports_remaining_capacity():
     snapshot = TokenUsageSnapshot.from_dict(SAMPLE)
+    assert snapshot.active is True
     assert snapshot.primary.remaining_percent == 82
     assert snapshot.secondary.remaining_percent == 55
     assert snapshot.month_cost_usd == 123.5
+
+
+def test_snapshot_without_explicit_activity_is_inactive():
+    payload = {key: value for key, value in SAMPLE.items() if key != "active"}
+    assert TokenUsageSnapshot.from_dict(payload).active is False
+
+
+def test_scheduled_token_mode_requires_live_activity(monkeypatch):
+    from basic import DisplayManager
+
+    manager = DisplayManager.__new__(DisplayManager)
+    manager.display_schedule = DisplaySchedule("token@00:00-00:00")
+    manager.token_usage_client = SimpleNamespace(
+        enabled=True,
+        get_snapshot=lambda: SimpleNamespace(active=False, stale=False),
+    )
+    monkeypatch.setenv("token_usage_fallback_mode", "weather")
+    now = datetime(2026, 7, 10, 12, 0)
+
+    assert manager._scheduled_mode(now) == "weather"
+    manager.token_usage_client.get_snapshot = lambda: SimpleNamespace(
+        active=True, stale=False
+    )
+    assert manager._scheduled_mode(now) == "token"
+    manager.token_usage_client.get_snapshot = lambda: SimpleNamespace(
+        active=True, stale=True
+    )
+    assert manager._scheduled_mode(now) == "weather"
+    monkeypatch.setenv("token_usage_fallback_mode", "token")
+    assert manager._scheduled_mode(now) == "transit"
 
 
 def test_file_client_reads_and_caches_snapshot(tmp_path, monkeypatch):
@@ -75,6 +108,23 @@ def test_client_discards_cache_after_maximum_stale_age(tmp_path, monkeypatch):
     assert client.get_snapshot() is not None
     source.unlink()
     assert client.get_snapshot(force=True) is None
+
+
+def test_client_does_not_trust_stale_active_status(tmp_path, monkeypatch):
+    source = tmp_path / "snapshot.json"
+    cache = tmp_path / "cache.json"
+    source.write_text(json.dumps(SAMPLE), encoding="utf-8")
+    monkeypatch.setenv("token_usage_enabled", "true")
+    monkeypatch.setenv("token_usage_source", "file")
+    monkeypatch.setenv("token_usage_file", str(source))
+    monkeypatch.setenv("token_usage_cache_file", str(cache))
+    client = TokenUsageClient()
+    assert client.get_snapshot().active is True
+    source.unlink()
+    stale = client.get_snapshot(force=True)
+    assert stale is not None
+    assert stale.stale is True
+    assert stale.active is False
 
 
 def test_view_rotation_uses_configured_duration(monkeypatch):

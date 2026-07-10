@@ -14,13 +14,55 @@ from datetime import datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Iterable
+
+
+class RecentJsonActivity:
+    """Report activity when a JSON session file was recently modified."""
+
+    def __init__(self, paths: Iterable[Path], window_seconds: int):
+        self.paths = [path.expanduser() for path in paths]
+        self.window_seconds = max(0, window_seconds)
+
+    @staticmethod
+    def _json_files(path: Path):
+        if path.is_file():
+            if path.suffix.lower() in {".json", ".jsonl"}:
+                yield path
+            return
+        if path.is_dir():
+            for candidate in path.rglob("*"):
+                if (
+                    candidate.is_file()
+                    and candidate.suffix.lower() in {".json", ".jsonl"}
+                ):
+                    yield candidate
+
+    def is_active(self, now: float | None = None) -> bool:
+        cutoff = (time.time() if now is None else now) - self.window_seconds
+        for path in self.paths:
+            try:
+                for candidate in self._json_files(path):
+                    try:
+                        if candidate.stat().st_mtime >= cutoff:
+                            return True
+                    except OSError:
+                        continue
+            except OSError:
+                continue
+        return False
 
 
 class SnapshotBuilder:
-    def __init__(self, command: str, cache_seconds: int):
+    def __init__(
+        self,
+        command: str,
+        cache_seconds: int,
+        activity_detector: RecentJsonActivity,
+    ):
         self.command = command
         self.cache_seconds = cache_seconds
+        self.activity_detector = activity_detector
         self._lock = threading.Lock()
         self._cached: Dict[str, Any] | None = None
         self._cached_at = 0.0
@@ -38,7 +80,7 @@ class SnapshotBuilder:
     def build(self) -> Dict[str, Any]:
         with self._lock:
             if self._cached and time.monotonic() - self._cached_at < self.cache_seconds:
-                return self._cached
+                return {**self._cached, "active": self.activity_detector.is_active()}
             usage_rows = self._run(
                 "usage", "--provider", "codex", "--source", "oauth", "--format", "json"
             )
@@ -78,7 +120,9 @@ class SnapshotBuilder:
                 "daily": daily,
             }
             self._cached_at = time.monotonic()
-            return self._cached
+            # Activity is intentionally evaluated separately from the cached
+            # usage metrics so it can turn off promptly between CLI refreshes.
+            return {**self._cached, "active": self.activity_detector.is_active()}
 
 
 def token_from_environment() -> str:
@@ -130,11 +174,36 @@ def main():
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--cache-seconds", type=int, default=300)
     parser.add_argument("--codexbar-command", default="codexbar")
+    parser.add_argument(
+        "--activity-path",
+        action="append",
+        help=(
+            "file or directory containing Codex JSON session data; may be "
+            "repeated (default: $CODEX_HOME/sessions or ~/.codex/sessions)"
+        ),
+    )
+    parser.add_argument(
+        "--activity-window-seconds",
+        type=int,
+        default=300,
+        help="report Codex active after a JSON file changed in this window",
+    )
     args = parser.parse_args()
     token = token_from_environment()
     if args.host not in {"127.0.0.1", "localhost", "::1"} and not token:
         parser.error("a token is required when listening beyond loopback")
-    builder = SnapshotBuilder(args.codexbar_command, max(0, args.cache_seconds))
+    default_codex_home = Path(os.getenv("CODEX_HOME", "~/.codex")).expanduser()
+    activity_paths = [
+        Path(path) for path in (args.activity_path or [default_codex_home / "sessions"])
+    ]
+    activity_detector = RecentJsonActivity(
+        activity_paths, max(0, args.activity_window_seconds)
+    )
+    builder = SnapshotBuilder(
+        args.codexbar_command,
+        max(0, args.cache_seconds),
+        activity_detector,
+    )
     server = ThreadingHTTPServer((args.host, args.port), make_handler(builder, token))
 
     def refresh_loop():

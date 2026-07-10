@@ -31,12 +31,12 @@ class RecentJsonActivity:
                 yield path
             return
         if path.is_dir():
-            for candidate in path.rglob("*"):
-                if (
-                    candidate.is_file()
-                    and candidate.suffix.lower() in {".json", ".jsonl"}
-                ):
-                    yield candidate
+            for pattern in ("*.json", "*.jsonl"):
+                yield from (
+                    candidate
+                    for candidate in path.rglob(pattern)
+                    if candidate.is_file()
+                )
 
     def is_active(self, now: float | None = None) -> bool:
         cutoff = (time.time() if now is None else now) - self.window_seconds

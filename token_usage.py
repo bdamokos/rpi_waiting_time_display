@@ -91,7 +91,9 @@ class DisplaySchedule:
     ``mode@DAYS@HH:MM-HH:MM``. Earlier entries have priority.
     """
 
-    ALLOWED_MODES = {"auto", "transit", "weather", "token", "token-always"}
+    ALLOWED_MODES = {
+        "auto", "transit", "weather", "token", "token-always", "ynab", "ynab-always"
+    }
 
     def __init__(self, value: str):
         self.entries: List[ScheduleEntry] = []

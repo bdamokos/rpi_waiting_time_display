@@ -85,6 +85,48 @@ def test_private_config_supports_rules_and_headers(monkeypatch, tmp_path):
     ]
 
 
+def test_private_config_rejects_null_url_and_defaults_null_options(
+    monkeypatch, tmp_path
+):
+    path = tmp_path / "feeds.json"
+    path.write_text(
+        json.dumps(
+            [
+                {"url": None, "label": None},
+                {
+                    "url": "https://wire.test/feed",
+                    "label": None,
+                    "match": None,
+                    "keywords": None,
+                    "headers": None,
+                },
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("breaking_news_config_file", str(path))
+
+    assert configured_breaking_sources() == [BreakingSource("https://wire.test/feed")]
+
+
+def test_keyword_normalization_uses_unicode_case_folding(monkeypatch, tmp_path):
+    path = tmp_path / "feeds.json"
+    path.write_text(
+        json.dumps(
+            [
+                {
+                    "url": "https://wire.test/feed",
+                    "keywords": ["STRAẞE"],
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("breaking_news_config_file", str(path))
+
+    assert configured_breaking_sources()[0].keywords == ("strasse",)
+
+
 def test_first_poll_baselines_then_only_new_matching_headline_is_returned(
     monkeypatch, tmp_path
 ):

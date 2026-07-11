@@ -40,29 +40,38 @@ class BreakingSource:
 
 
 def _source_from_dict(value) -> Optional[BreakingSource]:
-    if not isinstance(value, dict) or not str(value.get("url", "")).strip():
+    if not isinstance(value, dict):
         return None
-    match = str(value.get("match", "keywords")).strip().lower()
+    url = value.get("url")
+    if not isinstance(url, str) or not url.strip():
+        return None
+    match_value = value.get("match")
+    match = str(match_value).strip().lower() if match_value is not None else "keywords"
     if match not in {"keywords", "all"}:
         logger.warning("Ignoring breaking-news source with invalid match mode")
         return None
-    keywords = value.get("keywords", DEFAULT_KEYWORDS)
+    keywords = value.get("keywords")
+    if keywords is None:
+        keywords = DEFAULT_KEYWORDS
     if not isinstance(keywords, (list, tuple)) or not all(
         isinstance(item, str) for item in keywords
     ):
         logger.warning("Ignoring breaking-news source with invalid keywords")
         return None
-    headers = value.get("headers", {})
+    headers = value.get("headers")
+    if headers is None:
+        headers = {}
     if not isinstance(headers, dict) or not all(
         isinstance(key, str) and isinstance(item, str) for key, item in headers.items()
     ):
         logger.warning("Ignoring breaking-news source with invalid headers")
         return None
+    label = value.get("label")
     return BreakingSource(
-        url=str(value["url"]).strip(),
-        label=str(value.get("label", "")).strip(),
+        url=url.strip(),
+        label=str(label).strip() if label is not None else "",
         match=match,
-        keywords=tuple(item.strip().lower() for item in keywords if item.strip()),
+        keywords=tuple(item.strip().casefold() for item in keywords if item.strip()),
         headers=tuple(headers.items()),
     )
 

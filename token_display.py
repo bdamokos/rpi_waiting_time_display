@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from datetime import datetime
+
 from PIL import Image, ImageDraw, ImageFont
 
 from display_adapter import return_display_lock
@@ -99,6 +100,47 @@ def _compact_tokens(value: int) -> str:
     return str(value)
 
 
+def _today_cost(snapshot: TokenUsageSnapshot) -> float:
+    snapshot_date = snapshot.generated_at[:10]
+    return next(
+        (day.cost_usd for day in reversed(snapshot.daily) if day.date == snapshot_date),
+        0,
+    )
+
+
+def _chart_slots(count: int, left: int, right: int):
+    if count <= 0:
+        return []
+    gap = 2 if count <= 16 else 1
+    span = right - left
+    return [
+        (
+            round(left + span * index / count),
+            round(left + span * (index + 1) / count) - gap,
+        )
+        for index in range(count)
+    ]
+
+
+def _cumulative_points(days, left: int, top: int, right: int, bottom: int):
+    if not days:
+        return []
+    cumulative = []
+    running_total = 0
+    for day in days:
+        running_total += max(0, day.cost_usd)
+        cumulative.append(running_total)
+    maximum = cumulative[-1] or 1
+    slots = _chart_slots(len(days), left, right)
+    return [(left, bottom)] + [
+        (
+            slots[index + 1][0] if index + 1 < len(slots) else right,
+            round(bottom - (bottom - top) * value / maximum),
+        )
+        for index, value in enumerate(cumulative)
+    ]
+
+
 def draw_month_usage(epd, snapshot: TokenUsageSnapshot, set_base_image: bool = False):
     image, draw, black, white = _canvas(epd)
     fonts = _fonts()
@@ -107,6 +149,9 @@ def draw_month_usage(epd, snapshot: TokenUsageSnapshot, set_base_image: bool = F
 
     draw.text((7, 31), f"${snapshot.month_cost_usd:,.0f}", font=number, fill=black)
     draw.text((7, 58), "MONTH TO DATE", font=micro, fill=black)
+    today_text = f"TODAY ${_today_cost(snapshot):,.0f}"
+    today_width = draw.textbbox((0, 0), today_text, font=micro)[2]
+    draw.text((243 - today_width, 58), today_text, font=micro, fill=black)
     token_text = f"{_compact_tokens(snapshot.month_tokens)} TOKENS"
     token_width = draw.textbbox((0, 0), token_text, font=tiny)[2]
     draw.text((243 - token_width, 38), token_text, font=tiny, fill=black)
@@ -118,14 +163,18 @@ def draw_month_usage(epd, snapshot: TokenUsageSnapshot, set_base_image: bool = F
     )
     if days:
         maximum = max(day.cost_usd for day in days) or 1
-        gap = 2 if len(days) <= 16 else 1
-        width = max(2, (chart_right - chart_left - gap * (len(days) - 1)) // len(days))
-        for index, day in enumerate(days):
+        for day, (left, right) in zip(
+            days, _chart_slots(len(days), chart_left, chart_right)
+        ):
             height = max(1, round((chart_bottom - chart_top) * day.cost_usd / maximum))
-            x = chart_left + index * (width + gap)
             draw.rectangle(
-                (x, chart_bottom - height, x + width - 1, chart_bottom - 1), fill=black
+                (left, chart_bottom - height, right, chart_bottom - 1), fill=black
             )
+        cumulative = _cumulative_points(
+            days, chart_left, chart_top, chart_right, chart_bottom
+        )
+        draw.line(cumulative, fill=white, width=4, joint="curve")
+        draw.line(cumulative, fill=black, width=2, joint="curve")
         first = days[0].date[-2:].lstrip("0")
         last = days[-1].date[-2:].lstrip("0")
         draw.text((chart_left, 109), first, font=micro, fill=black)

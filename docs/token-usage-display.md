@@ -6,9 +6,10 @@ title: Token usage display
 # Token usage display
 
 The optional token mode rotates between a month-to-date usage-value chart and
-remaining-capacity bars for a five-hour and weekly window. It is disabled by
-default and does not change existing installations until
-`token_usage_enabled=true` is configured.
+remaining-capacity bars for a five-hour and weekly window. The month view pairs
+daily bars with a cumulative line and shows both today's estimate and the
+month-to-date total. It is disabled by default and does not change existing
+installations until `token_usage_enabled=true` is configured.
 
 When a live limit resets, the normal rotation is temporarily replaced by a
 distinct capacity-restored screen. No extra collector field is required: the

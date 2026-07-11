@@ -337,6 +337,7 @@ class DisplayManager:
         self._override_module = None
         self._override_generation = 0
         self._override_lock = threading.RLock()
+        self._override_render_lock = threading.Lock()
         self._last_screen_owner = None
         self.prefetch_offset = 10  # seconds before display update to fetch new data
         self.display_interval = DISPLAY_REFRESH_INTERVAL
@@ -439,7 +440,11 @@ class DisplayManager:
                 self.override_priority,
                 self.override_duration_seconds,
             )
-        rendered = self._render_display_override(normalized) if selected else False
+        rendered = (
+            self._render_display_override(normalized, generation)
+            if selected
+            else False
+        )
         if selected and not rendered:
             released = self._release_failed_override(generation)
             if released:
@@ -491,10 +496,22 @@ class DisplayManager:
             "modules": sorted(set(self.OVERRIDE_MODULE_ALIASES.values())),
         }
 
-    def _render_display_override(self, module=None):
-        if module is None:
-            with self._override_lock:
+    def _render_display_override(self, module=None, generation=None):
+        with self._override_lock:
+            if module is None:
                 module = self._override_module
+            if generation is None:
+                generation = self._override_generation
+        with self._override_render_lock:
+            with self._override_lock:
+                if (
+                    generation != self._override_generation
+                    or module != self._override_module
+                ):
+                    return False
+            return self._render_display_override_locked(module, generation)
+
+    def _render_display_override_locked(self, module, generation):
         if not module or not self.screen_arbiter.can_render(self.OVERRIDE_SCREEN_OWNER):
             return False
         if module == "calendar":
@@ -502,6 +519,12 @@ class DisplayManager:
                 self.OVERRIDE_SCREEN_OWNER
             )
         with self._display_lock:
+            with self._override_lock:
+                if (
+                    generation != self._override_generation
+                    or module != self._override_module
+                ):
+                    return False
             if not self.screen_arbiter.can_render(self.OVERRIDE_SCREEN_OWNER):
                 return False
             now = datetime.now()
@@ -894,8 +917,13 @@ class DisplayManager:
                     active_owner == self.OVERRIDE_SCREEN_OWNER
                     and self._last_screen_owner != self.OVERRIDE_SCREEN_OWNER
                 ):
-                    if not self._render_display_override():
-                        self._release_failed_override()
+                    with self._override_lock:
+                        override_module = self._override_module
+                        override_generation = self._override_generation
+                    if not self._render_display_override(
+                        override_module, override_generation
+                    ):
+                        self._release_failed_override(override_generation)
                         active_owner = self.screen_arbiter.active_owner()
                 if self._last_screen_owner and active_owner is None:
                     self._force_display_update()

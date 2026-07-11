@@ -10,6 +10,12 @@ remaining-capacity bars for a five-hour and weekly window. It is disabled by
 default and does not change existing installations until
 `token_usage_enabled=true` is configured.
 
+When a live limit resets, the normal rotation is temporarily replaced by a
+distinct capacity-restored screen. No extra collector field is required: the
+display recognizes a reset only when the limit's reset timestamp advances and
+its used percentage falls between two consecutive fresh snapshots. The notice
+lasts for `token_usage_reset_notice_duration` seconds (five minutes by default).
+
 ## Scheduling
 
 `display_schedule` is a comma-separated list of `mode@HH:MM-HH:MM` entries.
@@ -25,6 +31,7 @@ working hours, and shows weather on weekday nights:
 ```dotenv
 display_schedule=token-always@weekends@00:00-00:00,transit@weekdays@06:00-10:00,token@weekdays@10:00-22:00,weather@weekdays@22:00-06:00
 token_usage_view_duration=300
+token_usage_reset_notice_duration=300
 token_usage_views=month,limits
 token_usage_fallback_mode=transit
 ```
@@ -35,6 +42,12 @@ Supported modes are `auto`, `transit`, `weather`, `token`, and `token-always`.
 data is unavailable, `token_usage_fallback_mode` is used. The last good response
 is cached for `token_usage_max_stale_seconds`; stale data never keeps an active
 or always-on token window visible.
+
+A fresh reset notice may temporarily satisfy the activity requirement during a
+scheduled `token` window, so the restored capacity is visible even if no Codex
+session is active at that instant. It remains a base screen: calendar, RSS,
+flight, ISS, and other higher-priority arbiter claims continue to take
+precedence, and no reset notice is shown outside a scheduled token window.
 
 ## Data sources
 

@@ -18,7 +18,14 @@ from wifi_manager import is_connected, no_wifi_loop, get_hostname
 from display_adapter import return_display_lock
 import threading
 import math
-from flights import check_flights, gather_flights_within_radius, update_display_with_flights, enhance_flight_data
+from flights import (
+    RecentFlightCache,
+    check_flights,
+    enhance_flight_data,
+    gather_flights_within_radius,
+    update_display_with_flights,
+    update_display_with_recent_flights,
+)
 from threading import Lock, Event
 from PIL import Image
 from token_display import draw_month_usage, draw_usage_limits
@@ -277,6 +284,7 @@ class DisplayManager:
         "bus": "transit",
         "calendar": "calendar",
         "codex": "token",
+        "flights": "flights",
         "iss": "iss",
         "token": "token",
         "transit": "transit",
@@ -308,6 +316,7 @@ class DisplayManager:
         self.coordinates_lat = float(os.getenv('Coordinates_LAT', '50.8503'))
         self.coordinates_lng = float(os.getenv('Coordinates_LNG', '4.3517'))
         self.flight_getter = None
+        self.recent_flights = RecentFlightCache(max_entries=4)
         self.in_flight_mode = False
         self.flight_mode_start = None
         self.flight_mode_duration = 30  # Duration in seconds for flight mode
@@ -572,6 +581,16 @@ class DisplayManager:
             now = datetime.now()
             if module == "token":
                 rendered = self._draw_token_usage(now, require_active=False)
+            elif module == "flights":
+                recent_flights = self.recent_flights.recent()
+                rendered = bool(recent_flights)
+                if rendered:
+                    update_display_with_recent_flights(
+                        self.epd, recent_flights, set_base_image=True
+                    )
+                    self.current_display_mode = "flights"
+                    self.current_token_view = None
+                    self.in_weather_mode = False
             elif module == "iss":
                 from iss import display_next_iss_pass
 
@@ -785,6 +804,9 @@ class DisplayManager:
                                 logger.debug(f"Closest flight: {closest_flight}")
                                 enhanced_flight = enhance_flight_data(closest_flight)
                                 logger.debug(f"Enhanced flight: {enhanced_flight}")
+                                self.recent_flights.record(
+                                    enhanced_flight, observed_at=current_time
+                                )
                                 
                                 with self._display_lock:
                                     with self._flight_lock:

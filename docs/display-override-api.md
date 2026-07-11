@@ -24,7 +24,7 @@ transport before exposing the listener there. The default lease is 300 seconds
 and the default priority is 30; both can be changed with
 `display_override_duration_seconds` and `display_override_priority`.
 
-Request one of `token`, `weather`, `transit`, `calendar`, or `iss` (`codex`
+Request one of `token`, `weather`, `transit`, `calendar`, `iss`, or `flights` (`codex`
 remains an accepted alias for `token`):
 
 ```bash
@@ -38,6 +38,12 @@ curl -X POST http://DISPLAY_HOST:5003/api/display \
 `token` bypasses the normal recent-activity condition, but still needs a
 configured, non-stale token usage source. `calendar` shows the current agenda.
 Weather, transit, and calendar similarly need their data sources configured.
+`flights` shows up to four of the most recently observed nearby flights, newest
+first, using only identifiers, origin/destination codes, and observation times
+that were actually available. The in-memory history starts empty after a
+restart and is populated by normal live flight monitoring; requesting it does
+not poll either flight service. Live nearby-flight claims retain their higher
+priority and can interrupt this history screen.
 A successful request can therefore be accepted without immediately rendering
 when data is unavailable or a higher-priority owner controls the screen.
 

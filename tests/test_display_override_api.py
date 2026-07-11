@@ -168,6 +168,7 @@ def test_successful_override_records_owner_and_reports_canonical_modules():
     assert manager._last_screen_owner == manager.OVERRIDE_SCREEN_OWNER
     assert manager.display_override_status()["modules"] == [
         "calendar",
+        "flights",
         "iss",
         "token",
         "transit",

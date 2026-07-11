@@ -1,16 +1,17 @@
 from PIL import Image, ImageChops, ImageDraw
 
 from display_adapter import MockDisplay
+from tests.test_token_usage import SAMPLE
 from token_display import (
+    _cumulative_points,
     _fonts,
     _reset_badge,
+    _today_cost,
     draw_month_usage,
     draw_usage_limits,
     draw_usage_reset,
 )
 from token_usage import TokenUsageSnapshot
-
-from tests.test_token_usage import SAMPLE
 
 
 def test_token_views_render_at_display_dimensions(monkeypatch, tmp_path):
@@ -49,3 +50,21 @@ def test_reset_badge_is_clipped_into_top_right_corner():
 
     assert image.getpixel((249, 1)) == 0
     assert image.getpixel((226, 1)) == 1
+
+
+def test_month_view_cumulative_line_runs_from_chart_origin_to_top_right():
+    snapshot = TokenUsageSnapshot.from_dict(SAMPLE)
+
+    points = _cumulative_points(snapshot.daily, 7, 73, 243, 109)
+
+    assert points[0] == (7, 109)
+    assert points[-1] == (243, 73)
+    assert all(
+        current[1] <= previous[1] for previous, current in zip(points, points[1:])
+    )
+
+
+def test_month_view_uses_snapshot_date_for_today_total():
+    snapshot = TokenUsageSnapshot.from_dict(SAMPLE)
+
+    assert _today_cost(snapshot) == 83.5

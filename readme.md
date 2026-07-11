@@ -10,6 +10,7 @@ A Raspberry Pi project that displays bus waiting times using an e-Paper display 
 - ✈️ Optional: Overhead flight tracking
 - 🛰️ Optional: ISS tracking when visible
 - 📊 Optional: Scheduled token-usage dashboards with month-to-date estimates and remaining-capacity bars
+- 💶 Optional: Read-only YNAB views based only on the current month's assignments
 - 📅 Optional calendar plugin with upcoming-event alerts and agenda glances
 - 📰 Optional RSS/Nitter plugin with compact new-entry notifications
 - 🎛️ Screen arbitration, weekday-aware schedules, and a private-network display override API
@@ -61,6 +62,19 @@ request the token, weather, transit, or calendar screen. See the
 [arbiter](docs/screen-arbiter.md) and [display override API](docs/display-override-api.md)
 documentation.
 
+### YNAB monthly budget views
+
+YNAB screens distinguish current-month spending permission from historical
+rollover. They never treat Ready to Assign as safe-to-spend money. See the
+[configuration and calculation policy](docs/ynab-display.md).
+
+| Monthly plan | Daily allowance | Active envelopes |
+|---|---|---|
+| ![Anonymized YNAB monthly plan showing the amount left from this month's assignments](docs/images/ynab_month.png) | ![Anonymized daily allowance calculated from selected current-month categories](docs/images/ynab_daily.png) | ![Anonymized active category envelopes with current-month remainders](docs/images/ynab_active.png) |
+
+The screenshots use invented names and amounts. No account, budget, category,
+payee, transaction, or credential from a real YNAB budget is committed.
+
 ## Quick Start
 1. [Set up your Raspberry Pi](https://bdamokos.github.io/rpi_waiting_time_display/setting-up-the-rpi-webserial)
 2. Connect your display via USB
@@ -92,6 +106,4 @@ Basic setup (Raspberry Pi Zero 2W + display): **~€60**
 - Certain included data and assets are under a specific license:
   - [Font Awesome Free](https://fontawesome.com) - Icons used in the setup interface under the [Font Awesome Free License](https://fontawesome.com/license/free), icons used in the display under Creative Commons Attribution 4.0 International License
   - [Open-Meteo](https://open-meteo.com/) - Weather data under a [Creative Commons Attribution 4.0 International License](https://creativecommons.org/licenses/by/4.0/)
-
-
 

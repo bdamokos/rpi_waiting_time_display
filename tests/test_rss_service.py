@@ -1,6 +1,7 @@
 from datetime import timezone
 
-from rss_service import FeedSource, RSSWatcher, configured_sources, parse_feed
+from rss_service import (FeedSource, RSSWatcher, configured_sources, env_int,
+                         parse_feed)
 
 RSS = b"""<?xml version="1.0"?>
 <rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/">
@@ -71,6 +72,12 @@ def test_configured_sources_supports_nitter_with_replies_path(monkeypatch):
     monkeypatch.delenv("rss_feed_urls", raising=False)
 
     assert configured_sources()[0].url == ("http://nitter.local/alice/with_replies/rss")
+
+
+def test_invalid_integer_environment_uses_default(monkeypatch):
+    monkeypatch.setenv("rss_watch_timeout", "not-a-number")
+
+    assert env_int("rss_watch_timeout", 10) == 10
 
 
 def test_first_poll_baselines_and_later_poll_returns_only_new_entry(

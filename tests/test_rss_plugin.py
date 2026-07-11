@@ -70,3 +70,71 @@ def test_queued_entries_render_in_order(monkeypatch):
     plugin.tick(160)
 
     assert rendered == ["one", "two"]
+
+
+def test_invalid_integer_settings_do_not_crash_startup(monkeypatch):
+    monkeypatch.setenv("rss_watch_poll_seconds", "")
+    monkeypatch.setenv("rss_watch_display_seconds", "invalid")
+    monkeypatch.setenv("rss_watch_priority", "invalid")
+    monkeypatch.setenv("rss_watch_max_queue", "invalid")
+    watcher = SimpleNamespace(enabled=True, sources=[object()])
+
+    plugin = RSSPlugin(object(), ScreenArbiter(), threading.Lock(), watcher=watcher)
+
+    assert plugin.poll_seconds == 60
+    assert plugin.duration == 60
+    assert plugin.priority == 30
+    assert plugin.max_queue == 10
+
+
+def test_run_does_not_tick_after_stop_during_poll(monkeypatch):
+    watcher = SimpleNamespace(enabled=True, sources=[object()])
+    plugin = RSSPlugin(object(), ScreenArbiter(), threading.Lock(), watcher=watcher)
+    ticks = []
+
+    def poll():
+        plugin._stop_event.set()
+        return []
+
+    watcher.poll = poll
+    monkeypatch.setattr(plugin, "tick", lambda now: ticks.append(now))
+
+    plugin._run()
+
+    assert ticks == []
+
+
+def test_oversized_avatar_is_not_buffered_for_render(monkeypatch):
+    rendered = []
+
+    class AvatarResponse:
+        def raise_for_status(self):
+            return None
+
+        def iter_content(self, chunk_size):
+            yield b"x" * 300_000
+            yield b"x" * 300_000
+
+    class AvatarSession:
+        def get(self, url, timeout, stream):
+            assert stream is True
+            return AvatarResponse()
+
+    monkeypatch.setattr(
+        "rss_plugin.draw_feed_entry",
+        lambda epd, entry, **kwargs: rendered.append(kwargs["avatar_bytes"]),
+    )
+    watcher = SimpleNamespace(
+        enabled=True,
+        sources=[object()],
+        session=AvatarSession(),
+        timeout=1,
+    )
+    plugin = RSSPlugin(object(), ScreenArbiter(), threading.Lock(), watcher=watcher)
+    entry = _entry()
+    entry = type(entry)(**{**entry.__dict__, "avatar_url": "https://example.test/a"})
+    plugin.add_entries([entry])
+
+    plugin.tick()
+
+    assert rendered == [None]

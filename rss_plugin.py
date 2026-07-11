@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import logging
-import os
 import threading
 import time
 from collections import deque
 
 from rss_display import draw_feed_entry
-from rss_service import RSSWatcher
+from rss_service import RSSWatcher, env_int
 
 logger = logging.getLogger(__name__)
 
@@ -27,10 +26,10 @@ class RSSPlugin:
         self.on_render = on_render
         self.clock = clock or time.monotonic
         self.enabled = self.watcher.enabled
-        self.poll_seconds = max(15, int(os.getenv("rss_watch_poll_seconds", "60")))
-        self.duration = max(5, int(os.getenv("rss_watch_display_seconds", "60")))
-        self.priority = int(os.getenv("rss_watch_priority", "30"))
-        self.max_queue = max(1, int(os.getenv("rss_watch_max_queue", "10")))
+        self.poll_seconds = max(15, env_int("rss_watch_poll_seconds", 60))
+        self.duration = max(5, env_int("rss_watch_display_seconds", 60))
+        self.priority = env_int("rss_watch_priority", 30)
+        self.max_queue = max(1, env_int("rss_watch_max_queue", 10))
         self._queue = deque()
         self._active_until = None
         self._rendered_key = None
@@ -60,7 +59,8 @@ class RSSPlugin:
                 except Exception as exc:
                     logger.warning("RSS watcher update failed (%s)", type(exc).__name__)
                 next_poll = now + self.poll_seconds
-            self.tick(now)
+            if not self._stop_event.is_set():
+                self.tick(now)
             self._stop_event.wait(1.0)
 
     def add_entries(self, entries):
@@ -95,11 +95,18 @@ class RSSPlugin:
         if entry.avatar_url:
             try:
                 response = self.watcher.session.get(
-                    entry.avatar_url, timeout=self.watcher.timeout
+                    entry.avatar_url,
+                    timeout=self.watcher.timeout,
+                    stream=True,
                 )
                 response.raise_for_status()
-                if len(response.content) <= 512_000:
-                    avatar = response.content
+                content = bytearray()
+                for chunk in response.iter_content(chunk_size=16_384):
+                    content.extend(chunk)
+                    if len(content) > 512_000:
+                        break
+                else:
+                    avatar = bytes(content)
             except Exception:
                 logger.debug("RSS avatar unavailable", exc_info=True)
         with self.display_lock:

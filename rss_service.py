@@ -22,6 +22,15 @@ import requests
 logger = logging.getLogger(__name__)
 
 
+def env_int(name: str, default: int) -> int:
+    value = os.getenv(name, "").strip()
+    try:
+        return int(value) if value else default
+    except ValueError:
+        logger.warning("Invalid %s value; using %s", name, default)
+        return default
+
+
 class _TextExtractor(HTMLParser):
     def __init__(self):
         super().__init__()
@@ -170,7 +179,7 @@ class RSSWatcher:
         self.enabled = os.getenv(
             "rss_watch_enabled", "false"
         ).lower() == "true" and bool(self.sources)
-        self.timeout = max(1, int(os.getenv("rss_watch_timeout", "10")))
+        self.timeout = max(1, env_int("rss_watch_timeout", 10))
         self.show_existing = (
             os.getenv("rss_watch_show_existing", "false").lower() == "true"
         )
@@ -182,7 +191,7 @@ class RSSWatcher:
 
     def _load_state(self):
         try:
-            data = json.loads(self.state_path.read_text())
+            data = json.loads(self.state_path.read_text(encoding="utf-8"))
             return {url: list(keys) for url, keys in data.get("seen", {}).items()}
         except (OSError, ValueError, TypeError):
             return {}
@@ -194,7 +203,7 @@ class RSSWatcher:
             dir=self.state_path.parent, prefix=".rss-state-"
         )
         try:
-            with os.fdopen(fd, "w") as handle:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
                 handle.write(payload)
             os.replace(temporary, self.state_path)
         finally:

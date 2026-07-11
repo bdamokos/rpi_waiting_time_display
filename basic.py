@@ -29,6 +29,7 @@ from token_usage import (
     token_view_at,
 )
 from screen_arbiter import ScreenArbiter
+from calendar_plugin import CalendarPlugin
 
 logger = logging.getLogger(__name__)
 # Set logging level for PIL.PngImagePlugin and urllib3.connectionpool to warning
@@ -319,6 +320,12 @@ class DisplayManager:
         self.token_views = configured_token_views()
         self.current_display_mode = None
         self.current_token_view = None
+        self.calendar_plugin = CalendarPlugin(
+            epd,
+            self.screen_arbiter,
+            self._display_lock,
+            on_render=self._calendar_rendered,
+        )
         logger.info(f"DisplayManager initialized with min refresh interval: {self.min_refresh_interval}s")
         logger.info(f"DisplayManager initialized with coordinates: {self.coordinates_lat}, {self.coordinates_lng}")
         logger.info(f"DisplayManager initialized with flight mode duration: {self.flight_mode_duration}s")
@@ -329,6 +336,12 @@ class DisplayManager:
         )
         if self.token_usage_client.enabled:
             logger.info("Token usage display enabled with views: %s", ", ".join(self.token_views))
+
+    def _calendar_rendered(self, owner):
+        self.current_display_mode = owner
+        self.current_token_view = None
+        self.in_weather_mode = False
+        self.last_display_update = datetime.now()
 
     def _scheduled_mode(self, current_time):
         if not self.token_usage_client.enabled:
@@ -388,6 +401,10 @@ class DisplayManager:
         
         # Initialize ISS tracking if enabled
         self.initialize_iss_tracking()
+
+        # Calendar events are fetched and rendered independently of the base
+        # transit/weather/token data sources.
+        self.calendar_plugin.start()
         
         # Token views do not depend on transit either. The normal update loop
         # will prefetch it when a transit or automatic window becomes active.
@@ -860,6 +877,8 @@ class DisplayManager:
         
         if self.iss_tracker:
             self.iss_tracker.stop()
+
+        self.calendar_plugin.stop()
             
         for thread in [self._check_data_thread, self._flight_thread, self._iss_thread]:
             if thread:

@@ -2,6 +2,7 @@
 __pycache__
 __pycache__/*
 .env
+breaking-news-feeds.json
 .gitignore
 logs/*
 debug_output.png

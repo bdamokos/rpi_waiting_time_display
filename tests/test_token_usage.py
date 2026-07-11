@@ -63,6 +63,14 @@ def test_schedule_supports_day_lists_and_wrapping_ranges():
 def test_invalid_schedule_is_rejected():
     with pytest.raises(ValueError):
         DisplaySchedule("private-mode@09:00-10:00")
+
+
+def test_schedule_supports_ynab_modes():
+    schedule = DisplaySchedule(
+        "ynab@weekends@09:00-12:00,ynab-always@12:00-13:00"
+    )
+    assert schedule.mode_at(datetime(2026, 7, 11, 10, 0)) == "ynab"
+    assert schedule.mode_at(datetime(2026, 7, 11, 12, 30)) == "ynab-always"
     with pytest.raises(ValueError):
         DisplaySchedule("token@funday@09:00-10:00")
 

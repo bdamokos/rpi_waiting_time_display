@@ -436,11 +436,13 @@ class DisplayManager:
                 self.override_priority,
                 self.override_duration_seconds,
             )
-        rendered = self._render_display_override() if selected else False
+        rendered = self._render_display_override(normalized) if selected else False
         if selected and not rendered:
             released = self._release_failed_override()
             if released:
                 self._force_display_update()
+        elif selected and rendered:
+            self._last_screen_owner = self.OVERRIDE_SCREEN_OWNER
         return {
             "accepted": True,
             "module": normalized,
@@ -474,12 +476,13 @@ class DisplayManager:
             "module": module,
             "active_owner": self.screen_arbiter.active_owner(),
             "duration_seconds": self.override_duration_seconds,
-            "modules": ["calendar", "codex", "flights", "transit", "weather"],
+            "modules": sorted(set(self.OVERRIDE_MODULE_ALIASES.values())),
         }
 
-    def _render_display_override(self):
-        with self._override_lock:
-            module = self._override_module
+    def _render_display_override(self, module=None):
+        if module is None:
+            with self._override_lock:
+                module = self._override_module
         if not module or not self.screen_arbiter.can_render(self.OVERRIDE_SCREEN_OWNER):
             return False
         if module == "calendar":

@@ -1,4 +1,8 @@
-from display_override_api import _is_private_client, create_override_app
+from display_override_api import (
+    DisplayOverrideServer,
+    _is_private_client,
+    create_override_app,
+)
 from screen_arbiter import ScreenArbiter
 
 
@@ -8,6 +12,14 @@ def test_private_client_detection():
     assert _is_private_client("fd00::1")
     assert not _is_private_client("8.8.8.8")
     assert not _is_private_client("invalid")
+
+
+def test_override_server_defaults_to_loopback(monkeypatch):
+    monkeypatch.delenv("display_override_api_host", raising=False)
+
+    server = DisplayOverrideServer(lambda module: {}, lambda: {}, lambda: {})
+
+    assert server.host == "127.0.0.1"
 
 
 def test_override_api_accepts_json_and_path():
@@ -56,7 +68,10 @@ def test_failed_override_releases_active_claim(monkeypatch):
     import threading
 
     manager._override_lock = threading.RLock()
-    manager._render_display_override = lambda: False
+    rendered_modules = []
+    manager._render_display_override = (
+        lambda module=None: rendered_modules.append(module) or False
+    )
     restored = []
     manager._force_display_update = lambda: restored.append(True)
 
@@ -66,4 +81,36 @@ def test_failed_override_releases_active_claim(monkeypatch):
     assert not result["rendered"]
     assert manager.screen_arbiter.active_owner() is None
     assert manager._override_module is None
+    assert rendered_modules == ["weather"]
     assert restored == [True]
+
+
+def test_successful_override_records_owner_and_reports_canonical_modules():
+    from basic import DisplayManager
+
+    manager = DisplayManager.__new__(DisplayManager)
+    manager.screen_arbiter = ScreenArbiter()
+    manager.override_priority = 30
+    manager.override_duration_seconds = 300
+    manager._override_module = None
+    manager._last_screen_owner = None
+    import threading
+
+    manager._override_lock = threading.RLock()
+    rendered_modules = []
+    manager._render_display_override = (
+        lambda module=None: rendered_modules.append(module) or True
+    )
+
+    result = manager.request_display_override("codex")
+
+    assert result["module"] == "token"
+    assert rendered_modules == ["token"]
+    assert manager._last_screen_owner == manager.OVERRIDE_SCREEN_OWNER
+    assert manager.display_override_status()["modules"] == [
+        "calendar",
+        "flights",
+        "token",
+        "transit",
+        "weather",
+    ]

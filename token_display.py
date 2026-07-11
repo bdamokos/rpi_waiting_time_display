@@ -108,6 +108,20 @@ def _today_cost(snapshot: TokenUsageSnapshot) -> float:
     )
 
 
+def _chart_slots(count: int, left: int, right: int):
+    if count <= 0:
+        return []
+    gap = 2 if count <= 16 else 1
+    span = right - left
+    return [
+        (
+            round(left + span * index / count),
+            round(left + span * (index + 1) / count) - gap,
+        )
+        for index in range(count)
+    ]
+
+
 def _cumulative_points(days, left: int, top: int, right: int, bottom: int):
     if not days:
         return []
@@ -117,10 +131,10 @@ def _cumulative_points(days, left: int, top: int, right: int, bottom: int):
         running_total += max(0, day.cost_usd)
         cumulative.append(running_total)
     maximum = cumulative[-1] or 1
-    x_step = (right - left) / len(days)
+    slots = _chart_slots(len(days), left, right)
     return [(left, bottom)] + [
         (
-            round(left + x_step * (index + 1)),
+            slots[index + 1][0] if index + 1 < len(slots) else right,
             round(bottom - (bottom - top) * value / maximum),
         )
         for index, value in enumerate(cumulative)
@@ -149,13 +163,12 @@ def draw_month_usage(epd, snapshot: TokenUsageSnapshot, set_base_image: bool = F
     )
     if days:
         maximum = max(day.cost_usd for day in days) or 1
-        gap = 2 if len(days) <= 16 else 1
-        width = max(2, (chart_right - chart_left - gap * (len(days) - 1)) // len(days))
-        for index, day in enumerate(days):
+        for day, (left, right) in zip(
+            days, _chart_slots(len(days), chart_left, chart_right)
+        ):
             height = max(1, round((chart_bottom - chart_top) * day.cost_usd / maximum))
-            x = chart_left + index * (width + gap)
             draw.rectangle(
-                (x, chart_bottom - height, x + width - 1, chart_bottom - 1), fill=black
+                (left, chart_bottom - height, right, chart_bottom - 1), fill=black
             )
         cumulative = _cumulative_points(
             days, chart_left, chart_top, chart_right, chart_bottom

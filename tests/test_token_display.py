@@ -1,3 +1,5 @@
+from itertools import pairwise
+
 from PIL import Image, ImageChops, ImageDraw
 
 from display_adapter import MockDisplay
@@ -59,9 +61,17 @@ def test_month_view_cumulative_line_runs_from_chart_origin_to_top_right():
 
     assert points[0] == (7, 109)
     assert points[-1] == (243, 73)
-    assert all(
-        current[1] <= previous[1] for previous, current in zip(points, points[1:])
-    )
+    assert all(current[1] <= previous[1] for previous, current in pairwise(points))
+
+
+def test_month_view_cumulative_line_stays_aligned_across_31_days():
+    payload = {**SAMPLE, "daily": SAMPLE["daily"] * 15 + SAMPLE["daily"][:1]}
+    snapshot = TokenUsageSnapshot.from_dict(payload)
+
+    points = _cumulative_points(snapshot.daily, 7, 73, 243, 109)
+
+    assert len(points) == 32
+    assert points[-1] == (243, 73)
 
 
 def test_month_view_uses_snapshot_date_for_today_total():

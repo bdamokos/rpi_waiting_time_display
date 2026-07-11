@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import os
 from datetime import datetime
-from typing import Optional
-
 from PIL import Image, ImageDraw, ImageFont
 
 from display_adapter import return_display_lock
@@ -177,4 +175,47 @@ def draw_usage_limits(epd, snapshot: TokenUsageSnapshot, set_base_image: bool = 
     )
     _limit_bar(draw, black, white, 31, "5 HOUR", snapshot.primary, fonts)
     _limit_bar(draw, black, white, 76, "WEEK", snapshot.secondary, fonts)
+    _finish(epd, image, set_base_image)
+
+
+def draw_usage_reset(epd, snapshot: TokenUsageSnapshot, set_base_image: bool = False):
+    """Render a transient, glanceable state when live capacity resets."""
+
+    image, draw, black, white = _canvas(epd)
+    fonts = _fonts()
+    label, number, tiny, micro = fonts
+    _header(draw, black, white, "CAPACITY RESTORED", snapshot.stale, fonts)
+
+    # An open ring reads as refresh/reset without relying on a font glyph that
+    # may be unavailable on the Raspberry Pi image.
+    draw.arc((10, 33, 78, 101), start=35, end=326, fill=black, width=7)
+    draw.polygon(((69, 30), (81, 35), (71, 43)), fill=black)
+
+    notice = snapshot.reset_notice
+    if notice == "secondary":
+        title = "WEEKLY LIMIT"
+        window = snapshot.secondary
+    elif notice == "both":
+        title = "BOTH LIMITS"
+        window = snapshot.primary
+    else:
+        title = "5 HOUR LIMIT"
+        window = snapshot.primary
+
+    draw.text((93, 32), title, font=micro, fill=black)
+    draw.text((91, 45), "RESET", font=number, fill=black)
+    if notice == "both":
+        capacity = (
+            f"5H {round(snapshot.primary.remaining_percent)}%  "
+            f"WEEK {round(snapshot.secondary.remaining_percent)}%"
+        )
+        capacity_font = tiny
+    else:
+        capacity = f"{round(window.remaining_percent)}% AVAILABLE"
+        capacity_font = label
+    draw.text((92, 73), capacity, font=capacity_font, fill=black)
+
+    draw.line((7, 106, 243, 106), fill=black, width=1)
+    next_reset = _reset_label(window).replace("RESET", "NEXT", 1)
+    draw.text((7, 109), next_reset, font=micro, fill=black)
     _finish(epd, image, set_base_image)

@@ -7,7 +7,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, FrozenSet, List, Optional
 from urllib.request import Request, urlopen
@@ -154,6 +154,7 @@ class TokenUsageSnapshot:
     active: bool = False
     currency: str = "USD"
     stale: bool = False
+    reset_notice: Optional[str] = None
 
     @classmethod
     def from_dict(cls, payload: Dict[str, Any]) -> "TokenUsageSnapshot":
@@ -197,6 +198,47 @@ class TokenUsageSnapshot:
         )
 
 
+def _reset_time(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed
+    except (TypeError, ValueError):
+        return None
+
+
+def _window_has_reset(previous: RateWindow, current: RateWindow) -> bool:
+    previous_reset = _reset_time(previous.resets_at)
+    current_reset = _reset_time(current.resets_at)
+    return bool(
+        previous_reset
+        and current_reset
+        and current_reset > previous_reset
+        and current.used_percent < previous.used_percent
+    )
+
+
+def detect_reset_notice(
+    previous: Optional[TokenUsageSnapshot], current: TokenUsageSnapshot
+) -> Optional[str]:
+    """Identify a reset from two fresh snapshots without extending the schema."""
+
+    if not previous or previous.stale or current.stale:
+        return None
+    primary = _window_has_reset(previous.primary, current.primary)
+    secondary = _window_has_reset(previous.secondary, current.secondary)
+    if primary and secondary:
+        return "both"
+    if primary:
+        return "primary"
+    if secondary:
+        return "secondary"
+    return None
+
+
 class TokenUsageClient:
     """Read normalized usage JSON from HTTP or a file with last-good caching."""
 
@@ -213,11 +255,17 @@ class TokenUsageClient:
         self.max_stale_seconds = int(
             os.getenv("token_usage_max_stale_seconds", "21600")
         )
+        self.reset_notice_duration = max(
+            30, int(os.getenv("token_usage_reset_notice_duration", "300"))
+        )
         self.cache_file = Path(
             os.getenv("token_usage_cache_file", "cache/token_usage_last_good.json")
         )
         self._snapshot: Optional[TokenUsageSnapshot] = None
+        self._last_live_snapshot: Optional[TokenUsageSnapshot] = None
         self._last_fetch_monotonic = 0.0
+        self._reset_notice_kind: Optional[str] = None
+        self._reset_notice_until = 0.0
 
     def _read_payload(self) -> Dict[str, Any]:
         if self.source == "file":
@@ -270,11 +318,17 @@ class TokenUsageClient:
             and not force
             and now - self._last_fetch_monotonic < self.refresh_interval
         ):
-            return self._snapshot
+            return self._apply_reset_notice(self._snapshot, now)
         self._last_fetch_monotonic = now
         try:
             payload = self._read_payload()
-            self._snapshot = TokenUsageSnapshot.from_dict(payload)
+            snapshot = TokenUsageSnapshot.from_dict(payload)
+            reset_notice = detect_reset_notice(self._last_live_snapshot, snapshot)
+            if reset_notice:
+                self._reset_notice_kind = reset_notice
+                self._reset_notice_until = now + self.reset_notice_duration
+            self._snapshot = snapshot
+            self._last_live_snapshot = snapshot
             self._write_cache(payload)
         except Exception as exc:
             logger.warning("Token usage source unavailable: %s", exc)
@@ -283,7 +337,24 @@ class TokenUsageClient:
             self._snapshot = self._load_stale_cache()
             if self._snapshot:
                 self._snapshot.stale = True
-        return self._snapshot
+        return self._apply_reset_notice(self._snapshot, now)
+
+    def _apply_reset_notice(
+        self, snapshot: Optional[TokenUsageSnapshot], now: float
+    ) -> Optional[TokenUsageSnapshot]:
+        if not snapshot:
+            return None
+        if (
+            self._reset_notice_kind
+            and now < self._reset_notice_until
+            and not snapshot.stale
+        ):
+            snapshot.reset_notice = self._reset_notice_kind
+        else:
+            snapshot.reset_notice = None
+            if now >= self._reset_notice_until:
+                self._reset_notice_kind = None
+        return snapshot
 
 
 def configured_schedule() -> DisplaySchedule:

@@ -21,7 +21,7 @@ import math
 from flights import check_flights, gather_flights_within_radius, update_display_with_flights, enhance_flight_data
 from threading import Lock, Event
 from PIL import Image
-from token_display import draw_month_usage, draw_usage_limits
+from token_display import draw_month_usage, draw_usage_limits, draw_usage_reset
 from token_usage import (
     TokenUsageClient,
     configured_schedule,
@@ -361,7 +361,9 @@ class DisplayManager:
             return scheduled_mode
         snapshot = self.token_usage_client.get_snapshot()
         if snapshot and not snapshot.stale and (
-            scheduled_mode == "token-always" or snapshot.active
+            scheduled_mode == "token-always"
+            or snapshot.active
+            or getattr(snapshot, "reset_notice", None)
         ):
             return scheduled_mode
         return self._token_fallback_mode()
@@ -377,11 +379,16 @@ class DisplayManager:
 
     def _draw_token_usage(self, current_time, require_active=True):
         snapshot = self.token_usage_client.get_snapshot()
-        if not snapshot or snapshot.stale or (require_active and not snapshot.active):
+        reset_notice = getattr(snapshot, "reset_notice", None) if snapshot else None
+        if not snapshot or snapshot.stale or (
+            require_active and not snapshot.active and not reset_notice
+        ):
             return False
-        view = token_view_at(current_time, self.token_views)
+        view = "reset" if reset_notice else token_view_at(current_time, self.token_views)
         set_base_image = self.current_display_mode != "token" or self.current_token_view != view
-        if view == "month":
+        if view == "reset":
+            draw_usage_reset(self.epd, snapshot, set_base_image=set_base_image)
+        elif view == "month":
             draw_month_usage(self.epd, snapshot, set_base_image=set_base_image)
         else:
             draw_usage_limits(self.epd, snapshot, set_base_image=set_base_image)

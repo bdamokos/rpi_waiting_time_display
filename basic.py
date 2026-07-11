@@ -22,6 +22,12 @@ from flights import check_flights, gather_flights_within_radius, update_display_
 from threading import Lock, Event
 from PIL import Image
 from token_display import draw_month_usage, draw_usage_limits
+from ynab_budget import (
+    YnabBudgetClient,
+    configured_views as configured_ynab_views,
+    view_at as ynab_view_at,
+)
+from ynab_display import draw_ynab_view
 from token_usage import (
     TokenUsageClient,
     configured_schedule,
@@ -336,10 +342,13 @@ class DisplayManager:
         self.next_update_time = None
         self.next_prefetch_time = None
         self.token_usage_client = TokenUsageClient()
+        self.ynab_client = YnabBudgetClient()
         self.display_schedule = configured_schedule()
         self.token_views = configured_token_views()
+        self.ynab_views = configured_ynab_views()
         self.current_display_mode = None
         self.current_token_view = None
+        self.current_ynab_view = None
         self.calendar_plugin = CalendarPlugin(
             epd,
             self.screen_arbiter,
@@ -367,6 +376,8 @@ class DisplayManager:
         )
         if self.token_usage_client.enabled:
             logger.info("Token usage display enabled with views: %s", ", ".join(self.token_views))
+        if self.ynab_client.enabled:
+            logger.info("YNAB display enabled with views: %s", ", ".join(self.ynab_views))
 
     def _calendar_rendered(self, owner):
         self._plugin_rendered(owner)
@@ -378,11 +389,19 @@ class DisplayManager:
         self.last_display_update = datetime.now()
 
     def _scheduled_mode(self, current_time):
-        if not self.token_usage_client.enabled:
-            return "auto"
         scheduled_mode = self.display_schedule.mode_at(current_time)
+        if scheduled_mode in {"ynab", "ynab-always"}:
+            if not self.ynab_client.enabled:
+                return self._ynab_fallback_mode()
+            return (
+                scheduled_mode
+                if self.ynab_client.get_snapshot()
+                else self._ynab_fallback_mode()
+            )
         if scheduled_mode not in {"token", "token-always"}:
             return scheduled_mode
+        if not self.token_usage_client.enabled:
+            return self._token_fallback_mode()
         snapshot = self.token_usage_client.get_snapshot()
         if snapshot and not snapshot.stale and (
             scheduled_mode == "token-always" or snapshot.active
@@ -395,8 +414,17 @@ class DisplayManager:
         return mode in {"token", "token-always"}
 
     @staticmethod
+    def _is_ynab_mode(mode):
+        return mode in {"ynab", "ynab-always"}
+
+    @staticmethod
     def _token_fallback_mode():
         mode = os.getenv("token_usage_fallback_mode", "transit").strip().lower()
+        return mode if mode in {"auto", "transit", "weather"} else "transit"
+
+    @staticmethod
+    def _ynab_fallback_mode():
+        mode = os.getenv("ynab_fallback_mode", "transit").strip().lower()
         return mode if mode in {"auto", "transit", "weather"} else "transit"
 
     def _draw_token_usage(self, current_time, require_active=True):
@@ -411,6 +439,28 @@ class DisplayManager:
             draw_usage_limits(self.epd, snapshot, set_base_image=set_base_image)
         self.current_display_mode = "token"
         self.current_token_view = view
+        self.current_ynab_view = None
+        self.in_weather_mode = False
+        return True
+
+    def _draw_ynab(self, current_time):
+        snapshot = self.ynab_client.get_snapshot()
+        if not snapshot:
+            return False
+        view = ynab_view_at(current_time, self.ynab_views)
+        set_base_image = (
+            self.current_display_mode != "ynab" or self.current_ynab_view != view
+        )
+        draw_ynab_view(
+            self.epd,
+            snapshot,
+            view,
+            now=current_time,
+            set_base_image=set_base_image,
+        )
+        self.current_display_mode = "ynab"
+        self.current_ynab_view = view
+        self.current_token_view = None
         self.in_weather_mode = False
         return True
 
@@ -787,6 +837,13 @@ class DisplayManager:
                     return False
                 current_time = datetime.now()
                 scheduled_mode = self._scheduled_mode(current_time)
+                if self._is_ynab_mode(scheduled_mode) and self._draw_ynab(
+                    current_time
+                ):
+                    self.last_display_update = current_time
+                    return True
+                if self._is_ynab_mode(scheduled_mode):
+                    scheduled_mode = self._ynab_fallback_mode()
                 if self._is_token_mode(scheduled_mode) and self._draw_token_usage(
                     current_time, require_active=scheduled_mode == "token"
                 ):
@@ -957,6 +1014,13 @@ class DisplayManager:
                                 self.prefetch_done = False
                             continue
                         scheduled_mode = self._scheduled_mode(current_time)
+                        if self._is_ynab_mode(scheduled_mode):
+                            if self._draw_ynab(current_time):
+                                self.last_display_update = datetime.now()
+                                logger.info("YNAB display updated successfully")
+                                scheduled_mode = "rendered"
+                            else:
+                                scheduled_mode = self._ynab_fallback_mode()
                         if self._is_token_mode(scheduled_mode):
                             if self._draw_token_usage(
                                 current_time,

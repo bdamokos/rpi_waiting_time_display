@@ -33,3 +33,7 @@ Flights default to priority `50`. ISS defaults to `60` when the existing
 
 Future plugins should use bounded claims and check `can_render(owner)` again
 while holding the display lock immediately before writing to the device.
+
+The RSS watcher defaults to priority `30`: it interrupts the scheduled base
+screen and calendar agenda glances, but yields to upcoming calendar events,
+flights, and the priority ISS view. Set `rss_watch_priority` to change this.

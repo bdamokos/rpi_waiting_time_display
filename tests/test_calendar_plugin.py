@@ -142,6 +142,25 @@ def test_forced_agenda_yields_to_higher_priority(monkeypatch):
     assert rendered == []
 
 
+def test_forced_agenda_skips_disabled_calendar(monkeypatch):
+    rendered = []
+    plugin = _plugin(monkeypatch, rendered)
+    plugin.enabled = False
+
+    assert not plugin.render_forced_agenda("api-override")
+    assert rendered == []
+
+
+def test_forced_agenda_handles_fetch_failure(monkeypatch):
+    rendered = []
+    plugin = _plugin(monkeypatch, rendered)
+    plugin.client.get_events = lambda now: (_ for _ in ()).throw(RuntimeError("offline"))
+    plugin.arbiter.claim("api-override", 30, 300)
+
+    assert not plugin.render_forced_agenda("api-override")
+    assert rendered == []
+
+
 def test_all_day_event_only_appears_in_agenda(monkeypatch):
     rendered = []
     plugin = _plugin(monkeypatch, rendered)

@@ -99,6 +99,7 @@ class FeedEntry:
     handle: str = ""
     avatar_url: str = ""
     published: Optional[datetime] = None
+    categories: tuple[str, ...] = ()
 
 
 def configured_sources() -> list[FeedSource]:
@@ -156,6 +157,12 @@ def parse_feed(content: bytes, source: FeedSource) -> list[FeedEntry]:
         )
         key = hashlib.sha256(f"{source.url}|{identity}".encode()).hexdigest()
         published = _parse_date(_text(node, "pubdate", "published", "updated", "date"))
+        categories = tuple(
+            category
+            for child in node
+            if _local_name(child.tag) in {"category", "subject"}
+            if (category := clean_text("".join(child.itertext())))
+        )
         parsed.append(
             FeedEntry(
                 key=key,
@@ -168,6 +175,7 @@ def parse_feed(content: bytes, source: FeedSource) -> list[FeedEntry]:
                 handle=source.handle,
                 avatar_url=urljoin(source.url, avatar_url),
                 published=published,
+                categories=categories,
             )
         )
     return parsed

@@ -7,7 +7,9 @@ from breaking_news_service import (
     BreakingSource,
     configured_breaking_sources,
     headline_fingerprint,
+    is_sports_entry,
 )
+from rss_service import FeedEntry
 
 
 def _rss(*items):
@@ -125,6 +127,80 @@ def test_keyword_normalization_uses_unicode_case_folding(monkeypatch, tmp_path):
     monkeypatch.setenv("breaking_news_config_file", str(path))
 
     assert configured_breaking_sources()[0].keywords == ("strasse",)
+
+
+def test_sport_exclusion_defaults_on_and_can_be_disabled(monkeypatch, tmp_path):
+    path = tmp_path / "feeds.json"
+    path.write_text(
+        json.dumps(
+            [
+                {"url": "https://one.test/feed"},
+                {"url": "https://two.test/feed", "exclude_sports": False},
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("breaking_news_config_file", str(path))
+
+    sources = configured_breaking_sources()
+
+    assert sources[0].exclude_sports is True
+    assert sources[1].exclude_sports is False
+
+
+def test_bbc_sport_link_and_feed_category_are_sports():
+    bbc = FeedEntry(
+        "bbc",
+        "https://feeds.bbci.co.uk/news/rss.xml",
+        "breaking",
+        "BBC News",
+        "Breaking: transfer confirmed",
+        link="https://www.bbc.com/sport/football/articles/example",
+    )
+    category = FeedEntry(
+        "wire",
+        "https://wire.test/rss",
+        "breaking",
+        "Wire",
+        "Breaking: final result",
+        categories=("Sport",),
+    )
+
+    assert is_sports_entry(bbc)
+    assert is_sports_entry(category)
+
+
+def test_non_sport_bbc_breaking_story_is_not_filtered():
+    entry = FeedEntry(
+        "bbc",
+        "https://feeds.bbci.co.uk/news/rss.xml",
+        "breaking",
+        "BBC News",
+        "Breaking: government announces policy",
+        link="https://www.bbc.com/news/articles/example",
+    )
+
+    assert not is_sports_entry(entry)
+
+
+def test_poll_suppresses_new_bbc_sport_item(monkeypatch, tmp_path):
+    baseline = _rss(("1", "Breaking: initial story"))
+    updated = b"""<rss><channel><title>BBC News</title>
+      <item><title>Breaking: cup final result</title><guid>sport-2</guid>
+        <link>https://www.bbc.com/sport/football/articles/example</link>
+        <pubDate>Sat, 11 Jul 2026 10:00:00 GMT</pubDate></item>
+      <item><title>Breaking: initial story</title><guid>1</guid>
+        <pubDate>Sat, 11 Jul 2026 10:00:00 GMT</pubDate></item>
+    </channel></rss>"""
+    watcher = _watcher(
+        monkeypatch,
+        tmp_path,
+        [BreakingSource("https://feeds.bbci.co.uk/news/rss.xml")],
+        [Response(baseline), Response(updated)],
+    )
+
+    assert watcher.poll() == []
+    assert watcher.poll() == []
 
 
 def test_first_poll_baselines_then_only_new_matching_headline_is_returned(

@@ -37,6 +37,7 @@ class BreakingSource:
     match: str = "keywords"
     keywords: tuple[str, ...] = DEFAULT_KEYWORDS
     headers: tuple[tuple[str, str], ...] = ()
+    exclude_sports: bool = True
 
 
 def _source_from_dict(value) -> Optional[BreakingSource]:
@@ -66,6 +67,10 @@ def _source_from_dict(value) -> Optional[BreakingSource]:
     ):
         logger.warning("Ignoring breaking-news source with invalid headers")
         return None
+    exclude_sports = value.get("exclude_sports", True)
+    if not isinstance(exclude_sports, bool):
+        logger.warning("Ignoring breaking-news source with invalid exclude_sports")
+        return None
     label = value.get("label")
     return BreakingSource(
         url=url.strip(),
@@ -73,6 +78,7 @@ def _source_from_dict(value) -> Optional[BreakingSource]:
         match=match,
         keywords=tuple(item.strip().casefold() for item in keywords if item.strip()),
         headers=tuple(headers.items()),
+        exclude_sports=exclude_sports,
     )
 
 
@@ -106,6 +112,30 @@ def headline_fingerprint(title: str) -> str:
 def _safe_source_name(url: str) -> str:
     parsed = urlsplit(url)
     return parsed.hostname or "configured source"
+
+
+def is_sports_entry(entry: FeedEntry) -> bool:
+    """Use explicit feed/link metadata; avoid guessing from headline wording."""
+
+    link = urlsplit(entry.link)
+    path_parts = {part.casefold() for part in link.path.split("/") if part}
+    if path_parts.intersection({"sport", "sports"}):
+        return True
+    if "sport" in entry.publication.casefold().split():
+        return True
+    sport_categories = {
+        "sport",
+        "sports",
+        "football",
+        "soccer",
+        "rugby",
+        "cricket",
+        "tennis",
+        "golf",
+        "formula 1",
+        "motorsport",
+    }
+    return any(category.casefold() in sport_categories for category in entry.categories)
 
 
 class BreakingNewsWatcher:
@@ -255,6 +285,7 @@ class BreakingNewsWatcher:
                     if (
                         entry.key not in previous
                         and fingerprint not in known_fingerprints
+                        and not (source.exclude_sports and is_sports_entry(entry))
                         and self._qualifies(entry, source)
                         and self._fresh(entry)
                     ):

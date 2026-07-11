@@ -77,6 +77,7 @@ python webserial_server.py
 - **token_usage.py**: Optional schedule parser and normalized token-usage client
 - **token_display.py**: Compact month-to-date and rate-limit e-paper views
 - **rss_service.py**, **rss_plugin.py**: RSS/Nitter polling and arbitrated notifications
+- **breaking_news_service.py**, **breaking_news_plugin.py**: baseline-first breaking-news polling and arbitrated alerts
 - **tools/token_usage_server.py**: Authenticated bridge for a remote usage source
 
 ### Key Design Patterns

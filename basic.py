@@ -43,6 +43,7 @@ from token_usage import (
 )
 from screen_arbiter import ScreenArbiter
 from rss_plugin import RSSPlugin
+from breaking_news_plugin import BreakingNewsPlugin
 from calendar_plugin import CalendarPlugin
 from display_override_api import DisplayOverrideServer
 
@@ -375,6 +376,12 @@ class DisplayManager:
             self._display_lock,
             on_render=self._plugin_rendered,
         )
+        self.breaking_news_plugin = BreakingNewsPlugin(
+            epd,
+            self.screen_arbiter,
+            self._display_lock,
+            on_render=self._plugin_rendered,
+        )
         logger.info(f"DisplayManager initialized with min refresh interval: {self.min_refresh_interval}s")
         logger.info(f"DisplayManager initialized with coordinates: {self.coordinates_lat}, {self.coordinates_lng}")
         logger.info(f"DisplayManager initialized with flight mode duration: {self.flight_mode_duration}s")
@@ -663,6 +670,7 @@ class DisplayManager:
         self.calendar_plugin.start()
         self.override_server.start()
         self.rss_plugin.start()
+        self.breaking_news_plugin.start()
         
         # Token views do not depend on transit either. The normal update loop
         # will prefetch it when a transit or automatic window becomes active.
@@ -1168,6 +1176,7 @@ class DisplayManager:
         self.override_server.stop()
         self.calendar_plugin.stop()
         self.rss_plugin.stop()
+        self.breaking_news_plugin.stop()
             
         for thread in [self._check_data_thread, self._flight_thread, self._iss_thread]:
             if thread:

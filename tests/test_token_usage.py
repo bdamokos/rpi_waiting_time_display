@@ -249,6 +249,17 @@ def test_reset_detection_requires_timestamp_advance_and_usage_drop():
     )
 
 
+def test_reset_detection_ignores_non_string_reset_timestamps():
+    previous = TokenUsageSnapshot.from_dict(SAMPLE)
+    changed = deepcopy(SAMPLE)
+    changed["limits"]["primary"] = {
+        "used_percent": 2,
+        "resets_at": 12345,
+    }
+
+    assert detect_reset_notice(previous, TokenUsageSnapshot.from_dict(changed)) is None
+
+
 def test_draw_token_usage_prioritizes_reset_notice(monkeypatch):
     from basic import DisplayManager
 

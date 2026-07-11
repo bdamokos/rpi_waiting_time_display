@@ -1,6 +1,35 @@
 from display_override_api import _is_private_client, create_override_app
 
 
+def _display_manager_for_override(monkeypatch, tmp_path):
+    import threading
+    from types import SimpleNamespace
+
+    import iss
+    from basic import DisplayManager
+    from display_adapter import MockDisplay
+    from screen_arbiter import ScreenArbiter
+
+    monkeypatch.chdir(tmp_path)
+    manager = DisplayManager.__new__(DisplayManager)
+    manager.epd = MockDisplay()
+    manager.screen_arbiter = ScreenArbiter()
+    manager.override_priority = 30
+    manager.override_duration_seconds = 300
+    manager._override_module = None
+    manager._override_lock = threading.RLock()
+    manager._display_lock = threading.Lock()
+    manager.iss_tracker = SimpleNamespace(
+        next_known_pass=lambda now: {"risetime": now + 600, "duration": 300}
+    )
+    manager.current_display_mode = None
+    manager.current_token_view = None
+    manager.in_weather_mode = False
+    manager.last_display_update = None
+    monkeypatch.setattr(iss, "display_next_iss_pass", lambda *args, **kwargs: None)
+    return manager
+
+
 def test_private_client_detection():
     assert _is_private_client("127.0.0.1")
     assert _is_private_client("192.168.1.20")
@@ -42,3 +71,24 @@ def test_override_api_validates_access_auth_and_payload():
     headers = {"Authorization": "Bearer secret"}
     assert client.post("/api/display", headers=headers, json={}).status_code == 400
     assert client.post("/api/display/nope", headers=headers).status_code == 404
+
+
+def test_iss_override_renders_cached_prediction(monkeypatch, tmp_path):
+    manager = _display_manager_for_override(monkeypatch, tmp_path)
+
+    result = manager.request_display_override("iss")
+
+    assert result["accepted"] is True
+    assert result["rendered"] is True
+    assert manager.current_display_mode == "iss-prediction"
+
+
+def test_live_iss_owner_keeps_priority_over_prediction_override(monkeypatch, tmp_path):
+    manager = _display_manager_for_override(monkeypatch, tmp_path)
+    assert manager.screen_arbiter.claim(manager.ISS_SCREEN_OWNER, 60, 60)
+
+    result = manager.request_display_override("iss")
+
+    assert result["accepted"] is True
+    assert result["rendered"] is False
+    assert result["active_owner"] == manager.ISS_SCREEN_OWNER

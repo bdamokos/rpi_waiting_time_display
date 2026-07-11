@@ -78,3 +78,23 @@ def test_flights_override_uses_cache_without_displacing_live_flight():
         assert manager.screen_arbiter.active_owner() == manager.FLIGHT_SCREEN_OWNER
         assert not manager._render_display_override()
         render.assert_called_once()
+
+
+def test_empty_flights_override_releases_screen_claim():
+    from basic import DisplayManager
+
+    manager = DisplayManager.__new__(DisplayManager)
+    manager.epd = Mock()
+    manager.recent_flights = RecentFlightCache()
+    manager.screen_arbiter = ScreenArbiter()
+    manager.override_priority = 30
+    manager.override_duration_seconds = 300
+    manager._override_module = None
+    manager._override_lock = RLock()
+    manager._display_lock = Lock()
+
+    result = manager.request_display_override("flights")
+
+    assert result["accepted"]
+    assert not result["rendered"]
+    assert result["active_owner"] is None

@@ -111,7 +111,7 @@ def update_display_with_recent_flights(epd, flights, set_base_image=False):
         header_font = ImageFont.truetype(font_paths["dejavu_bold"], 14)
         primary_font = ImageFont.truetype(font_paths["dejavu_bold"], 12)
         detail_font = ImageFont.truetype(font_paths["dejavu"], 10)
-    except IOError:
+    except (IOError, KeyError):
         header_font = primary_font = detail_font = ImageFont.load_default()
 
     draw.text((7, 4), "Recent flights", fill="black", font=header_font)

@@ -479,6 +479,8 @@ class DisplayManager:
                     self.current_display_mode = "flights"
                     self.current_token_view = None
                     self.in_weather_mode = False
+                else:
+                    self.screen_arbiter.release(self.OVERRIDE_SCREEN_OWNER)
             elif module == "weather":
                 weather_data = self.weather_manager.get_weather_data()
                 rendered = bool(weather_enabled and weather_data)

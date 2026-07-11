@@ -326,6 +326,7 @@ class DisplayManager:
             1, int(os.getenv("display_override_duration_seconds", "300"))
         )
         self._override_module = None
+        self._override_generation = 0
         self._override_lock = threading.RLock()
         self._last_screen_owner = None
         self.prefetch_offset = 10  # seconds before display update to fetch new data
@@ -421,6 +422,8 @@ class DisplayManager:
                 "modules": sorted(self.OVERRIDE_MODULE_ALIASES),
             }
         with self._override_lock:
+            self._override_generation += 1
+            generation = self._override_generation
             self._override_module = normalized
             selected = self.screen_arbiter.claim(
                 self.OVERRIDE_SCREEN_OWNER,
@@ -429,7 +432,7 @@ class DisplayManager:
             )
         rendered = self._render_display_override(normalized) if selected else False
         if selected and not rendered:
-            released = self._release_failed_override()
+            released = self._release_failed_override(generation)
             if released:
                 self._force_display_update()
         elif selected and rendered:
@@ -442,10 +445,12 @@ class DisplayManager:
             "active_owner": self.screen_arbiter.active_owner(),
         }
 
-    def _release_failed_override(self):
+    def _release_failed_override(self, generation=None):
         """Drop an active override that could not render its requested view."""
 
         with self._override_lock:
+            if generation is not None and generation != self._override_generation:
+                return False
             if self.screen_arbiter.active_owner() != self.OVERRIDE_SCREEN_OWNER:
                 return False
             self._override_module = None
@@ -453,6 +458,7 @@ class DisplayManager:
 
     def clear_display_override(self):
         with self._override_lock:
+            self._override_generation += 1
             self._override_module = None
             was_active = self.screen_arbiter.release(self.OVERRIDE_SCREEN_OWNER)
         if was_active:

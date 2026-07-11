@@ -63,6 +63,7 @@ def test_flights_override_uses_cache_without_displacing_live_flight():
     manager._override_module = None
     manager._override_generation = 0
     manager._override_lock = RLock()
+    manager._override_render_lock = Lock()
     manager._display_lock = Lock()
     manager.current_display_mode = None
     manager.current_token_view = None
@@ -93,6 +94,7 @@ def test_empty_flights_override_releases_screen_claim():
     manager._override_module = None
     manager._override_generation = 0
     manager._override_lock = RLock()
+    manager._override_render_lock = Lock()
     manager._display_lock = Lock()
     restored = []
     manager._force_display_update = lambda: restored.append(True)

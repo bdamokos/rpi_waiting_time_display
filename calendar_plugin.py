@@ -191,3 +191,21 @@ class CalendarPlugin:
             return False
         seconds_since_midnight = now.hour * 3600 + now.minute * 60 + now.second
         return seconds_since_midnight % self.agenda_interval < self.agenda_duration
+
+    def render_forced_agenda(self, owner: str) -> bool:
+        """Render the current agenda while an external arbiter owner is active."""
+
+        now = datetime.now(self.client.timezone)
+        events = self.client.get_events(now)
+        with self.display_lock:
+            if not self.arbiter.can_render(owner):
+                return False
+            draw_calendar_agenda(
+                self.epd,
+                events[: self.agenda_max_events],
+                now,
+                set_base_image=True,
+            )
+        if self.on_render:
+            self.on_render("calendar")
+        return True

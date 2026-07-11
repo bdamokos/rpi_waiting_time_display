@@ -99,11 +99,17 @@ class SnapshotBuilder:
             ]
             primary = usage.get("usage", {}).get("primary") or {}
             secondary = usage.get("usage", {}).get("secondary") or {}
+            reset_credits = usage.get("usage", {}).get("codexResetCredits") or {}
+            try:
+                resets_available = max(0, int(reset_credits.get("availableCount", 0)))
+            except (TypeError, ValueError):
+                resets_available = 0
             self._cached = {
                 "schema_version": 1,
                 "generated_at": datetime.now().astimezone().isoformat(),
                 "currency": cost.get("currencyCode", "USD"),
                 "limits": {
+                    "resets_available": resets_available,
                     "primary": {
                         "used_percent": float(primary.get("usedPercent", 0)),
                         "resets_at": primary.get("resetsAt"),

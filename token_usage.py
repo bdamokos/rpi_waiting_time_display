@@ -150,6 +150,7 @@ class TokenUsageSnapshot:
     daily: List[DailyUsage]
     month_cost_usd: float
     month_tokens: int
+    resets_available: int = 0
     active: bool = False
     currency: str = "USD"
     stale: bool = False
@@ -169,6 +170,10 @@ class TokenUsageSnapshot:
             if isinstance(item, dict) and item.get("date")
         ]
         month = payload.get("month_to_date") or {}
+        try:
+            resets_available = max(0, int(limits.get("resets_available", 0)))
+        except (TypeError, ValueError):
+            resets_available = 0
         return cls(
             generated_at=str(payload.get("generated_at") or ""),
             primary=RateWindow(
@@ -184,6 +189,7 @@ class TokenUsageSnapshot:
             month_tokens=int(
                 month.get("total_tokens", sum(day.total_tokens for day in daily))
             ),
+            resets_available=resets_available,
             # Missing activity information fails closed: token views are only
             # eligible when the source explicitly reports current activity.
             active=payload.get("active") is True,

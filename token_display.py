@@ -53,14 +53,41 @@ def _finish(epd, image, set_base_image: bool):
             epd.display(buffer)
 
 
-def _header(draw, black, title: str, stale: bool, fonts):
+def _reset_badge(draw, black, white, count: int, font):
+    if count <= 0:
+        return
+    text = "9+" if count > 9 else str(count)
+    # The display edge clips the circle into an app-style corner badge.
+    draw.ellipse((227, -10, 261, 24), fill=black)
+    bounds = draw.textbbox((0, 0), text, font=font)
+    width = bounds[2] - bounds[0]
+    height = bounds[3] - bounds[1]
+    draw.text(
+        (241 - width // 2, 8 - height // 2 - bounds[1]),
+        text,
+        font=font,
+        fill=white,
+    )
+
+
+def _header(
+    draw,
+    black,
+    white,
+    title: str,
+    stale: bool,
+    fonts,
+    resets_available: int = 0,
+):
     label, _, tiny, micro = fonts
     draw.text((7, 5), "CODEX", font=label, fill=black)
     draw.line((55, 13, 67, 13), fill=black, width=1)
     draw.text((72, 6), title, font=micro, fill=black)
     status = "STALE" if stale else datetime.now().strftime("%H:%M")
     width = draw.textbbox((0, 0), status, font=tiny)[2]
-    draw.text((243 - width, 6), status, font=tiny, fill=black)
+    status_right = 222 if resets_available else 243
+    draw.text((status_right - width, 6), status, font=tiny, fill=black)
+    _reset_badge(draw, black, white, resets_available, micro)
     draw.line((7, 24, 243, 24), fill=black, width=1)
 
 
@@ -78,7 +105,7 @@ def draw_month_usage(epd, snapshot: TokenUsageSnapshot, set_base_image: bool = F
     image, draw, black, white = _canvas(epd)
     fonts = _fonts()
     label, number, tiny, micro = fonts
-    _header(draw, black, "MTD / EST. API VALUE", snapshot.stale, fonts)
+    _header(draw, black, white, "MTD / EST. API VALUE", snapshot.stale, fonts)
 
     draw.text((7, 31), f"${snapshot.month_cost_usd:,.0f}", font=number, fill=black)
     draw.text((7, 58), "MONTH TO DATE", font=micro, fill=black)
@@ -139,7 +166,15 @@ def _limit_bar(draw, black, white, y: int, title: str, window: RateWindow, fonts
 def draw_usage_limits(epd, snapshot: TokenUsageSnapshot, set_base_image: bool = False):
     image, draw, black, white = _canvas(epd)
     fonts = _fonts()
-    _header(draw, black, "CAPACITY REMAINING", snapshot.stale, fonts)
+    _header(
+        draw,
+        black,
+        white,
+        "CAPACITY REMAINING",
+        snapshot.stale,
+        fonts,
+        resets_available=snapshot.resets_available,
+    )
     _limit_bar(draw, black, white, 31, "5 HOUR", snapshot.primary, fonts)
     _limit_bar(draw, black, white, 76, "WEEK", snapshot.secondary, fonts)
     _finish(epd, image, set_base_image)

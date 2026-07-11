@@ -78,6 +78,7 @@ tokens, session names, and project paths are not exposed.
   "active": true,
   "currency": "USD",
   "limits": {
+    "resets_available": 1,
     "primary": {"used_percent": 25, "resets_at": "2026-01-15T16:00:00Z"},
     "secondary": {"used_percent": 40, "resets_at": "2026-01-20T09:00:00Z"}
   },
@@ -87,6 +88,10 @@ tokens, session names, and project paths are not exposed.
   ]
 }
 ```
+
+`limits.resets_available` is the number of banked Codex rate-limit resets that
+can be applied from the Codex usage page. Older sources may omit it; the display
+then hides the corner badge.
 
 The cost shown from local Codex logs is an estimated API-price equivalent. It
 is not an invoice or the amount charged for a ChatGPT subscription.

@@ -17,6 +17,7 @@ SAMPLE = {
     "active": True,
     "currency": "USD",
     "limits": {
+        "resets_available": 1,
         "primary": {"used_percent": 18, "resets_at": "2026-07-10T15:00:00Z"},
         "secondary": {"used_percent": 45, "resets_at": "2026-07-14T15:00:00Z"},
     },
@@ -71,7 +72,16 @@ def test_snapshot_reports_remaining_capacity():
     assert snapshot.active is True
     assert snapshot.primary.remaining_percent == 82
     assert snapshot.secondary.remaining_percent == 55
+    assert snapshot.resets_available == 1
     assert snapshot.month_cost_usd == 123.5
+
+
+def test_snapshot_tolerates_invalid_reset_count():
+    payload = {
+        **SAMPLE,
+        "limits": {**SAMPLE["limits"], "resets_available": "unknown"},
+    }
+    assert TokenUsageSnapshot.from_dict(payload).resets_available == 0
 
 
 def test_snapshot_without_explicit_activity_is_inactive():

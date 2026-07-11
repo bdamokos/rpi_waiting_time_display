@@ -9,6 +9,7 @@ def test_bridge_normalizes_and_removes_identity_fields(monkeypatch, tmp_path):
             "provider": "codex",
             "usage": {
                 "accountEmail": "private@example.test",
+                "codexResetCredits": {"availableCount": 2},
                 "primary": {"usedPercent": 25, "resetsAt": "2026-07-10T15:00:00Z"},
                 "secondary": {"usedPercent": 40, "resetsAt": "2026-07-14T15:00:00Z"},
             },
@@ -29,9 +30,7 @@ def test_bridge_normalizes_and_removes_identity_fields(monkeypatch, tmp_path):
     ]
     activity_file = tmp_path / "session.jsonl"
     activity_file.write_text("{}\n", encoding="utf-8")
-    builder = SnapshotBuilder(
-        "codexbar", 300, RecentJsonActivity([tmp_path], 300)
-    )
+    builder = SnapshotBuilder("codexbar", 300, RecentJsonActivity([tmp_path], 300))
 
     def fake_run(*arguments):
         return usage if arguments[0] == "usage" else cost
@@ -41,6 +40,7 @@ def test_bridge_normalizes_and_removes_identity_fields(monkeypatch, tmp_path):
     snapshot = builder.build()
     serialized = str(snapshot).lower()
     assert snapshot["limits"]["primary"]["used_percent"] == 25
+    assert snapshot["limits"]["resets_available"] == 2
     assert snapshot["month_to_date"]["cost_usd"] == 12.5
     assert snapshot["active"] is True
     assert "email" not in serialized

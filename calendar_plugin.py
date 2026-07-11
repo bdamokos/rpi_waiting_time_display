@@ -67,6 +67,15 @@ class CalendarPlugin:
             ).split(",")
             if mode.strip()
         }
+        self.default_refresh_seconds = max(
+            30,
+            int(
+                os.getenv(
+                    "calendar_default_refresh_seconds",
+                    os.getenv("refresh_interval", "90"),
+                )
+            ),
+        )
         self._event_render_key = None
         self._agenda_render_key = None
         self._event_was_selected = False
@@ -176,7 +185,11 @@ class CalendarPlugin:
             self._agenda_was_selected = False
             return
         if default_due:
-            slot = "default"
+            seconds_since_midnight = now.hour * 3600 + now.minute * 60 + now.second
+            slot = (
+                "default",
+                seconds_since_midnight // self.default_refresh_seconds,
+            )
         else:
             seconds_since_midnight = now.hour * 3600 + now.minute * 60 + now.second
             slot = seconds_since_midnight // self.agenda_interval
@@ -213,4 +226,5 @@ class CalendarPlugin:
     def _default_is_due(self, now):
         if not self.default_enabled or not self.base_mode_at:
             return False
-        return self.base_mode_at(now).strip().lower() in self.default_modes
+        mode = self.base_mode_at(now)
+        return isinstance(mode, str) and mode.strip().lower() in self.default_modes

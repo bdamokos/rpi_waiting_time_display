@@ -13,7 +13,9 @@ plugin uses the raw `display_schedule` mode to define that window. By default,
 `calendar_default_modes=auto,weather,token,token-always`, so scheduled `transit`
 periods keep the bus display while other periods prefer the calendar. Change
 the comma-separated mode list to fit another installation's schedule, or leave
-the feature disabled to retain glance-only behavior.
+the feature disabled to retain glance-only behavior. The preferred agenda
+refreshes its clock every `calendar_default_refresh_seconds` (90 seconds by
+default) without relinquishing its low-priority claim.
 
 The final ten minutes before a fresh event are exclusive by default. Earlier
 event cards use priority `40`, so the default flight (`50`) and ISS (`60`)

@@ -22,7 +22,14 @@ def _event(now, minutes=120, *, stale=False):
     )
 
 
-def _plugin(monkeypatch, rendered, *, base_mode_at=None, default_enabled=False):
+def _plugin(
+    monkeypatch,
+    rendered,
+    *,
+    base_mode_at=None,
+    default_enabled=False,
+    default_refresh_seconds=3600,
+):
     monkeypatch.setenv("calendar_lead_minutes", "60")
     monkeypatch.setenv("calendar_exclusive_minutes", "10")
     monkeypatch.setenv("calendar_exclusive_enabled", "true")
@@ -35,6 +42,7 @@ def _plugin(monkeypatch, rendered, *, base_mode_at=None, default_enabled=False):
         "calendar_default_enabled", "true" if default_enabled else "false"
     )
     monkeypatch.setenv("calendar_default_modes", "auto,weather,token,token-always")
+    monkeypatch.setenv("calendar_default_refresh_seconds", str(default_refresh_seconds))
     monkeypatch.setattr(
         "calendar_plugin.draw_upcoming_event",
         lambda *args, **kwargs: rendered.append(("event", kwargs)),
@@ -229,3 +237,40 @@ def test_default_agenda_releases_when_no_events_remain(monkeypatch):
 
     assert plugin.arbiter.active_owner() is None
     assert not plugin.arbiter.has_claim(plugin.AGENDA_OWNER)
+
+
+def test_default_agenda_refreshes_clock_on_configured_cadence(monkeypatch):
+    rendered = []
+    plugin = _plugin(
+        monkeypatch,
+        rendered,
+        base_mode_at=lambda now: "weather",
+        default_enabled=True,
+        default_refresh_seconds=90,
+    )
+    now = datetime(2026, 7, 11, 8, 5, tzinfo=TIMEZONE)
+    event = _event(now, 120)
+
+    plugin.tick(now, [event])
+    plugin.tick(now + timedelta(seconds=89), [event])
+    plugin.tick(now + timedelta(seconds=90), [event])
+
+    assert rendered == [
+        ("agenda", {"set_base_image": True}),
+        ("agenda", {"set_base_image": False}),
+    ]
+
+
+def test_default_agenda_ignores_non_string_base_mode(monkeypatch):
+    rendered = []
+    plugin = _plugin(
+        monkeypatch,
+        rendered,
+        base_mode_at=lambda now: None,
+        default_enabled=True,
+    )
+    now = datetime(2026, 7, 11, 8, 5, tzinfo=TIMEZONE)
+
+    plugin.tick(now, [_event(now, 120)])
+
+    assert plugin.arbiter.active_owner() is None

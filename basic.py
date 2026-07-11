@@ -277,6 +277,7 @@ class DisplayManager:
         "bus": "transit",
         "calendar": "calendar",
         "codex": "token",
+        "iss": "iss",
         "token": "token",
         "transit": "transit",
         "weather": "weather",
@@ -571,6 +572,19 @@ class DisplayManager:
             now = datetime.now()
             if module == "token":
                 rendered = self._draw_token_usage(now, require_active=False)
+            elif module == "iss":
+                from iss import display_next_iss_pass
+
+                next_pass = (
+                    self.iss_tracker.next_known_pass(now.timestamp())
+                    if self.iss_tracker
+                    else None
+                )
+                display_next_iss_pass(self.epd, next_pass, now=now.astimezone())
+                rendered = True
+                self.current_display_mode = "iss-prediction"
+                self.current_token_view = None
+                self.in_weather_mode = False
             elif module == "weather":
                 weather_data = self.weather_manager.get_weather_data()
                 rendered = bool(weather_enabled and weather_data)

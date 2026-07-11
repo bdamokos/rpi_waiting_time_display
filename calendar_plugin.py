@@ -30,12 +30,14 @@ class CalendarPlugin:
         *,
         client: Optional[CalendarClient] = None,
         on_render: Optional[Callable[[str], None]] = None,
+        base_mode_at: Optional[Callable[[datetime], str]] = None,
     ):
         self.epd = epd
         self.arbiter = arbiter
         self.display_lock = display_lock
         self.client = client or CalendarClient()
         self.on_render = on_render
+        self.base_mode_at = base_mode_at
         self.enabled = self.client.enabled
         self.poll_seconds = max(1, int(os.getenv("calendar_poll_seconds", "1")))
         self.claim_ttl = max(5, self.poll_seconds * 3)
@@ -56,6 +58,15 @@ class CalendarPlugin:
         self.agenda_max_events = max(
             1, min(4, int(os.getenv("calendar_agenda_max_events", "4")))
         )
+        self.default_enabled = _enabled("calendar_default_enabled")
+        self.default_modes = {
+            mode.strip().lower()
+            for mode in os.getenv(
+                "calendar_default_modes",
+                "auto,weather,token,token-always",
+            ).split(",")
+            if mode.strip()
+        }
         self._event_render_key = None
         self._agenda_render_key = None
         self._event_was_selected = False
@@ -150,7 +161,8 @@ class CalendarPlugin:
             self.on_render(self.EVENT_OWNER)
 
     def _show_agenda(self, now, events):
-        if not events or not self._agenda_is_due(now):
+        default_due = self._default_is_due(now)
+        if not events or (not default_due and not self._agenda_is_due(now)):
             self.arbiter.release(self.AGENDA_OWNER)
             self._agenda_was_selected = False
             self._agenda_render_key = None
@@ -163,11 +175,17 @@ class CalendarPlugin:
         if not selected:
             self._agenda_was_selected = False
             return
-        seconds_since_midnight = now.hour * 3600 + now.minute * 60 + now.second
-        slot = seconds_since_midnight // self.agenda_interval
+        if default_due:
+            slot = "default"
+        else:
+            seconds_since_midnight = now.hour * 3600 + now.minute * 60 + now.second
+            slot = seconds_since_midnight // self.agenda_interval
         render_key = (
             slot,
-            tuple(event.uid for event in events[: self.agenda_max_events]),
+            tuple(
+                (event.uid, event.start, event.end, event.stale)
+                for event in events[: self.agenda_max_events]
+            ),
         )
         if render_key == self._agenda_render_key and self._agenda_was_selected:
             return
@@ -191,3 +209,8 @@ class CalendarPlugin:
             return False
         seconds_since_midnight = now.hour * 3600 + now.minute * 60 + now.second
         return seconds_since_midnight % self.agenda_interval < self.agenda_duration
+
+    def _default_is_due(self, now):
+        if not self.default_enabled or not self.base_mode_at:
+            return False
+        return self.base_mode_at(now).strip().lower() in self.default_modes

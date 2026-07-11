@@ -7,10 +7,21 @@ adds two screen types:
 - a short upcoming-agenda glance every configured interval (one minute every
   half hour by default).
 
+Set `calendar_default_enabled=true` to keep the upcoming agenda as the preferred
+base screen whenever useful events exist outside the commuting window. The
+plugin uses the raw `display_schedule` mode to define that window. By default,
+`calendar_default_modes=auto,weather,token,token-always`, so scheduled `transit`
+periods keep the bus display while other periods prefer the calendar. Change
+the comma-separated mode list to fit another installation's schedule, or leave
+the feature disabled to retain glance-only behavior.
+
 The final ten minutes before a fresh event are exclusive by default. Earlier
 event cards use priority `40`, so the default flight (`50`) and ISS (`60`)
 claims can temporarily override them. Agenda glances use priority `20` and
-return automatically to the scheduled transit, weather, or token screen.
+return automatically to the scheduled transit, weather, or token screen. A
+preferred default agenda uses the same low priority, so higher-priority plugin
+claims remain able to interrupt it. The normal lead-window event card and its
+exclusive final-ten-minute behavior are unchanged.
 
 ## Google Calendar setup
 

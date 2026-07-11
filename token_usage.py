@@ -356,7 +356,11 @@ class TokenUsageClient:
                 self._reset_notice_kind = None
         if reset_notice:
             return replace(snapshot, reset_notice=reset_notice)
-        return snapshot if snapshot.reset_notice is None else replace(snapshot, reset_notice=None)
+        return (
+            snapshot
+            if snapshot.reset_notice is None
+            else replace(snapshot, reset_notice=None)
+        )
 
 
 def configured_schedule() -> DisplaySchedule:

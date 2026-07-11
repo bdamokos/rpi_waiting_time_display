@@ -18,10 +18,23 @@ from wifi_manager import is_connected, no_wifi_loop, get_hostname
 from display_adapter import return_display_lock
 import threading
 import math
-from flights import check_flights, gather_flights_within_radius, update_display_with_flights, enhance_flight_data
+from flights import (
+    RecentFlightCache,
+    check_flights,
+    enhance_flight_data,
+    gather_flights_within_radius,
+    update_display_with_flights,
+    update_display_with_recent_flights,
+)
 from threading import Lock, Event
 from PIL import Image
 from token_display import draw_month_usage, draw_usage_limits, draw_usage_reset
+from ynab_budget import (
+    YnabBudgetClient,
+    configured_views as configured_ynab_views,
+    view_at as ynab_view_at,
+)
+from ynab_display import draw_ynab_view
 from token_usage import (
     TokenUsageClient,
     configured_schedule,
@@ -30,7 +43,9 @@ from token_usage import (
 )
 from screen_arbiter import ScreenArbiter
 from rss_plugin import RSSPlugin
+from breaking_news_plugin import BreakingNewsPlugin
 from calendar_plugin import CalendarPlugin
+from display_override_api import DisplayOverrideServer
 
 logger = logging.getLogger(__name__)
 # Set logging level for PIL.PngImagePlugin and urllib3.connectionpool to warning
@@ -265,6 +280,17 @@ class BusManager:
 class DisplayManager:
     FLIGHT_SCREEN_OWNER = "flight"
     ISS_SCREEN_OWNER = "iss"
+    OVERRIDE_SCREEN_OWNER = "api-override"
+    OVERRIDE_MODULE_ALIASES = {
+        "bus": "transit",
+        "calendar": "calendar",
+        "codex": "token",
+        "flights": "flights",
+        "iss": "iss",
+        "token": "token",
+        "transit": "transit",
+        "weather": "weather",
+    }
 
     def __init__(self, epd):
         self.epd = epd
@@ -291,6 +317,7 @@ class DisplayManager:
         self.coordinates_lat = float(os.getenv('Coordinates_LAT', '50.8503'))
         self.coordinates_lng = float(os.getenv('Coordinates_LNG', '4.3517'))
         self.flight_getter = None
+        self.recent_flights = RecentFlightCache(max_entries=4)
         self.in_flight_mode = False
         self.flight_mode_start = None
         self.flight_mode_duration = 30  # Duration in seconds for flight mode
@@ -311,23 +338,46 @@ class DisplayManager:
             os.getenv("screen_priority_iss", default_iss_priority)
         )
         self.screen_arbiter = ScreenArbiter()
+        self.override_priority = int(os.getenv("display_override_priority", "30"))
+        self.override_duration_seconds = max(
+            1, int(os.getenv("display_override_duration_seconds", "300"))
+        )
+        self._override_module = None
+        self._override_generation = 0
+        self._override_lock = threading.RLock()
+        self._override_render_lock = threading.Lock()
         self._last_screen_owner = None
         self.prefetch_offset = 10  # seconds before display update to fetch new data
         self.display_interval = DISPLAY_REFRESH_INTERVAL
         self.next_update_time = None
         self.next_prefetch_time = None
         self.token_usage_client = TokenUsageClient()
+        self.ynab_client = YnabBudgetClient()
         self.display_schedule = configured_schedule()
         self.token_views = configured_token_views()
+        self.ynab_views = configured_ynab_views()
         self.current_display_mode = None
         self.current_token_view = None
+        self.current_ynab_view = None
         self.calendar_plugin = CalendarPlugin(
             epd,
             self.screen_arbiter,
             self._display_lock,
             on_render=self._calendar_rendered,
+            base_mode_at=self.display_schedule.mode_at,
+        )
+        self.override_server = DisplayOverrideServer(
+            self.request_display_override,
+            self.clear_display_override,
+            self.display_override_status,
         )
         self.rss_plugin = RSSPlugin(
+            epd,
+            self.screen_arbiter,
+            self._display_lock,
+            on_render=self._plugin_rendered,
+        )
+        self.breaking_news_plugin = BreakingNewsPlugin(
             epd,
             self.screen_arbiter,
             self._display_lock,
@@ -343,6 +393,8 @@ class DisplayManager:
         )
         if self.token_usage_client.enabled:
             logger.info("Token usage display enabled with views: %s", ", ".join(self.token_views))
+        if self.ynab_client.enabled:
+            logger.info("YNAB display enabled with views: %s", ", ".join(self.ynab_views))
 
     def _calendar_rendered(self, owner):
         self._plugin_rendered(owner)
@@ -354,11 +406,19 @@ class DisplayManager:
         self.last_display_update = datetime.now()
 
     def _scheduled_mode(self, current_time):
-        if not self.token_usage_client.enabled:
-            return "auto"
         scheduled_mode = self.display_schedule.mode_at(current_time)
+        if scheduled_mode in {"ynab", "ynab-always"}:
+            if not self.ynab_client.enabled:
+                return self._ynab_fallback_mode()
+            return (
+                scheduled_mode
+                if self.ynab_client.get_snapshot()
+                else self._ynab_fallback_mode()
+            )
         if scheduled_mode not in {"token", "token-always"}:
             return scheduled_mode
+        if not self.token_usage_client.enabled:
+            return self._token_fallback_mode()
         snapshot = self.token_usage_client.get_snapshot()
         if snapshot and not snapshot.stale and (
             scheduled_mode == "token-always"
@@ -373,8 +433,17 @@ class DisplayManager:
         return mode in {"token", "token-always"}
 
     @staticmethod
+    def _is_ynab_mode(mode):
+        return mode in {"ynab", "ynab-always"}
+
+    @staticmethod
     def _token_fallback_mode():
         mode = os.getenv("token_usage_fallback_mode", "transit").strip().lower()
+        return mode if mode in {"auto", "transit", "weather"} else "transit"
+
+    @staticmethod
+    def _ynab_fallback_mode():
+        mode = os.getenv("ynab_fallback_mode", "transit").strip().lower()
         return mode if mode in {"auto", "transit", "weather"} else "transit"
 
     def _draw_token_usage(self, current_time, require_active=True):
@@ -394,8 +463,193 @@ class DisplayManager:
             draw_usage_limits(self.epd, snapshot, set_base_image=set_base_image)
         self.current_display_mode = "token"
         self.current_token_view = view
+        self.current_ynab_view = None
         self.in_weather_mode = False
         return True
+
+    def _draw_ynab(self, current_time):
+        snapshot = self.ynab_client.get_snapshot()
+        if not snapshot:
+            return False
+        view = ynab_view_at(current_time, self.ynab_views)
+        set_base_image = (
+            self.current_display_mode != "ynab" or self.current_ynab_view != view
+        )
+        draw_ynab_view(
+            self.epd,
+            snapshot,
+            view,
+            now=current_time,
+            set_base_image=set_base_image,
+        )
+        self.current_display_mode = "ynab"
+        self.current_ynab_view = view
+        self.current_token_view = None
+        self.in_weather_mode = False
+        return True
+
+    def request_display_override(self, module):
+        requested = module.strip().lower()
+        normalized = self.OVERRIDE_MODULE_ALIASES.get(requested)
+        if not normalized:
+            return {
+                "accepted": False,
+                "error": "unknown module",
+                "modules": sorted(self.OVERRIDE_MODULE_ALIASES),
+            }
+        with self._override_lock:
+            self._override_generation += 1
+            generation = self._override_generation
+            self._override_module = normalized
+            selected = self.screen_arbiter.claim(
+                self.OVERRIDE_SCREEN_OWNER,
+                self.override_priority,
+                self.override_duration_seconds,
+            )
+        rendered = (
+            self._render_display_override(normalized, generation)
+            if selected
+            else False
+        )
+        if selected and not rendered:
+            released = self._release_failed_override(generation)
+            if released:
+                self._force_display_update()
+        elif selected and rendered:
+            with self._override_lock:
+                if (
+                    generation == self._override_generation
+                    and self.screen_arbiter.active_owner()
+                    == self.OVERRIDE_SCREEN_OWNER
+                ):
+                    self._last_screen_owner = self.OVERRIDE_SCREEN_OWNER
+        return {
+            "accepted": True,
+            "module": normalized,
+            "duration_seconds": self.override_duration_seconds,
+            "rendered": rendered,
+            "active_owner": self.screen_arbiter.active_owner(),
+        }
+
+    def _release_failed_override(self, generation=None):
+        """Drop an active override that could not render its requested view."""
+
+        with self._override_lock:
+            if generation is not None and generation != self._override_generation:
+                return False
+            if self.screen_arbiter.active_owner() != self.OVERRIDE_SCREEN_OWNER:
+                return False
+            self._override_module = None
+            return self.screen_arbiter.release(self.OVERRIDE_SCREEN_OWNER)
+
+    def clear_display_override(self):
+        with self._override_lock:
+            self._override_generation += 1
+            self._override_module = None
+            was_active = self.screen_arbiter.release(self.OVERRIDE_SCREEN_OWNER)
+        if was_active:
+            self._force_display_update()
+        return {"cleared": True, "active_owner": self.screen_arbiter.active_owner()}
+
+    def display_override_status(self):
+        claim = self.screen_arbiter.claim_for(self.OVERRIDE_SCREEN_OWNER)
+        with self._override_lock:
+            module = self._override_module if claim else None
+        return {
+            "module": module,
+            "active_owner": self.screen_arbiter.active_owner(),
+            "duration_seconds": self.override_duration_seconds,
+            "modules": sorted(set(self.OVERRIDE_MODULE_ALIASES.values())),
+        }
+
+    def _render_display_override(self, module=None, generation=None):
+        with self._override_lock:
+            if module is None:
+                module = self._override_module
+            if generation is None:
+                generation = self._override_generation
+        with self._override_render_lock:
+            with self._override_lock:
+                if (
+                    generation != self._override_generation
+                    or module != self._override_module
+                ):
+                    return False
+            return self._render_display_override_locked(module, generation)
+
+    def _render_display_override_locked(self, module, generation):
+        if not module or not self.screen_arbiter.can_render(self.OVERRIDE_SCREEN_OWNER):
+            return False
+        if module == "calendar":
+            return self.calendar_plugin.render_forced_agenda(
+                self.OVERRIDE_SCREEN_OWNER
+            )
+        with self._display_lock:
+            with self._override_lock:
+                if (
+                    generation != self._override_generation
+                    or module != self._override_module
+                ):
+                    return False
+            if not self.screen_arbiter.can_render(self.OVERRIDE_SCREEN_OWNER):
+                return False
+            now = datetime.now()
+            if module == "token":
+                rendered = self._draw_token_usage(now, require_active=False)
+            elif module == "flights":
+                recent_flights = self.recent_flights.recent()
+                rendered = bool(recent_flights)
+                if rendered:
+                    update_display_with_recent_flights(
+                        self.epd, recent_flights, set_base_image=True
+                    )
+                    self.current_display_mode = "flights"
+                    self.current_token_view = None
+                    self.in_weather_mode = False
+            elif module == "iss":
+                from iss import display_next_iss_pass
+
+                next_pass = (
+                    self.iss_tracker.next_known_pass(now.timestamp())
+                    if self.iss_tracker
+                    else None
+                )
+                display_next_iss_pass(self.epd, next_pass, now=now.astimezone())
+                rendered = True
+                self.current_display_mode = "iss-prediction"
+                self.current_token_view = None
+                self.in_weather_mode = False
+            elif module == "weather":
+                weather_data = self.weather_manager.get_weather_data()
+                rendered = bool(weather_enabled and weather_data)
+                if rendered:
+                    draw_weather_display(self.epd, weather_data, set_base_image=True)
+                    self.current_display_mode = "weather"
+                    self.current_token_view = None
+                    self.in_weather_mode = True
+            else:
+                bus_data, error_message, stop_name = self.bus_manager.get_bus_data()
+                weather_data = self.weather_manager.get_weather_data() if weather_enabled else None
+                valid_bus_data = [
+                    bus for bus in bus_data
+                    if any(value and value != "--" for value in bus["times"])
+                ]
+                rendered = bool(valid_bus_data and not error_message)
+                if rendered:
+                    update_display(
+                        self.epd,
+                        weather_data,
+                        valid_bus_data,
+                        error_message,
+                        stop_name,
+                        set_base_image=True,
+                    )
+                    self.current_display_mode = "transit"
+                    self.current_token_view = None
+                    self.in_weather_mode = False
+            if rendered:
+                self.last_display_update = now
+            return rendered
         
     def start(self):
         logger.info("Starting display manager components...")
@@ -422,7 +676,9 @@ class DisplayManager:
         # Calendar events are fetched and rendered independently of the base
         # transit/weather/token data sources.
         self.calendar_plugin.start()
+        self.override_server.start()
         self.rss_plugin.start()
+        self.breaking_news_plugin.start()
         
         # Token views do not depend on transit either. The normal update loop
         # will prefetch it when a transit or automatic window becomes active.
@@ -564,6 +820,9 @@ class DisplayManager:
                                 logger.debug(f"Closest flight: {closest_flight}")
                                 enhanced_flight = enhance_flight_data(closest_flight)
                                 logger.debug(f"Enhanced flight: {enhanced_flight}")
+                                self.recent_flights.record(
+                                    enhanced_flight, observed_at=current_time
+                                )
                                 
                                 with self._display_lock:
                                     with self._flight_lock:
@@ -616,6 +875,13 @@ class DisplayManager:
                     return False
                 current_time = datetime.now()
                 scheduled_mode = self._scheduled_mode(current_time)
+                if self._is_ynab_mode(scheduled_mode) and self._draw_ynab(
+                    current_time
+                ):
+                    self.last_display_update = current_time
+                    return True
+                if self._is_ynab_mode(scheduled_mode):
+                    scheduled_mode = self._ynab_fallback_mode()
                 if self._is_token_mode(scheduled_mode) and self._draw_token_usage(
                     current_time, require_active=scheduled_mode == "token"
                 ):
@@ -734,6 +1000,18 @@ class DisplayManager:
                             logger.info(f"Starting flight cooldown period of {self.flight_mode_cooldown} seconds")
 
                 active_owner = self.screen_arbiter.active_owner()
+                if (
+                    active_owner == self.OVERRIDE_SCREEN_OWNER
+                    and self._last_screen_owner != self.OVERRIDE_SCREEN_OWNER
+                ):
+                    with self._override_lock:
+                        override_module = self._override_module
+                        override_generation = self._override_generation
+                    if not self._render_display_override(
+                        override_module, override_generation
+                    ):
+                        self._release_failed_override(override_generation)
+                        active_owner = self.screen_arbiter.active_owner()
                 if self._last_screen_owner and active_owner is None:
                     self._force_display_update()
                     self._schedule_next_update()
@@ -774,6 +1052,13 @@ class DisplayManager:
                                 self.prefetch_done = False
                             continue
                         scheduled_mode = self._scheduled_mode(current_time)
+                        if self._is_ynab_mode(scheduled_mode):
+                            if self._draw_ynab(current_time):
+                                self.last_display_update = datetime.now()
+                                logger.info("YNAB display updated successfully")
+                                scheduled_mode = "rendered"
+                            else:
+                                scheduled_mode = self._ynab_fallback_mode()
                         if self._is_token_mode(scheduled_mode):
                             if self._draw_token_usage(
                                 current_time,
@@ -896,8 +1181,10 @@ class DisplayManager:
         if self.iss_tracker:
             self.iss_tracker.stop()
 
+        self.override_server.stop()
         self.calendar_plugin.stop()
         self.rss_plugin.stop()
+        self.breaking_news_plugin.stop()
             
         for thread in [self._check_data_thread, self._flight_thread, self._iss_thread]:
             if thread:

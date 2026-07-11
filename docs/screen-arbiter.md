@@ -37,3 +37,8 @@ while holding the display lock immediately before writing to the device.
 The RSS watcher defaults to priority `30`: it interrupts the scheduled base
 screen and calendar agenda glances, but yields to upcoming calendar events,
 flights, and the priority ISS view. Set `rss_watch_priority` to change this.
+
+Breaking-news alerts default to priority `70` and a non-exclusive four-minute
+claim. Higher-priority or exclusive claims still win; the alert's wall-clock
+duration continues while it is pre-empted. Set `breaking_news_priority` to fit
+the local priority policy.

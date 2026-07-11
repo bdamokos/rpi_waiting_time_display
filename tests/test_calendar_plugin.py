@@ -22,7 +22,14 @@ def _event(now, minutes=120, *, stale=False):
     )
 
 
-def _plugin(monkeypatch, rendered):
+def _plugin(
+    monkeypatch,
+    rendered,
+    *,
+    base_mode_at=None,
+    default_enabled=False,
+    default_refresh_seconds=3600,
+):
     monkeypatch.setenv("calendar_lead_minutes", "60")
     monkeypatch.setenv("calendar_exclusive_minutes", "10")
     monkeypatch.setenv("calendar_exclusive_enabled", "true")
@@ -31,6 +38,11 @@ def _plugin(monkeypatch, rendered):
     monkeypatch.setenv("calendar_priority_exclusive", "100")
     monkeypatch.setenv("calendar_agenda_interval_seconds", "1800")
     monkeypatch.setenv("calendar_agenda_duration_seconds", "60")
+    monkeypatch.setenv(
+        "calendar_default_enabled", "true" if default_enabled else "false"
+    )
+    monkeypatch.setenv("calendar_default_modes", "auto,weather,token,token-always")
+    monkeypatch.setenv("calendar_default_refresh_seconds", str(default_refresh_seconds))
     monkeypatch.setattr(
         "calendar_plugin.draw_upcoming_event",
         lambda *args, **kwargs: rendered.append(("event", kwargs)),
@@ -45,6 +57,7 @@ def _plugin(monkeypatch, rendered):
         ScreenArbiter(),
         threading.Lock(),
         client=client,
+        base_mode_at=base_mode_at,
     )
 
 
@@ -117,6 +130,50 @@ def test_event_start_releases_exclusive_claim(monkeypatch):
     assert plugin.arbiter.active_owner() is None
 
 
+def test_forced_agenda_uses_external_owner(monkeypatch):
+    rendered = []
+    plugin = _plugin(monkeypatch, rendered)
+    now = datetime(2026, 7, 11, 8, 5, tzinfo=TIMEZONE)
+    event = _event(now)
+    plugin.client.get_events = lambda now: [event]
+    assert plugin.arbiter.claim("api-override", 30, 300)
+
+    assert plugin.render_forced_agenda("api-override")
+    assert rendered[-1][0] == "agenda"
+
+
+def test_forced_agenda_yields_to_higher_priority(monkeypatch):
+    rendered = []
+    plugin = _plugin(monkeypatch, rendered)
+    now = datetime(2026, 7, 11, 8, 5, tzinfo=TIMEZONE)
+    event = _event(now)
+    plugin.client.get_events = lambda now: [event]
+    plugin.arbiter.claim("api-override", 30, 300)
+    plugin.arbiter.claim("flight", 50, 30)
+
+    assert not plugin.render_forced_agenda("api-override")
+    assert rendered == []
+
+
+def test_forced_agenda_skips_disabled_calendar(monkeypatch):
+    rendered = []
+    plugin = _plugin(monkeypatch, rendered)
+    plugin.enabled = False
+
+    assert not plugin.render_forced_agenda("api-override")
+    assert rendered == []
+
+
+def test_forced_agenda_handles_fetch_failure(monkeypatch):
+    rendered = []
+    plugin = _plugin(monkeypatch, rendered)
+    plugin.client.get_events = lambda now: (_ for _ in ()).throw(RuntimeError("offline"))
+    plugin.arbiter.claim("api-override", 30, 300)
+
+    assert not plugin.render_forced_agenda("api-override")
+    assert rendered == []
+
+
 def test_all_day_event_only_appears_in_agenda(monkeypatch):
     rendered = []
     plugin = _plugin(monkeypatch, rendered)
@@ -133,3 +190,131 @@ def test_all_day_event_only_appears_in_agenda(monkeypatch):
 
     assert plugin.arbiter.active_owner() == plugin.AGENDA_OWNER
     assert rendered[0][0] == "agenda"
+
+
+def test_default_agenda_persists_outside_transit_window(monkeypatch):
+    rendered = []
+    plugin = _plugin(
+        monkeypatch,
+        rendered,
+        base_mode_at=lambda now: "weather",
+        default_enabled=True,
+    )
+    now = datetime(2026, 7, 11, 8, 5, tzinfo=TIMEZONE)
+    event = _event(now, 120)
+
+    plugin.tick(now, [event])
+    plugin.tick(now + timedelta(minutes=5), [event])
+
+    claim = plugin.arbiter.claim_for(plugin.AGENDA_OWNER)
+    assert claim.priority == 20
+    assert claim.exclusive is False
+    assert rendered == [("agenda", {"set_base_image": True})]
+
+
+def test_default_agenda_yields_to_transit_and_keeps_periodic_glance(monkeypatch):
+    rendered = []
+    plugin = _plugin(
+        monkeypatch,
+        rendered,
+        base_mode_at=lambda now: "transit",
+        default_enabled=True,
+    )
+    now = datetime(2026, 7, 11, 8, 5, tzinfo=TIMEZONE)
+    event = _event(now, 120)
+
+    plugin.tick(now, [event])
+    assert plugin.arbiter.active_owner() is None
+
+    glance = now.replace(minute=30)
+    plugin.tick(glance, [event])
+    assert plugin.arbiter.active_owner() == plugin.AGENDA_OWNER
+    plugin.tick(glance + timedelta(seconds=60), [event])
+    assert plugin.arbiter.active_owner() is None
+
+
+def test_default_agenda_remains_preemptible(monkeypatch):
+    rendered = []
+    plugin = _plugin(
+        monkeypatch,
+        rendered,
+        base_mode_at=lambda now: "token-always",
+        default_enabled=True,
+    )
+    now = datetime(2026, 7, 11, 8, 5, tzinfo=TIMEZONE)
+
+    plugin.tick(now, [_event(now, 120)])
+
+    assert plugin.arbiter.claim("flight", 50, 30)
+    assert plugin.arbiter.active_owner() == "flight"
+
+
+def test_lead_window_event_replaces_default_agenda(monkeypatch):
+    rendered = []
+    plugin = _plugin(
+        monkeypatch,
+        rendered,
+        base_mode_at=lambda now: "weather",
+        default_enabled=True,
+    )
+    now = datetime(2026, 7, 11, 8, 5, tzinfo=TIMEZONE)
+
+    plugin.tick(now, [_event(now, 30)])
+
+    assert plugin.arbiter.active_owner() == plugin.EVENT_OWNER
+    assert not plugin.arbiter.has_claim(plugin.AGENDA_OWNER)
+    assert rendered[0][0] == "event"
+
+
+def test_default_agenda_releases_when_no_events_remain(monkeypatch):
+    rendered = []
+    plugin = _plugin(
+        monkeypatch,
+        rendered,
+        base_mode_at=lambda now: "weather",
+        default_enabled=True,
+    )
+    now = datetime(2026, 7, 11, 8, 5, tzinfo=TIMEZONE)
+    plugin.tick(now, [_event(now, 120)])
+
+    plugin.tick(now + timedelta(minutes=1), [])
+
+    assert plugin.arbiter.active_owner() is None
+    assert not plugin.arbiter.has_claim(plugin.AGENDA_OWNER)
+
+
+def test_default_agenda_refreshes_clock_on_configured_cadence(monkeypatch):
+    rendered = []
+    plugin = _plugin(
+        monkeypatch,
+        rendered,
+        base_mode_at=lambda now: "weather",
+        default_enabled=True,
+        default_refresh_seconds=90,
+    )
+    now = datetime(2026, 7, 11, 8, 5, tzinfo=TIMEZONE)
+    event = _event(now, 120)
+
+    plugin.tick(now, [event])
+    plugin.tick(now + timedelta(seconds=89), [event])
+    plugin.tick(now + timedelta(seconds=90), [event])
+
+    assert rendered == [
+        ("agenda", {"set_base_image": True}),
+        ("agenda", {"set_base_image": False}),
+    ]
+
+
+def test_default_agenda_ignores_non_string_base_mode(monkeypatch):
+    rendered = []
+    plugin = _plugin(
+        monkeypatch,
+        rendered,
+        base_mode_at=lambda now: None,
+        default_enabled=True,
+    )
+    now = datetime(2026, 7, 11, 8, 5, tzinfo=TIMEZONE)
+
+    plugin.tick(now, [_event(now, 120)])
+
+    assert plugin.arbiter.active_owner() is None

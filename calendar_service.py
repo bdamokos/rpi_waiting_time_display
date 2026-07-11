@@ -272,9 +272,9 @@ class CalendarClient:
                 "Calendar display enabled but no %s sources configured", source_type
             )
         cache_dir = Path(os.getenv("calendar_cache_dir", "cache")).expanduser()
-        timeout = float(os.getenv("calendar_timeout", "10"))
-        max_stale = int(os.getenv("calendar_max_stale_seconds", "21600"))
         try:
+            timeout = float(os.getenv("calendar_timeout", "10"))
+            max_stale = int(os.getenv("calendar_max_stale_seconds", "21600"))
             return [
                 IcsCalendarSource(
                     locator,

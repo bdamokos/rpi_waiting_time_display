@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import os
 from datetime import datetime, timedelta
+from functools import lru_cache
 from typing import Iterable
 
 from PIL import Image, ImageDraw, ImageFont
@@ -17,6 +18,7 @@ display_lock = return_display_lock()
 DISPLAY_SCREEN_ROTATION = int(os.getenv("screen_rotation", 90))
 
 
+@lru_cache(maxsize=1)
 def _fonts():
     paths = get_font_paths()
     try:

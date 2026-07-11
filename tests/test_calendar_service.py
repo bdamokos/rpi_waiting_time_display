@@ -237,3 +237,15 @@ def test_calendar_client_reads_configured_file_source(tmp_path, monkeypatch):
     events = CalendarClient().get_events(NOW, force=True)
 
     assert [event.start.day for event in events] == [13, 20]
+
+
+def test_invalid_source_timeout_does_not_crash_startup(monkeypatch, caplog):
+    monkeypatch.setenv("calendar_enabled", "true")
+    monkeypatch.setenv("calendar_source", "ics")
+    monkeypatch.setenv("calendar_ics_url", "https://calendar.example/basic.ics")
+    monkeypatch.setenv("calendar_timeout", "not-a-number")
+
+    client = CalendarClient()
+
+    assert client._sources == []
+    assert "Invalid calendar configuration" in caplog.text

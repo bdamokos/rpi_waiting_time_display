@@ -92,9 +92,13 @@ def test_empty_flights_override_releases_screen_claim():
     manager._override_module = None
     manager._override_lock = RLock()
     manager._display_lock = Lock()
+    restored = []
+    manager._force_display_update = lambda: restored.append(True)
 
     result = manager.request_display_override("flights")
 
     assert result["accepted"]
     assert not result["rendered"]
     assert result["active_owner"] is None
+    assert manager._override_module is None
+    assert restored == [True]

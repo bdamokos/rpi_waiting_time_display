@@ -1,4 +1,8 @@
-from display_override_api import _is_private_client, create_override_app
+from display_override_api import (
+    DisplayOverrideServer,
+    _is_private_client,
+    create_override_app,
+)
 from screen_arbiter import ScreenArbiter
 
 
@@ -8,6 +12,14 @@ def test_private_client_detection():
     assert _is_private_client("fd00::1")
     assert not _is_private_client("8.8.8.8")
     assert not _is_private_client("invalid")
+
+
+def test_override_server_defaults_to_loopback(monkeypatch):
+    monkeypatch.delenv("display_override_api_host", raising=False)
+
+    server = DisplayOverrideServer(lambda module: {}, lambda: {}, lambda: {})
+
+    assert server.host == "127.0.0.1"
 
 
 def test_override_api_accepts_json_and_path():

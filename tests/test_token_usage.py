@@ -216,6 +216,7 @@ def test_client_detects_and_expires_primary_reset_notice(tmp_path, monkeypatch):
     }
     source.write_text(json.dumps(reset), encoding="utf-8")
     assert client.get_snapshot(force=True).reset_notice == "primary"
+    assert client._snapshot.reset_notice is None
     assert client.get_snapshot().reset_notice is None
 
 

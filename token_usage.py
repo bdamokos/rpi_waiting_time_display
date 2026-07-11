@@ -6,7 +6,7 @@ import json
 import logging
 import os
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, FrozenSet, List, Optional
@@ -344,17 +344,19 @@ class TokenUsageClient:
     ) -> Optional[TokenUsageSnapshot]:
         if not snapshot:
             return None
+        reset_notice = None
         if (
             self._reset_notice_kind
             and now < self._reset_notice_until
             and not snapshot.stale
         ):
-            snapshot.reset_notice = self._reset_notice_kind
+            reset_notice = self._reset_notice_kind
         else:
-            snapshot.reset_notice = None
             if now >= self._reset_notice_until:
                 self._reset_notice_kind = None
-        return snapshot
+        if reset_notice:
+            return replace(snapshot, reset_notice=reset_notice)
+        return snapshot if snapshot.reset_notice is None else replace(snapshot, reset_notice=None)
 
 
 def configured_schedule() -> DisplaySchedule:

@@ -61,6 +61,7 @@ def test_flights_override_uses_cache_without_displacing_live_flight():
     manager.override_priority = 30
     manager.override_duration_seconds = 300
     manager._override_module = None
+    manager._override_generation = 0
     manager._override_lock = RLock()
     manager._display_lock = Lock()
     manager.current_display_mode = None
@@ -90,6 +91,7 @@ def test_empty_flights_override_releases_screen_claim():
     manager.override_priority = 30
     manager.override_duration_seconds = 300
     manager._override_module = None
+    manager._override_generation = 0
     manager._override_lock = RLock()
     manager._display_lock = Lock()
     restored = []

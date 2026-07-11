@@ -1,4 +1,4 @@
-# Version: 0.0.22 (2026-03-19) # AUTO-INCREMENT
+# Version: 0.0.23 (2026-07-11) # AUTO-INCREMENT
 # Add this file to pre-commit hook to auto-increment
 
 # Actual requirements below
@@ -63,5 +63,6 @@ cryptography>=46.0.5
 filelock>=3.20.3
 h11>=0.16.0
 pydantic==2.13.3
+ical==11.1.0
 cairosvg==2.9.0
 niquests==3.17.0

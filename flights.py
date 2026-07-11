@@ -11,6 +11,8 @@ import math
 import time
 import threading
 import requests_cache
+from collections import OrderedDict
+from datetime import datetime
 from functools import lru_cache
 from threading import Event, Lock
 from requests_cache import CachedSession
@@ -57,6 +59,103 @@ aeroapi_enabled = os.getenv("aeroapi_enabled", "false").lower() == "true"
 aeroapi_key = os.getenv("aeroapi_key")
 aeroapi_enable_paid_usage = os.getenv("aeroapi_enable_paid_usage", "false").lower() == "true"
 aeroapi_active_hours = os.getenv("aeroapi_active_hours", "0-24")
+
+
+class RecentFlightCache:
+    """Bounded, thread-safe cache of the most recently observed flights."""
+
+    def __init__(self, max_entries=4):
+        self.max_entries = max(1, max_entries)
+        self._entries = OrderedDict()
+        self._lock = Lock()
+
+    @staticmethod
+    def _identity(flight):
+        return next(
+            (
+                str(flight.get(field)).strip()
+                for field in ("hex", "callsign", "flight_number", "registration")
+                if flight.get(field) and str(flight.get(field)).strip()
+            ),
+            None,
+        )
+
+    def record(self, flight, observed_at=None):
+        identity = self._identity(flight)
+        if not identity:
+            return False
+        entry = dict(flight)
+        entry["observed_at"] = observed_at or datetime.now()
+        with self._lock:
+            self._entries.pop(identity, None)
+            self._entries[identity] = entry
+            while len(self._entries) > self.max_entries:
+                self._entries.popitem(last=False)
+        return True
+
+    def recent(self):
+        with self._lock:
+            return [dict(entry) for entry in reversed(self._entries.values())]
+
+
+def update_display_with_recent_flights(epd, flights, set_base_image=False):
+    """Render a compact newest-first flight history for the 2.13-inch display."""
+    width = epd.height
+    height = epd.width
+    mode = "1" if epd.is_bw_display else "RGB"
+    background = 1 if epd.is_bw_display else "white"
+    image = Image.new(mode, (width, height), background)
+    draw = ImageDraw.Draw(image)
+    font_paths = get_font_paths()
+    try:
+        header_font = ImageFont.truetype(font_paths["dejavu_bold"], 14)
+        primary_font = ImageFont.truetype(font_paths["dejavu_bold"], 12)
+        detail_font = ImageFont.truetype(font_paths["dejavu"], 10)
+    except IOError:
+        header_font = primary_font = detail_font = ImageFont.load_default()
+
+    draw.text((7, 4), "Recent flights", fill="black", font=header_font)
+    draw.line([(7, 22), (width - 7, 22)], fill="black", width=1)
+    for index, flight in enumerate(flights[:4]):
+        top = 27 + index * 23
+        identifier = next(
+            (
+                str(flight.get(field)).strip()
+                for field in ("flight_number", "callsign", "registration")
+                if flight.get(field) and str(flight.get(field)).strip()
+            ),
+            "",
+        )
+        observed_at = flight.get("observed_at")
+        observed = (
+            observed_at.strftime("%H:%M") if hasattr(observed_at, "strftime") else ""
+        )
+        draw.text((7, top), identifier[:15], fill="black", font=primary_font)
+        if observed:
+            observed_width = draw.textbbox((0, 0), observed, font=detail_font)[2]
+            draw.text(
+                (width - 7 - observed_width, top + 1),
+                observed,
+                fill="black",
+                font=detail_font,
+            )
+        origin = str(flight.get("origin_code") or "").strip()
+        destination = str(flight.get("destination_code") or "").strip()
+        route = " → ".join(part for part in (origin, destination) if part)
+        draw.text((7, top + 12), route[:25], fill="black", font=detail_font)
+
+    image = image.rotate(DISPLAY_SCREEN_ROTATION, expand=True)
+    with display_lock:
+        buffer = epd.getbuffer(image)
+        if hasattr(epd, "displayPartial"):
+            if set_base_image:
+                epd.init()
+                epd.displayPartBaseImage(buffer)
+            else:
+                epd.displayPartial(buffer)
+        else:
+            epd.display(buffer)
+    return True
 
 
 def is_aeroapi_active():

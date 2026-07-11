@@ -8,7 +8,6 @@ import json
 import logging
 import os
 import tempfile
-import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -18,6 +17,7 @@ from typing import Iterable, Optional
 from urllib.parse import quote, urljoin
 
 import requests
+from defusedxml import ElementTree as ET
 
 logger = logging.getLogger(__name__)
 
@@ -192,8 +192,10 @@ class RSSWatcher:
     def _load_state(self):
         try:
             data = json.loads(self.state_path.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                return {}
             return {url: list(keys) for url, keys in data.get("seen", {}).items()}
-        except (OSError, ValueError, TypeError):
+        except (OSError, ValueError, TypeError, AttributeError):
             return {}
 
     def _save_state(self):

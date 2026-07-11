@@ -80,6 +80,16 @@ def test_invalid_integer_environment_uses_default(monkeypatch):
     assert env_int("rss_watch_timeout", 10) == 10
 
 
+def test_non_object_state_file_recovers_as_empty(monkeypatch, tmp_path):
+    state_path = tmp_path / "state.json"
+    state_path.write_text("null", encoding="utf-8")
+    monkeypatch.setenv("rss_watch_state_file", str(state_path))
+
+    watcher = RSSWatcher([], session=Session([]))
+
+    assert watcher._seen == {}
+
+
 def test_first_poll_baselines_and_later_poll_returns_only_new_entry(
     monkeypatch, tmp_path
 ):

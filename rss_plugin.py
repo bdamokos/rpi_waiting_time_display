@@ -113,6 +113,6 @@ class RSSPlugin:
             if not self.arbiter.can_render(self.OWNER):
                 return
             draw_feed_entry(self.epd, entry, avatar_bytes=avatar, set_base_image=True)
-        self._rendered_key = entry.key
-        if self.on_render:
-            self.on_render(self.OWNER)
+            self._rendered_key = entry.key
+            if self.on_render:
+                self.on_render(self.OWNER)

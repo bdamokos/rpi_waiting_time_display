@@ -10,56 +10,8 @@ A Raspberry Pi project that displays bus waiting times using an e-Paper display 
 - ✈️ Optional: Overhead flight tracking
 - 🛰️ Optional: ISS tracking when visible
 - 📊 Optional: Scheduled token-usage dashboards with month-to-date estimates and remaining-capacity bars
-- 📅 Optional calendar plugin with upcoming-event alerts and agenda glances
-- 📰 Optional RSS/Nitter plugin with compact new-entry notifications
-- 🎛️ Screen arbitration, weekday-aware schedules, and a private-network display override API
 
 [View detailed features and screenshots →](https://bdamokos.github.io/rpi_waiting_time_display/features/)
-
-## Optional Display Plugins
-
-The calendar and RSS plugins share the screen safely with transit, weather,
-flight, ISS, and Codex views through the screen arbiter. Each plugin is disabled
-by default and configured in the untracked `.env` file.
-
-### Calendar
-
-Read one or more iCalendar feeds to show a focused countdown before an event or
-a brief upcoming agenda. Feed URLs may be remote secret iCal links or local
-files. See [calendar setup and privacy notes](docs/calendar-display.md).
-
-| Upcoming event | Agenda glance |
-| --- | --- |
-| ![Mock e-paper calendar event countdown](docs/images/calendar_event_mock.png) | ![Mock e-paper upcoming calendar agenda](docs/images/calendar_agenda_mock.png) |
-
-### RSS and Nitter
-
-Watch standard RSS/Atom feeds or configurable Nitter feeds. The first poll
-establishes a baseline, then new entries appear as short, queued notifications
-without putting feed URLs on the display. See [RSS watch setup](docs/rss-watch-display.md).
-
-| Nitter post | RSS article |
-| --- | --- |
-| ![Mock e-paper Nitter post notification](docs/images/rss_nitter_mock.png) | ![Mock e-paper RSS article notification](docs/images/rss_article_mock.png) |
-
-### Codex usage views
-
-The token-usage display can run only while Codex is active or stay scheduled
-with `token-always`. Schedules support weekday/weekend rules, and the capacity
-view includes a corner badge when banked resets are available. See
-[token usage setup](docs/token-usage-display.md).
-
-| Month-to-date estimate | Remaining capacity |
-| --- | --- |
-| ![Mock e-paper Codex month-to-date usage](docs/images/codex_month_usage_mock.png) | ![Mock e-paper Codex remaining-capacity view](docs/images/codex_capacity_mock.png) |
-
-### Screen control
-
-The screen arbiter gives temporary alerts predictable priority and returns to
-the scheduled base view afterward. A local/private-network API can temporarily
-request the token, weather, transit, or calendar screen. See the
-[arbiter](docs/screen-arbiter.md) and [display override API](docs/display-override-api.md)
-documentation.
 
 ## Quick Start
 1. [Set up your Raspberry Pi](https://bdamokos.github.io/rpi_waiting_time_display/setting-up-the-rpi-webserial)

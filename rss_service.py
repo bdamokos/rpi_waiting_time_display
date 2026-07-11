@@ -15,7 +15,7 @@ from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Iterable, Optional
-from urllib.parse import urljoin
+from urllib.parse import quote, urljoin
 
 import requests
 
@@ -95,12 +95,16 @@ class FeedEntry:
 def configured_sources() -> list[FeedSource]:
     sources = []
     nitter_base = os.getenv("rss_nitter_base_url", "").strip().rstrip("/")
+    nitter_path = os.getenv("rss_nitter_feed_path", "/{handle}/rss").strip()
+    if not nitter_path.startswith("/"):
+        nitter_path = f"/{nitter_path}"
     for handle in os.getenv("rss_nitter_users", "").split(","):
         handle = handle.strip().lstrip("@")
         if handle and nitter_base:
+            feed_path = nitter_path.replace("{handle}", quote(handle, safe=""))
             sources.append(
                 FeedSource(
-                    f"{nitter_base}/{handle}/rss",
+                    f"{nitter_base}{feed_path}",
                     kind="nitter",
                     handle=f"@{handle}",
                 )

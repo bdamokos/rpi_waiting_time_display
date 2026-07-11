@@ -64,6 +64,15 @@ def test_configured_sources_builds_nitter_and_arbitrary_feeds(monkeypatch):
     assert [source.kind for source in sources] == ["nitter", "nitter", "rss", "rss"]
 
 
+def test_configured_sources_supports_nitter_with_replies_path(monkeypatch):
+    monkeypatch.setenv("rss_nitter_base_url", "http://nitter.local")
+    monkeypatch.setenv("rss_nitter_users", "alice")
+    monkeypatch.setenv("rss_nitter_feed_path", "/{handle}/with_replies/rss")
+    monkeypatch.delenv("rss_feed_urls", raising=False)
+
+    assert configured_sources()[0].url == ("http://nitter.local/alice/with_replies/rss")
+
+
 def test_first_poll_baselines_and_later_poll_returns_only_new_entry(
     monkeypatch, tmp_path
 ):

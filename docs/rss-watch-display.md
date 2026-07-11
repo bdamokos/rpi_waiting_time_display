@@ -16,8 +16,12 @@ remains the source of truth, while the display is a readable notification.
 rss_watch_enabled=true
 rss_nitter_base_url=http://your-nitter-instance
 rss_nitter_users=account_one,account_two
+rss_nitter_feed_path=/{handle}/rss
 rss_feed_urls=https://example.org/feed.xml,https://example.net/atom.xml
 ```
+
+Set `rss_nitter_feed_path=/{handle}/with_replies/rss` when the source watchlist
+includes replies. `{handle}` is replaced with each safely encoded username.
 
 The first successful poll records a baseline and does not display old entries.
 State is retained in `cache/rss-watch-state.json`, so restarts do not replay

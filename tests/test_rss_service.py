@@ -70,6 +70,16 @@ def test_feed_with_comments_does_not_crash():
     assert entry.categories == ("News",)
 
 
+def test_atom_feed_parses_category_term_attribute():
+    content = b"""<feed xmlns="http://www.w3.org/2005/Atom">
+      <title>Example</title><entry><title>Update</title><id>one</id>
+      <category term="sports"/></entry></feed>"""
+
+    entry = parse_feed(content, FeedSource("https://news.test/atom"))[0]
+
+    assert entry.categories == ("sports",)
+
+
 def test_configured_sources_builds_nitter_and_arbitrary_feeds(monkeypatch):
     monkeypatch.setenv("rss_nitter_base_url", "http://nitter.local/")
     monkeypatch.setenv("rss_nitter_users", "alice, @bob")

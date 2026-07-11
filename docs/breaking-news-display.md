@@ -16,7 +16,8 @@ another private path):
   {
     "url": "https://feeds.bbci.co.uk/news/rss.xml",
     "label": "BBC News",
-    "match": "keywords"
+    "match": "keywords",
+    "exclude_sports": true
   },
   {
     "url": "https://licensed-provider.example/breaking.xml",
@@ -32,6 +33,10 @@ another private path):
 `news alert`, and `developing`. Override it per source when the publisher uses
 different labels. Use `match: "all"` only for a feed whose publisher defines
 every item as breaking; using it on a general news feed creates false alerts.
+Sport is excluded by default using explicit feed categories, publication names,
+and `/sport` or `/sports` link paths. This keeps BBC Sport stories in the BBC
+headline feed from claiming the display without making fragile guesses from
+headline words. Set `"exclude_sports": false` on a source to opt back in.
 
 BBC publishes an official headline RSS feed at the URL shown above. AP offers
 authenticated feeds and RSS products to entitled Media API customers; use only

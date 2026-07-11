@@ -1,7 +1,6 @@
 from datetime import timezone
 
-from rss_service import (FeedSource, RSSWatcher, configured_sources, env_int,
-                         parse_feed)
+from rss_service import FeedSource, RSSWatcher, configured_sources, env_int, parse_feed
 
 RSS = b"""<?xml version="1.0"?>
 <rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/">
@@ -47,6 +46,38 @@ def test_nitter_feed_parses_identity_text_and_avatar():
     assert entry.title == "Hello & welcome to the feed"
     assert entry.avatar_url == "https://nitter.test/pic/avatar.jpg"
     assert entry.published.tzinfo == timezone.utc
+
+
+def test_feed_parses_category_metadata():
+    content = RSS.replace(
+        b"<guid>tweet-1</guid>",
+        b"<guid>tweet-1</guid><category>Sport</category>",
+    )
+
+    entry = parse_feed(content, FeedSource("https://news.test/rss"))[0]
+
+    assert entry.categories == ("Sport",)
+
+
+def test_feed_with_comments_does_not_crash():
+    content = RSS.replace(
+        b"<guid>tweet-1</guid>",
+        b"<guid>tweet-1</guid><!-- comment --><category>News</category>",
+    )
+
+    entry = parse_feed(content, FeedSource("https://news.test/rss"))[0]
+
+    assert entry.categories == ("News",)
+
+
+def test_atom_feed_parses_category_term_attribute():
+    content = b"""<feed xmlns="http://www.w3.org/2005/Atom">
+      <title>Example</title><entry><title>Update</title><id>one</id>
+      <category term="sports"/></entry></feed>"""
+
+    entry = parse_feed(content, FeedSource("https://news.test/atom"))[0]
+
+    assert entry.categories == ("sports",)
 
 
 def test_configured_sources_builds_nitter_and_arbitrary_feeds(monkeypatch):

@@ -29,6 +29,7 @@ from token_usage import (
     token_view_at,
 )
 from screen_arbiter import ScreenArbiter
+from rss_plugin import RSSPlugin
 from calendar_plugin import CalendarPlugin
 from display_override_api import DisplayOverrideServer
 
@@ -348,6 +349,12 @@ class DisplayManager:
             self.clear_display_override,
             self.display_override_status,
         )
+        self.rss_plugin = RSSPlugin(
+            epd,
+            self.screen_arbiter,
+            self._display_lock,
+            on_render=self._plugin_rendered,
+        )
         logger.info(f"DisplayManager initialized with min refresh interval: {self.min_refresh_interval}s")
         logger.info(f"DisplayManager initialized with coordinates: {self.coordinates_lat}, {self.coordinates_lng}")
         logger.info(f"DisplayManager initialized with flight mode duration: {self.flight_mode_duration}s")
@@ -360,6 +367,9 @@ class DisplayManager:
             logger.info("Token usage display enabled with views: %s", ", ".join(self.token_views))
 
     def _calendar_rendered(self, owner):
+        self._plugin_rendered(owner)
+
+    def _plugin_rendered(self, owner):
         self.current_display_mode = owner
         self.current_token_view = None
         self.in_weather_mode = False
@@ -419,6 +429,10 @@ class DisplayManager:
                 self.override_duration_seconds,
             )
         rendered = self._render_display_override() if selected else False
+        if selected and not rendered:
+            released = self._release_failed_override()
+            if released:
+                self._force_display_update()
         return {
             "accepted": True,
             "module": normalized,
@@ -426,6 +440,15 @@ class DisplayManager:
             "rendered": rendered,
             "active_owner": self.screen_arbiter.active_owner(),
         }
+
+    def _release_failed_override(self):
+        """Drop an active override that could not render its requested view."""
+
+        with self._override_lock:
+            if self.screen_arbiter.active_owner() != self.OVERRIDE_SCREEN_OWNER:
+                return False
+            self._override_module = None
+            return self.screen_arbiter.release(self.OVERRIDE_SCREEN_OWNER)
 
     def clear_display_override(self):
         with self._override_lock:
@@ -532,6 +555,7 @@ class DisplayManager:
         # transit/weather/token data sources.
         self.calendar_plugin.start()
         self.override_server.start()
+        self.rss_plugin.start()
         
         # Token views do not depend on transit either. The normal update loop
         # will prefetch it when a transit or automatic window becomes active.
@@ -847,7 +871,9 @@ class DisplayManager:
                     active_owner == self.OVERRIDE_SCREEN_OWNER
                     and self._last_screen_owner != self.OVERRIDE_SCREEN_OWNER
                 ):
-                    self._render_display_override()
+                    if not self._render_display_override():
+                        self._release_failed_override()
+                        active_owner = self.screen_arbiter.active_owner()
                 if self._last_screen_owner and active_owner is None:
                     self._force_display_update()
                     self._schedule_next_update()
@@ -1012,6 +1038,7 @@ class DisplayManager:
 
         self.override_server.stop()
         self.calendar_plugin.stop()
+        self.rss_plugin.stop()
             
         for thread in [self._check_data_thread, self._flight_thread, self._iss_thread]:
             if thread:

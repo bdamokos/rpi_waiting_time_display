@@ -1,4 +1,5 @@
 from display_override_api import _is_private_client, create_override_app
+from screen_arbiter import ScreenArbiter
 
 
 def _display_manager_for_override(monkeypatch, tmp_path):
@@ -92,3 +93,27 @@ def test_live_iss_owner_keeps_priority_over_prediction_override(monkeypatch, tmp
     assert result["accepted"] is True
     assert result["rendered"] is False
     assert result["active_owner"] == manager.ISS_SCREEN_OWNER
+
+
+def test_failed_override_releases_active_claim(monkeypatch):
+    from basic import DisplayManager
+
+    manager = DisplayManager.__new__(DisplayManager)
+    manager.screen_arbiter = ScreenArbiter()
+    manager.override_priority = 30
+    manager.override_duration_seconds = 300
+    manager._override_module = None
+    import threading
+
+    manager._override_lock = threading.RLock()
+    manager._render_display_override = lambda: False
+    restored = []
+    manager._force_display_update = lambda: restored.append(True)
+
+    result = manager.request_display_override("weather")
+
+    assert result["accepted"]
+    assert not result["rendered"]
+    assert manager.screen_arbiter.active_owner() is None
+    assert manager._override_module is None
+    assert restored == [True]

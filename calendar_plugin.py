@@ -195,8 +195,15 @@ class CalendarPlugin:
     def render_forced_agenda(self, owner: str) -> bool:
         """Render the current agenda while an external arbiter owner is active."""
 
-        now = datetime.now(self.client.timezone)
-        events = self.client.get_events(now)
+        if not self.enabled:
+            logger.warning("Calendar plugin is disabled; cannot render forced agenda")
+            return False
+        try:
+            now = datetime.now(self.client.timezone)
+            events = self.client.get_events(now)
+        except Exception as exc:
+            logger.error("Failed to fetch events for forced agenda: %s", exc)
+            return False
         with self.display_lock:
             if not self.arbiter.can_render(owner):
                 return False

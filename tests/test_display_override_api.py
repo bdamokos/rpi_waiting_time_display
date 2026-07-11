@@ -24,6 +24,7 @@ def _display_manager_for_override(monkeypatch, tmp_path):
     manager._override_module = None
     manager._override_generation = 0
     manager._override_lock = threading.RLock()
+    manager._override_render_lock = threading.Lock()
     manager._display_lock = threading.Lock()
     manager.iss_tracker = SimpleNamespace(
         next_known_pass=lambda now: {"risetime": now + 600, "duration": 300}

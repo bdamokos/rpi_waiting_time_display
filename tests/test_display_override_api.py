@@ -22,6 +22,7 @@ def _display_manager_for_override(monkeypatch, tmp_path):
     manager.override_priority = 30
     manager.override_duration_seconds = 300
     manager._override_module = None
+    manager._override_generation = 0
     manager._override_lock = threading.RLock()
     manager._display_lock = threading.Lock()
     manager.iss_tracker = SimpleNamespace(

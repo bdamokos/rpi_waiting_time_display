@@ -172,7 +172,12 @@ class ISSTracker:
 
     def next_known_pass(self, now=None):
         """Return the next predicted pass that has not started yet."""
-        current_time = time() if now is None else now
+        if now is None:
+            current_time = time()
+        elif isinstance(now, datetime):
+            current_time = now.timestamp()
+        else:
+            current_time = now
         return next(
             (
                 pass_info
@@ -418,7 +423,10 @@ def _prediction_fonts():
 
 def display_next_iss_pass(epd, pass_info, now=None):
     """Render the next cached ISS overflight, or an honest empty state."""
-    now = now or datetime.now().astimezone()
+    if now is None:
+        now = datetime.now().astimezone()
+    elif now.tzinfo is None:
+        now = now.astimezone()
     width = epd.height
     height = epd.width
     mode = '1' if epd.is_bw_display else 'RGB'
@@ -430,7 +438,7 @@ def display_next_iss_pass(epd, pass_info, now=None):
     draw.text((8, 5), "NEXT ISS PASS", font=title_font, fill="black")
     draw.line((8, 32, width - 8, 32), fill="black", width=2)
 
-    if not pass_info:
+    if not pass_info or "risetime" not in pass_info:
         draw.text((8, 45), "No prediction available", font=value_font, fill="black")
         draw.text((8, 72), "The tracker has no future pass", font=detail_font, fill="black")
         draw.text((8, 90), "cached yet. Try again later.", font=detail_font, fill="black")
@@ -443,7 +451,8 @@ def display_next_iss_pass(epd, pass_info, now=None):
             hours, remainder = divmod(seconds_until // 60, 60)
             countdown = f"in {hours}h {remainder:02d}m"
         duration = max(0, int(pass_info.get('duration', 0)))
-        max_position = pass_info.get('position', {}).get('max', {})
+        position = pass_info.get('position') or {}
+        max_position = position.get('max') or {}
         direction = max_position.get('direction')
         elevation = max_position.get('altitude')
 
@@ -452,7 +461,7 @@ def display_next_iss_pass(epd, pass_info, now=None):
         details = [f"Duration {duration // 60}m {duration % 60:02d}s"]
         if direction and elevation is not None:
             details.append(f"Peak {direction} at {elevation:.0f} deg")
-        darkness = pass_info.get('darkness', {})
+        darkness = pass_info.get('darkness') or {}
         if darkness.get('fully_dark'):
             details.append("Dark sky")
         elif darkness:

@@ -54,6 +54,11 @@ def test_override_api_validates_access_auth_and_payload():
     assert client.get("/api/display").status_code == 401
     headers = {"Authorization": "Bearer secret"}
     assert client.post("/api/display", headers=headers, json={}).status_code == 400
+    assert client.post("/api/display", headers=headers, json=[]).status_code == 400
+    assert (
+        client.post("/api/display", headers=headers, json="weather").status_code
+        == 400
+    )
     assert client.post("/api/display/nope", headers=headers).status_code == 404
 
 

@@ -436,7 +436,13 @@ class DisplayManager:
             if released:
                 self._force_display_update()
         elif selected and rendered:
-            self._last_screen_owner = self.OVERRIDE_SCREEN_OWNER
+            with self._override_lock:
+                if (
+                    generation == self._override_generation
+                    and self.screen_arbiter.active_owner()
+                    == self.OVERRIDE_SCREEN_OWNER
+                ):
+                    self._last_screen_owner = self.OVERRIDE_SCREEN_OWNER
         return {
             "accepted": True,
             "module": normalized,

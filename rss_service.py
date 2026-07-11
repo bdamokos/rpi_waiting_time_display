@@ -160,7 +160,8 @@ def parse_feed(content: bytes, source: FeedSource) -> list[FeedEntry]:
         categories = tuple(
             category
             for child in node
-            if _local_name(child.tag) in {"category", "subject"}
+            if isinstance(child.tag, str)
+            and _local_name(child.tag) in {"category", "subject"}
             if (category := clean_text("".join(child.itertext())))
         )
         parsed.append(

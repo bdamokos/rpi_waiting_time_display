@@ -165,9 +165,26 @@ def test_bbc_sport_link_and_feed_category_are_sports():
         "Breaking: final result",
         categories=("Sport",),
     )
+    plural_publication = FeedEntry(
+        "sports-wire",
+        "https://wire.test/rss",
+        "breaking",
+        "Example Sports",
+        "Breaking: final result",
+    )
+    plural_category = FeedEntry(
+        "motorsports",
+        "https://wire.test/rss",
+        "breaking",
+        "Wire",
+        "Breaking: race result",
+        categories=("Motorsports",),
+    )
 
     assert is_sports_entry(bbc)
     assert is_sports_entry(category)
+    assert is_sports_entry(plural_publication)
+    assert is_sports_entry(plural_category)
 
 
 def test_non_sport_bbc_breaking_story_is_not_filtered():

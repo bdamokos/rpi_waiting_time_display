@@ -121,7 +121,7 @@ def is_sports_entry(entry: FeedEntry) -> bool:
     path_parts = {part.casefold() for part in link.path.split("/") if part}
     if path_parts.intersection({"sport", "sports"}):
         return True
-    if "sport" in entry.publication.casefold().split():
+    if {"sport", "sports"}.intersection(entry.publication.casefold().split()):
         return True
     sport_categories = {
         "sport",
@@ -134,6 +134,7 @@ def is_sports_entry(entry: FeedEntry) -> bool:
         "golf",
         "formula 1",
         "motorsport",
+        "motorsports",
     }
     return any(category.casefold() in sport_categories for category in entry.categories)
 

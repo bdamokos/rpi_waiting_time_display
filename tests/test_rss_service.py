@@ -59,6 +59,17 @@ def test_feed_parses_category_metadata():
     assert entry.categories == ("Sport",)
 
 
+def test_feed_with_comments_does_not_crash():
+    content = RSS.replace(
+        b"<guid>tweet-1</guid>",
+        b"<guid>tweet-1</guid><!-- comment --><category>News</category>",
+    )
+
+    entry = parse_feed(content, FeedSource("https://news.test/rss"))[0]
+
+    assert entry.categories == ("News",)
+
+
 def test_configured_sources_builds_nitter_and_arbitrary_feeds(monkeypatch):
     monkeypatch.setenv("rss_nitter_base_url", "http://nitter.local/")
     monkeypatch.setenv("rss_nitter_users", "alice, @bob")

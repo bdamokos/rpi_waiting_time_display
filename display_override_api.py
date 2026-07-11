@@ -75,13 +75,17 @@ def create_override_app(
 
 
 class DisplayOverrideServer:
-    """Run the override API in a stoppable background thread."""
+    """Run the override API in a stoppable background thread.
+
+    The listener defaults to loopback. Operators must explicitly configure a
+    LAN address when remote private-network clients need access.
+    """
 
     def __init__(self, request_override, clear_override, get_status):
         self.enabled = (
             os.getenv("display_override_api_enabled", "false").lower() == "true"
         )
-        self.host = os.getenv("display_override_api_host", "0.0.0.0")
+        self.host = os.getenv("display_override_api_host", "127.0.0.1")
         self.port = int(os.getenv("display_override_api_port", "5003"))
         token = os.getenv("display_override_api_token", "")
         self.app = create_override_app(

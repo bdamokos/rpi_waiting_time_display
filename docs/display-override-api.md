@@ -10,16 +10,20 @@ Enable the listener in the display's untracked `.env` file:
 
 ```dotenv
 display_override_api_enabled=true
+display_override_api_host=0.0.0.0
 display_override_api_port=5003
 ```
 
-The listener accepts only loopback and private-network client addresses. For a
-shared or untrusted LAN, set `display_override_api_token` and send it as a
-Bearer token. The default lease is 300 seconds and the default priority is 30;
-both can be changed with `display_override_duration_seconds` and
-`display_override_priority`.
+The listener defaults to `127.0.0.1`. Set `display_override_api_host` to the
+device's LAN address or `0.0.0.0` only when remote private-network clients need
+access. Requests are still limited to loopback and private-network client
+addresses. For a shared or untrusted LAN, set `display_override_api_token` and
+send it as a Bearer token. The default lease is 300 seconds and the default
+priority is 30; both can be changed with `display_override_duration_seconds`
+and `display_override_priority`.
 
-Request one of `codex`, `weather`, `transit`, `calendar`, or `iss`:
+Request one of `token`, `weather`, `transit`, `calendar`, or `iss`. `codex`
+remains an accepted alias for `token`:
 
 ```bash
 curl -X POST http://DISPLAY_HOST:5003/api/display/codex

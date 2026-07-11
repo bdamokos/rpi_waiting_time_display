@@ -9,7 +9,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, FrozenSet, List, Optional
 from urllib.request import Request, urlopen
 
 logger = logging.getLogger(__name__)
@@ -27,13 +27,55 @@ def _minutes(value: str) -> int:
     return parsed % (24 * 60)
 
 
+WEEKDAYS = {
+    "mon": 0,
+    "tue": 1,
+    "wed": 2,
+    "thu": 3,
+    "fri": 4,
+    "sat": 5,
+    "sun": 6,
+}
+
+
+def _weekday_set(value: str) -> FrozenSet[int]:
+    """Parse a schedule day selector such as ``weekdays`` or ``mon+wed-fri``."""
+
+    selector = value.strip().lower()
+    aliases = {
+        "daily": frozenset(range(7)),
+        "all": frozenset(range(7)),
+        "weekdays": frozenset(range(5)),
+        "weekends": frozenset({5, 6}),
+    }
+    if selector in aliases:
+        return aliases[selector]
+
+    selected = set()
+    for part in selector.split("+"):
+        names = part.strip().split("-")
+        if len(names) == 1 and names[0] in WEEKDAYS:
+            selected.add(WEEKDAYS[names[0]])
+            continue
+        if len(names) != 2 or any(name not in WEEKDAYS for name in names):
+            raise ValueError(f"invalid day selector: {value}")
+        start, end = (WEEKDAYS[name] for name in names)
+        selected.update((start + offset) % 7 for offset in range((end - start) % 7 + 1))
+    if not selected:
+        raise ValueError(f"invalid day selector: {value}")
+    return frozenset(selected)
+
+
 @dataclass(frozen=True)
 class ScheduleEntry:
     mode: str
     start_minute: int
     end_minute: int
+    weekdays: FrozenSet[int] = frozenset(range(7))
 
     def contains(self, value: datetime) -> bool:
+        if value.weekday() not in self.weekdays:
+            return False
         minute = value.hour * 60 + value.minute
         if self.start_minute == self.end_minute:
             return True
@@ -43,20 +85,34 @@ class ScheduleEntry:
 
 
 class DisplaySchedule:
-    """Parse ``mode@HH:MM-HH:MM`` entries and select the current mode."""
+    """Parse time-only or weekday-aware entries and select the current mode.
 
-    ALLOWED_MODES = {"auto", "transit", "weather", "token"}
+    Entries use ``mode@HH:MM-HH:MM`` or
+    ``mode@DAYS@HH:MM-HH:MM``. Earlier entries have priority.
+    """
+
+    ALLOWED_MODES = {"auto", "transit", "weather", "token", "token-always"}
 
     def __init__(self, value: str):
         self.entries: List[ScheduleEntry] = []
         for raw_entry in filter(None, (part.strip() for part in value.split(","))):
             try:
-                mode, window = raw_entry.split("@", 1)
+                parts = raw_entry.split("@")
+                if len(parts) == 2:
+                    mode, window = parts
+                    weekdays = frozenset(range(7))
+                elif len(parts) == 3:
+                    mode, days, window = parts
+                    weekdays = _weekday_set(days)
+                else:
+                    raise ValueError("expected mode@time or mode@days@time")
                 start, end = window.split("-", 1)
                 mode = mode.strip().lower()
                 if mode not in self.ALLOWED_MODES:
                     raise ValueError(f"unsupported mode: {mode}")
-                self.entries.append(ScheduleEntry(mode, _minutes(start), _minutes(end)))
+                self.entries.append(
+                    ScheduleEntry(mode, _minutes(start), _minutes(end), weekdays)
+                )
             except (TypeError, ValueError) as exc:
                 raise ValueError(
                     f"invalid display_schedule entry '{raw_entry}': {exc}"

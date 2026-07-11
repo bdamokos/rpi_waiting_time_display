@@ -12,22 +12,29 @@ default and does not change existing installations until
 
 ## Scheduling
 
-`display_schedule` is a comma-separated list of
-`mode@HH:MM-HH:MM` entries. The first matching entry wins, and ranges may cross
-midnight. For example:
+`display_schedule` is a comma-separated list of `mode@HH:MM-HH:MM` entries.
+To limit an entry by day, use `mode@DAYS@HH:MM-HH:MM`. The first matching entry
+wins, and ranges may cross midnight. `DAYS` may be `daily`, `weekdays`,
+`weekends`, one day (`mon`), an inclusive range (`mon-fri`), or a `+`-joined
+combination (`mon+wed+fri`). Day matching uses the device's local timezone.
+
+This example keeps Codex information visible throughout the weekend, preserves
+transit on weekday mornings, shows Codex only while it is active during weekday
+working hours, and shows weather on weekday nights:
 
 ```dotenv
-display_schedule=transit@06:00-10:00,token@10:00-22:00,weather@22:00-06:00
+display_schedule=token-always@weekends@00:00-00:00,transit@weekdays@06:00-10:00,token@weekdays@10:00-22:00,weather@weekdays@22:00-06:00
 token_usage_view_duration=300
 token_usage_views=month,limits
 token_usage_fallback_mode=transit
 ```
 
-Supported modes are `auto`, `transit`, `weather`, and `token`. When token data
-is unavailable or does not explicitly report `active: true`,
-`token_usage_fallback_mode` is used. The last good response is cached for
-`token_usage_max_stale_seconds`, but cached activity is never trusted: Codex
-views disappear when the live source is unavailable.
+Supported modes are `auto`, `transit`, `weather`, `token`, and `token-always`.
+`token` is shown only while the source reports recent Codex activity;
+`token-always` ignores activity but still requires a fresh snapshot. When token
+data is unavailable, `token_usage_fallback_mode` is used. The last good response
+is cached for `token_usage_max_stale_seconds`; stale data never keeps an active
+or always-on token window visible.
 
 ## Data sources
 

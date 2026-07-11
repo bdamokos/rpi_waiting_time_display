@@ -318,21 +318,27 @@ class DisplayManager:
         if not self.token_usage_client.enabled:
             return "auto"
         scheduled_mode = self.display_schedule.mode_at(current_time)
-        if scheduled_mode != "token":
+        if scheduled_mode not in {"token", "token-always"}:
             return scheduled_mode
         snapshot = self.token_usage_client.get_snapshot()
-        if snapshot and snapshot.active and not snapshot.stale:
-            return "token"
+        if snapshot and not snapshot.stale and (
+            scheduled_mode == "token-always" or snapshot.active
+        ):
+            return scheduled_mode
         return self._token_fallback_mode()
+
+    @staticmethod
+    def _is_token_mode(mode):
+        return mode in {"token", "token-always"}
 
     @staticmethod
     def _token_fallback_mode():
         mode = os.getenv("token_usage_fallback_mode", "transit").strip().lower()
         return mode if mode in {"auto", "transit", "weather"} else "transit"
 
-    def _draw_token_usage(self, current_time):
+    def _draw_token_usage(self, current_time, require_active=True):
         snapshot = self.token_usage_client.get_snapshot()
-        if not snapshot or not snapshot.active or snapshot.stale:
+        if not snapshot or snapshot.stale or (require_active and not snapshot.active):
             return False
         view = token_view_at(current_time, self.token_views)
         set_base_image = self.current_display_mode != "token" or self.current_token_view != view
@@ -350,7 +356,7 @@ class DisplayManager:
         scheduled_mode = self._scheduled_mode(datetime.now())
         # Token views do not depend on weather. Warm it in the background so a
         # slow provider cannot delay the first scheduled token render.
-        if scheduled_mode == "token":
+        if self._is_token_mode(scheduled_mode):
             threading.Thread(
                 target=self.weather_manager.start,
                 name="WeatherManagerStarter",
@@ -369,7 +375,7 @@ class DisplayManager:
         
         # Token views do not depend on transit either. The normal update loop
         # will prefetch it when a transit or automatic window becomes active.
-        if scheduled_mode != "token":
+        if not self._is_token_mode(scheduled_mode):
             self.bus_manager.fetch_data()
             time.sleep(2)
         
@@ -520,10 +526,12 @@ class DisplayManager:
             with self._display_lock:
                 current_time = datetime.now()
                 scheduled_mode = self._scheduled_mode(current_time)
-                if scheduled_mode == "token" and self._draw_token_usage(current_time):
+                if self._is_token_mode(scheduled_mode) and self._draw_token_usage(
+                    current_time, require_active=scheduled_mode == "token"
+                ):
                     self.last_display_update = current_time
                     return
-                if scheduled_mode == "token":
+                if self._is_token_mode(scheduled_mode):
                     scheduled_mode = self._token_fallback_mode()
                 bus_data, error_message, stop_name = self.bus_manager.get_bus_data()
                 weather_data = self.weather_manager.get_weather_data() if weather_enabled else None
@@ -638,7 +646,7 @@ class DisplayManager:
                 # Check if it's time to prefetch data
                 if (
                     transit_enabled
-                    and self._scheduled_mode(current_time) != "token"
+                    and not self._is_token_mode(self._scheduled_mode(current_time))
                     and current_time >= self.next_prefetch_time
                 ):
                     with self._prefetch_lock:
@@ -663,8 +671,11 @@ class DisplayManager:
 
                     with self._display_lock:
                         scheduled_mode = self._scheduled_mode(current_time)
-                        if scheduled_mode == "token":
-                            if self._draw_token_usage(current_time):
+                        if self._is_token_mode(scheduled_mode):
+                            if self._draw_token_usage(
+                                current_time,
+                                require_active=scheduled_mode == "token",
+                            ):
                                 self.last_display_update = datetime.now()
                                 logger.info("Token usage display updated successfully")
                                 scheduled_mode = "rendered"

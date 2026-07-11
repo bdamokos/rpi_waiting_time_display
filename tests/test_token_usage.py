@@ -38,9 +38,32 @@ def test_schedule_selects_day_and_overnight_ranges():
     assert schedule.mode_at(datetime(2026, 7, 10, 5, 59)) == "weather"
 
 
+def test_schedule_supports_weekday_and_weekend_overrides():
+    schedule = DisplaySchedule(
+        "token-always@weekends@00:00-00:00,"
+        "transit@weekdays@06:00-10:00,"
+        "token@weekdays@10:00-22:00,"
+        "weather@weekdays@22:00-06:00"
+    )
+    assert schedule.mode_at(datetime(2026, 7, 10, 9, 59)) == "transit"  # Friday
+    assert schedule.mode_at(datetime(2026, 7, 10, 10, 0)) == "token"
+    assert schedule.mode_at(datetime(2026, 7, 11, 1, 0)) == "token-always"  # Saturday
+    assert schedule.mode_at(datetime(2026, 7, 12, 23, 59)) == "token-always"
+    assert schedule.mode_at(datetime(2026, 7, 13, 1, 0)) == "weather"  # Monday
+
+
+def test_schedule_supports_day_lists_and_wrapping_ranges():
+    schedule = DisplaySchedule("token@fri-mon+wed@12:00-13:00")
+    for day in (10, 11, 12, 13, 15):
+        assert schedule.mode_at(datetime(2026, 7, day, 12, 0)) == "token"
+    assert schedule.mode_at(datetime(2026, 7, 14, 12, 0)) == "auto"
+
+
 def test_invalid_schedule_is_rejected():
     with pytest.raises(ValueError):
         DisplaySchedule("private-mode@09:00-10:00")
+    with pytest.raises(ValueError):
+        DisplaySchedule("token@funday@09:00-10:00")
 
 
 def test_snapshot_reports_remaining_capacity():
@@ -79,6 +102,24 @@ def test_scheduled_token_mode_requires_live_activity(monkeypatch):
     assert manager._scheduled_mode(now) == "weather"
     monkeypatch.setenv("token_usage_fallback_mode", "token")
     assert manager._scheduled_mode(now) == "transit"
+
+
+def test_token_always_mode_ignores_activity_but_not_staleness(monkeypatch):
+    from basic import DisplayManager
+
+    manager = DisplayManager.__new__(DisplayManager)
+    manager.display_schedule = DisplaySchedule("token-always@weekends@00:00-00:00")
+    manager.token_usage_client = SimpleNamespace(
+        enabled=True,
+        get_snapshot=lambda: SimpleNamespace(active=False, stale=False),
+    )
+    monkeypatch.setenv("token_usage_fallback_mode", "weather")
+
+    assert manager._scheduled_mode(datetime(2026, 7, 11, 12, 0)) == "token-always"
+    manager.token_usage_client.get_snapshot = lambda: SimpleNamespace(
+        active=False, stale=True
+    )
+    assert manager._scheduled_mode(datetime(2026, 7, 11, 12, 0)) == "weather"
 
 
 def test_file_client_reads_and_caches_snapshot(tmp_path, monkeypatch):

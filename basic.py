@@ -694,6 +694,7 @@ class DisplayManager:
                             self.in_flight_mode = False
                             self.last_flight_mode_end = current_time
                             self.flight_mode_start = None
+                            last_flight_log = 0
                             self.screen_arbiter.release(self.FLIGHT_SCREEN_OWNER)
                             logger.info(f"Starting flight cooldown period of {self.flight_mode_cooldown} seconds")
 
@@ -734,6 +735,8 @@ class DisplayManager:
 
                     with self._display_lock:
                         if not self.screen_arbiter.can_render():
+                            with self._prefetch_lock:
+                                self.prefetch_done = False
                             continue
                         scheduled_mode = self._scheduled_mode(current_time)
                         if self._is_token_mode(scheduled_mode):

@@ -14,8 +14,16 @@ A claim has four properties:
   released or expires.
 
 Claims remain registered while another plugin is active. When the winning claim
-ends, the next-highest claim resumes automatically; if no claims remain, the
-normal scheduled display is restored.
+ends, the next-highest claim becomes eligible automatically; if no claims
+remain, the normal scheduled display is restored.
+
+The arbiter manages ownership, not a retained image layer. An e-ink panel keeps
+showing the last pixels written by the previous owner until the resumed plugin
+renders again. Interrupting plugins must therefore detect when
+`can_render(owner)` becomes true and redraw immediately, or poll frequently
+enough for their use case. The built-in flight and ISS plugins update
+periodically, while the display manager explicitly redraws the base screen when
+the final claim ends.
 
 ## Existing plugin priorities
 

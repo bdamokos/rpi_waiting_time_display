@@ -123,6 +123,18 @@ Key environment variables:
 - Use step-by-step approach for new features
 - Create GitHub issues for bugs that can't be fixed quickly
 
+## Pull request follow-through
+
+- Opening a pull request is not the end of the task. Wait for configured CI and
+  review bots to finish, inspect their feedback, and implement valid fixes before
+  reporting the PR as ready or the task as complete.
+- Re-run the relevant tests after review fixes and confirm that required checks
+  are green and actionable review threads are resolved.
+- Merge only when the user's request or standing instructions authorize merging.
+  If the request was only to create a PR, hand the clean PR back to the user for
+  confirmation instead. If merging is authorized, merge once the PR is clean and
+  report the resulting merge commit.
+
 ## Deployment and privacy
 
 - The public Git repository is the source of truth for application code. Keep hostnames, IP addresses, bearer tokens, account identifiers, usage snapshots, and personal `.env` values out of tracked files and commit history.

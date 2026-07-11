@@ -117,6 +117,50 @@ def test_event_start_releases_exclusive_claim(monkeypatch):
     assert plugin.arbiter.active_owner() is None
 
 
+def test_forced_agenda_uses_external_owner(monkeypatch):
+    rendered = []
+    plugin = _plugin(monkeypatch, rendered)
+    now = datetime(2026, 7, 11, 8, 5, tzinfo=TIMEZONE)
+    event = _event(now)
+    plugin.client.get_events = lambda now: [event]
+    assert plugin.arbiter.claim("api-override", 30, 300)
+
+    assert plugin.render_forced_agenda("api-override")
+    assert rendered[-1][0] == "agenda"
+
+
+def test_forced_agenda_yields_to_higher_priority(monkeypatch):
+    rendered = []
+    plugin = _plugin(monkeypatch, rendered)
+    now = datetime(2026, 7, 11, 8, 5, tzinfo=TIMEZONE)
+    event = _event(now)
+    plugin.client.get_events = lambda now: [event]
+    plugin.arbiter.claim("api-override", 30, 300)
+    plugin.arbiter.claim("flight", 50, 30)
+
+    assert not plugin.render_forced_agenda("api-override")
+    assert rendered == []
+
+
+def test_forced_agenda_skips_disabled_calendar(monkeypatch):
+    rendered = []
+    plugin = _plugin(monkeypatch, rendered)
+    plugin.enabled = False
+
+    assert not plugin.render_forced_agenda("api-override")
+    assert rendered == []
+
+
+def test_forced_agenda_handles_fetch_failure(monkeypatch):
+    rendered = []
+    plugin = _plugin(monkeypatch, rendered)
+    plugin.client.get_events = lambda now: (_ for _ in ()).throw(RuntimeError("offline"))
+    plugin.arbiter.claim("api-override", 30, 300)
+
+    assert not plugin.render_forced_agenda("api-override")
+    assert rendered == []
+
+
 def test_all_day_event_only_appears_in_agenda(monkeypatch):
     rendered = []
     plugin = _plugin(monkeypatch, rendered)

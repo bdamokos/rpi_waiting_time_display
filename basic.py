@@ -364,6 +364,7 @@ class DisplayManager:
             self.screen_arbiter,
             self._display_lock,
             on_render=self._calendar_rendered,
+            base_mode_at=self.display_schedule.mode_at,
         )
         self.override_server = DisplayOverrideServer(
             self.request_display_override,

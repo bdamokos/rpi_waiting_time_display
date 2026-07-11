@@ -10,17 +10,19 @@ Enable the listener in the display's untracked `.env` file:
 
 ```dotenv
 display_override_api_enabled=true
-display_override_api_host=0.0.0.0
+display_override_api_host=<LAN_BIND_ADDRESS>
 display_override_api_port=5003
 ```
 
-The listener defaults to `127.0.0.1`. Set `display_override_api_host` explicitly
-to a LAN interface or `0.0.0.0` when another private-network device needs to
-connect. Requests are still limited to loopback and private-network client
-addresses. For a shared or untrusted LAN, set `display_override_api_token` and
-send it as a Bearer token. The default lease is 300 seconds and the default
-priority is 30; both can be changed with `display_override_duration_seconds`
-and `display_override_priority`.
+The listener defaults to loopback. Set `display_override_api_host` explicitly
+to the device's LAN interface, or to the all-interfaces bind address, only when
+another private-network device needs to connect. Requests are still limited to
+loopback and private-network client addresses. On a trusted private network,
+set `display_override_api_token` and send it as a Bearer token. Plain HTTP does
+not protect that token from interception on an untrusted network; use encrypted
+transport before exposing the listener there. The default lease is 300 seconds
+and the default priority is 30; both can be changed with
+`display_override_duration_seconds` and `display_override_priority`.
 
 Request one of `token`, `weather`, `transit`, `calendar`, or `flights` (`codex`
 remains an accepted alias for `token`):

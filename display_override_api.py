@@ -50,7 +50,9 @@ def create_override_app(
 
     @app.post("/api/display")
     def override_from_json():
-        body = request.get_json(silent=True) or {}
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict):
+            return jsonify(error="JSON object with field 'module' is required"), 400
         module = body.get("module")
         if not isinstance(module, str) or not module.strip():
             return jsonify(error="JSON field 'module' is required"), 400

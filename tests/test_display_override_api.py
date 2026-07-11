@@ -54,6 +54,11 @@ def test_override_api_validates_access_auth_and_payload():
     assert client.get("/api/display").status_code == 401
     headers = {"Authorization": "Bearer secret"}
     assert client.post("/api/display", headers=headers, json={}).status_code == 400
+    assert client.post("/api/display", headers=headers, json=[]).status_code == 400
+    assert (
+        client.post("/api/display", headers=headers, json="weather").status_code
+        == 400
+    )
     assert client.post("/api/display/nope", headers=headers).status_code == 404
 
 
@@ -65,6 +70,7 @@ def test_failed_override_releases_active_claim(monkeypatch):
     manager.override_priority = 30
     manager.override_duration_seconds = 300
     manager._override_module = None
+    manager._override_generation = 0
     import threading
 
     manager._override_lock = threading.RLock()
@@ -93,6 +99,7 @@ def test_successful_override_records_owner_and_reports_canonical_modules():
     manager.override_priority = 30
     manager.override_duration_seconds = 300
     manager._override_module = None
+    manager._override_generation = 0
     manager._last_screen_owner = None
     import threading
 
@@ -114,3 +121,34 @@ def test_successful_override_records_owner_and_reports_canonical_modules():
         "transit",
         "weather",
     ]
+
+
+def test_failed_request_does_not_release_a_newer_override():
+    from basic import DisplayManager
+
+    manager = DisplayManager.__new__(DisplayManager)
+    manager.screen_arbiter = ScreenArbiter()
+    manager.override_priority = 30
+    manager.override_duration_seconds = 300
+    manager._override_module = None
+    manager._override_generation = 0
+    manager._last_screen_owner = None
+    import threading
+
+    manager._override_lock = threading.RLock()
+
+    def render(module=None):
+        if module == "weather":
+            newer = manager.request_display_override("token")
+            assert newer["rendered"]
+            return False
+        return True
+
+    manager._render_display_override = render
+    manager._force_display_update = lambda: None
+
+    older = manager.request_display_override("weather")
+
+    assert not older["rendered"]
+    assert manager._override_module == "token"
+    assert manager.screen_arbiter.active_owner() == manager.OVERRIDE_SCREEN_OWNER

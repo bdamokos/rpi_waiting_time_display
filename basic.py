@@ -28,6 +28,7 @@ from token_usage import (
     configured_token_views,
     token_view_at,
 )
+from screen_arbiter import ScreenArbiter
 
 logger = logging.getLogger(__name__)
 # Set logging level for PIL.PngImagePlugin and urllib3.connectionpool to warning
@@ -260,6 +261,9 @@ class BusManager:
             return self.bus_data.get('stop_name')
 
 class DisplayManager:
+    FLIGHT_SCREEN_OWNER = "flight"
+    ISS_SCREEN_OWNER = "iss"
+
     def __init__(self, epd):
         self.epd = epd
         self.update_count = 0
@@ -299,6 +303,13 @@ class DisplayManager:
         self.in_iss_mode = False
         self.iss_mode_start_time = None
         self.iss_mode_max_seconds = int(os.getenv("iss_mode_max_seconds", "3600"))
+        self.flight_screen_priority = int(os.getenv("screen_priority_flight", "50"))
+        default_iss_priority = "60" if self.iss_priority else "40"
+        self.iss_screen_priority = int(
+            os.getenv("screen_priority_iss", default_iss_priority)
+        )
+        self.screen_arbiter = ScreenArbiter()
+        self._last_screen_owner = None
         self.prefetch_offset = 10  # seconds before display update to fetch new data
         self.display_interval = DISPLAY_REFRESH_INTERVAL
         self.next_update_time = None
@@ -311,6 +322,11 @@ class DisplayManager:
         logger.info(f"DisplayManager initialized with min refresh interval: {self.min_refresh_interval}s")
         logger.info(f"DisplayManager initialized with coordinates: {self.coordinates_lat}, {self.coordinates_lng}")
         logger.info(f"DisplayManager initialized with flight mode duration: {self.flight_mode_duration}s")
+        logger.info(
+            "Screen priorities initialized: flight=%s, iss=%s",
+            self.flight_screen_priority,
+            self.iss_screen_priority,
+        )
         if self.token_usage_client.enabled:
             logger.info("Token usage display enabled with views: %s", ", ".join(self.token_views))
 
@@ -398,11 +414,12 @@ class DisplayManager:
             flight_check_interval=flight_check_interval,
             aeroapi_enabled=aeroapi_enabled
         )
-        self.flight_thread = threading.Thread(
+        self._flight_thread = threading.Thread(
             target=self._check_flights,
+            name="FlightTracker",
             daemon=True
         )
-        self.flight_thread.start()
+        self._flight_thread.start()
 
     def initialize_iss_tracking(self):
         if not self.iss_enabled:
@@ -425,27 +442,44 @@ class DisplayManager:
     def _run_iss_tracker(self):
         """Run ISS tracker with display mode management"""
         def on_pass_start():
-            if self.iss_priority:
-                # Force exit from flight mode if needed
-                if self.in_flight_mode:
-                    logger.info("ISS pass starting - forcing exit from flight mode")
-                    self.in_flight_mode = False
-                    self.flight_mode_start = None
             self.in_iss_mode = True
             self.iss_mode_start_time = datetime.now()
+            self.screen_arbiter.claim(
+                self.ISS_SCREEN_OWNER,
+                self.iss_screen_priority,
+                self.iss_mode_max_seconds,
+            )
             
         def on_pass_end():
             self.in_iss_mode = False
             self.iss_mode_start_time = None
-            self._force_display_update()
+            self.screen_arbiter.release(self.ISS_SCREEN_OWNER)
+
+        def display_position(position):
+            if not self.screen_arbiter.can_render(self.ISS_SCREEN_OWNER):
+                return False
+            from iss import display_iss_info
+
+            with self._display_lock:
+                if not self.screen_arbiter.can_render(self.ISS_SCREEN_OWNER):
+                    return False
+                display_iss_info(self.epd, position)
+                self.last_display_update = datetime.now()
+                self.current_display_mode = self.ISS_SCREEN_OWNER
+            return True
 
         try:
-            self.iss_tracker.run(self.epd, on_pass_start, on_pass_end)
+            self.iss_tracker.run(
+                self.epd,
+                on_pass_start,
+                on_pass_end,
+                display_callback=display_position,
+            )
         except Exception as e:
             logger.error(f"Error in ISS tracker: {e}")
             self.in_iss_mode = False
             self.iss_mode_start_time = None
-            self._force_display_update()
+            self.screen_arbiter.release(self.ISS_SCREEN_OWNER)
 
     def _can_enter_flight_mode(self, current_time):
         """Check if we can enter flight mode based on cooldown"""
@@ -502,11 +536,24 @@ class DisplayManager:
                                             logger.debug("Entering flight mode")
                                             self.in_flight_mode = True
                                             self.flight_mode_start = current_time
+                                            self.screen_arbiter.claim(
+                                                self.FLIGHT_SCREEN_OWNER,
+                                                self.flight_screen_priority,
+                                                self.flight_mode_duration,
+                                            )
                                             logger.debug(f"Flight mode start time: {self.flight_mode_start}")
                                         else:
                                             logger.debug("Updating flight display while in flight mode")
-                                        update_display_with_flights(self.epd, [enhanced_flight])
-                                    self.last_display_update = datetime.now()
+                                        if self.screen_arbiter.can_render(
+                                            self.FLIGHT_SCREEN_OWNER
+                                        ):
+                                            update_display_with_flights(
+                                                self.epd, [enhanced_flight]
+                                            )
+                                            self.current_display_mode = (
+                                                self.FLIGHT_SCREEN_OWNER
+                                            )
+                                            self.last_display_update = datetime.now()
                                     self.last_flight_update = current_time
                         else:
                             logger.debug("No flights found within the radius")
@@ -523,14 +570,22 @@ class DisplayManager:
         """Force an immediate display update"""
         logger.info("Forcing initial display update...")
         try:
+            if not self.screen_arbiter.can_render():
+                logger.debug(
+                    "Base display update deferred while %s owns the screen",
+                    self.screen_arbiter.active_owner(),
+                )
+                return False
             with self._display_lock:
+                if not self.screen_arbiter.can_render():
+                    return False
                 current_time = datetime.now()
                 scheduled_mode = self._scheduled_mode(current_time)
                 if self._is_token_mode(scheduled_mode) and self._draw_token_usage(
                     current_time, require_active=scheduled_mode == "token"
                 ):
                     self.last_display_update = current_time
-                    return
+                    return True
                 if self._is_token_mode(scheduled_mode):
                     scheduled_mode = self._token_fallback_mode()
                 bus_data, error_message, stop_name = self.bus_manager.get_bus_data()
@@ -584,9 +639,11 @@ class DisplayManager:
                     logger.warning("No valid data for initial display")
                 
                 self.last_display_update = datetime.now()
+                return True
         except Exception as e:
             logger.error(f"Error in initial display update: {e}")
             logger.debug(traceback.format_exc())
+            return False
 
     def _can_update_display(self, current_time):
         """Check if enough time has passed since last display update"""
@@ -609,21 +666,21 @@ class DisplayManager:
 
         while not self._stop_event.is_set():
             try:
-                if self.in_iss_mode:
-                    if self.iss_mode_start_time:
-                        time_in_iss_mode = (datetime.now() - self.iss_mode_start_time).total_seconds()
-                        if time_in_iss_mode >= self.iss_mode_max_seconds:
-                            logger.warning(f"ISS mode watchdog triggered after {time_in_iss_mode:.1f}s (max {self.iss_mode_max_seconds}s) - forcing exit from ISS mode")
-                            self.in_iss_mode = False
-                            self.iss_mode_start_time = None
-                            self._force_display_update()
-                            time.sleep(1)
-                            continue
-                    # Skip normal updates during ISS passes
-                    time.sleep(1)
-                    continue
-                
                 current_time = datetime.now()
+
+                if self.in_iss_mode and self.iss_mode_start_time:
+                    time_in_iss_mode = (
+                        current_time - self.iss_mode_start_time
+                    ).total_seconds()
+                    if time_in_iss_mode >= self.iss_mode_max_seconds:
+                        logger.warning(
+                            "ISS mode watchdog triggered after %.1fs (max %ss)",
+                            time_in_iss_mode,
+                            self.iss_mode_max_seconds,
+                        )
+                        self.in_iss_mode = False
+                        self.iss_mode_start_time = None
+                        self.screen_arbiter.release(self.ISS_SCREEN_OWNER)
 
                 # Handle flight mode checks
                 with self._flight_lock:
@@ -637,11 +694,14 @@ class DisplayManager:
                             self.in_flight_mode = False
                             self.last_flight_mode_end = current_time
                             self.flight_mode_start = None
+                            self.screen_arbiter.release(self.FLIGHT_SCREEN_OWNER)
                             logger.info(f"Starting flight cooldown period of {self.flight_mode_cooldown} seconds")
-                            # Force an immediate update to normal display
-                            self._force_display_update()
-                        time.sleep(1)  # Add sleep when in flight mode
-                        continue
+
+                active_owner = self.screen_arbiter.active_owner()
+                if self._last_screen_owner and active_owner is None:
+                    self._force_display_update()
+                    self._schedule_next_update()
+                self._last_screen_owner = active_owner
 
                 # Check if it's time to prefetch data
                 if (
@@ -662,7 +722,10 @@ class DisplayManager:
                                 # We want to avoid infinite retry loops within the same cycle
 
                 # Check if it's time to update display
-                if current_time >= self.next_update_time:
+                if (
+                    current_time >= self.next_update_time
+                    and self.screen_arbiter.can_render()
+                ):
                     logger.debug("Updating display...")
                     weather_data = self.weather_manager.get_weather_data() if weather_enabled else None
                     valid_bus_data = self.bus_manager.get_valid_bus_data() if transit_enabled else None
@@ -670,6 +733,8 @@ class DisplayManager:
                     stop_name = self.bus_manager.get_stop_name() if transit_enabled else None
 
                     with self._display_lock:
+                        if not self.screen_arbiter.can_render():
+                            continue
                         scheduled_mode = self._scheduled_mode(current_time)
                         if self._is_token_mode(scheduled_mode):
                             if self._draw_token_usage(
@@ -810,8 +875,7 @@ class DisplayManager:
         self.in_flight_mode = False
         self.flight_mode_start = None
         self.last_flight_mode_end = datetime.now()
-        # Force an immediate update to normal display
-        self._force_display_update()
+        self.screen_arbiter.release(self.FLIGHT_SCREEN_OWNER)
 
 def main():
     epd = None

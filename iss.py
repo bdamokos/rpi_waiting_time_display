@@ -96,7 +96,7 @@ class ISSTracker:
             logger.error(f"Error calculating passes: {e}")
             self.next_passes = []
 
-    def monitor_pass(self, pass_info, epd):
+    def monitor_pass(self, pass_info, epd, display_callback=None):
         """Monitor ISS during a pass window"""
         start_time = pass_info['risetime']
         end_time = start_time + pass_info['duration']
@@ -107,8 +107,13 @@ class ISSTracker:
             is_visible, position = is_iss_near(Coordinates_LAT, Coordinates_LNG, debug=True)
             if position:
                 try:
-                    display_iss_info(epd, position)
-                    logger.debug(f"Updated display with position: {position}")
+                    displayed = (
+                        display_callback(position)
+                        if display_callback
+                        else display_iss_info(epd, position)
+                    )
+                    if displayed is not False:
+                        logger.debug(f"Updated display with position: {position}")
                 except Exception as e:
                     logger.error(f"Error updating ISS display: {e}")
             
@@ -116,7 +121,13 @@ class ISSTracker:
         
         logger.info(f"Completed pass monitoring at {datetime.now()}")
 
-    def run(self, epd, on_pass_start=None, on_pass_end=None):
+    def run(
+        self,
+        epd,
+        on_pass_start=None,
+        on_pass_end=None,
+        display_callback=None,
+    ):
         """Main running loop with callbacks"""
         while not self.stop_event.is_set():
             current_time = time()
@@ -134,7 +145,11 @@ class ISSTracker:
                     if on_pass_start:
                         on_pass_start()
                     try:
-                        self.monitor_pass(current_pass, epd)
+                        self.monitor_pass(
+                            current_pass,
+                            epd,
+                            display_callback=display_callback,
+                        )
                     except Exception as e:
                         logger.error(f"Error monitoring ISS pass: {e}")
                     finally:

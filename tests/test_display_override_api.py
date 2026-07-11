@@ -127,7 +127,7 @@ def test_failed_override_releases_active_claim(monkeypatch):
     manager._override_lock = threading.RLock()
     rendered_modules = []
     manager._render_display_override = (
-        lambda module=None: rendered_modules.append(module) or False
+        lambda module=None, generation=None: rendered_modules.append(module) or False
     )
     restored = []
     manager._force_display_update = lambda: restored.append(True)
@@ -157,7 +157,7 @@ def test_successful_override_records_owner_and_reports_canonical_modules():
     manager._override_lock = threading.RLock()
     rendered_modules = []
     manager._render_display_override = (
-        lambda module=None: rendered_modules.append(module) or True
+        lambda module=None, generation=None: rendered_modules.append(module) or True
     )
 
     result = manager.request_display_override("codex")
@@ -188,7 +188,7 @@ def test_failed_request_does_not_release_a_newer_override():
 
     manager._override_lock = threading.RLock()
 
-    def render(module=None):
+    def render(module=None, generation=None):
         if module == "weather":
             newer = manager.request_display_override("token")
             assert newer["rendered"]

@@ -21,6 +21,7 @@ import log_config
 import logging
 from PIL import Image, ImageDraw, ImageFont
 from threading import Event
+from functools import lru_cache
 import humanize
 from astronomy_utils import get_moon_phase, get_appropriate_ephemeris
 from backoff import ExponentialBackoff
@@ -168,6 +169,23 @@ class ISSTracker:
     def stop(self):
         """Stop the tracker"""
         self.stop_event.set()
+
+    def next_known_pass(self, now=None):
+        """Return the next predicted pass that has not started yet."""
+        if now is None:
+            current_time = time()
+        elif isinstance(now, datetime):
+            current_time = now.timestamp()
+        else:
+            current_time = now
+        return next(
+            (
+                pass_info
+                for pass_info in self.next_passes
+                if pass_info.get('risetime', 0) > current_time
+            ),
+            None,
+        )
 
 # Create a global backoff instance for the API functions
 _api_backoff = ExponentialBackoff(initial_backoff=30, max_backoff=300)  # 30s to 5min
@@ -387,6 +405,77 @@ def get_direction(azimuth):
                  "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
     index = round(azimuth / 22.5) % 16
     return directions[index]
+
+
+@lru_cache(maxsize=1)
+def _prediction_fonts():
+    font_paths = get_font_paths()
+    try:
+        return (
+            ImageFont.truetype(font_paths['dejavu_bold'], 21),
+            ImageFont.truetype(font_paths['dejavu_bold'], 15),
+            ImageFont.truetype(font_paths['dejavu'], 12),
+        )
+    except OSError:
+        fallback = ImageFont.load_default()
+        return fallback, fallback, fallback
+
+
+def display_next_iss_pass(epd, pass_info, now=None):
+    """Render the next cached ISS overflight, or an honest empty state."""
+    if now is None:
+        now = datetime.now().astimezone()
+    elif now.tzinfo is None:
+        now = now.astimezone()
+    width = epd.height
+    height = epd.width
+    mode = '1' if epd.is_bw_display else 'RGB'
+    background = 1 if epd.is_bw_display else 'white'
+    image = Image.new(mode, (width, height), background)
+    draw = ImageDraw.Draw(image)
+    title_font, value_font, detail_font = _prediction_fonts()
+
+    draw.text((8, 5), "NEXT ISS PASS", font=title_font, fill="black")
+    draw.line((8, 32, width - 8, 32), fill="black", width=2)
+
+    if not pass_info or "risetime" not in pass_info:
+        draw.text((8, 45), "No prediction available", font=value_font, fill="black")
+        draw.text((8, 72), "The tracker has no future pass", font=detail_font, fill="black")
+        draw.text((8, 90), "cached yet. Try again later.", font=detail_font, fill="black")
+    else:
+        rise = datetime.fromtimestamp(pass_info['risetime'], tz=timezone.utc).astimezone()
+        seconds_until = max(0, int((rise - now).total_seconds()))
+        if seconds_until < 3600:
+            countdown = f"in {seconds_until // 60} min"
+        else:
+            hours, remainder = divmod(seconds_until // 60, 60)
+            countdown = f"in {hours}h {remainder:02d}m"
+        duration = max(0, int(pass_info.get('duration', 0)))
+        position = pass_info.get('position') or {}
+        max_position = position.get('max') or {}
+        direction = max_position.get('direction')
+        elevation = max_position.get('altitude')
+
+        draw.text((8, 40), countdown, font=title_font, fill="black")
+        draw.text((138, 43), rise.strftime("%a %H:%M"), font=value_font, fill="black")
+        details = [f"Duration {duration // 60}m {duration % 60:02d}s"]
+        if direction and elevation is not None:
+            details.append(f"Peak {direction} at {elevation:.0f} deg")
+        darkness = pass_info.get('darkness') or {}
+        if darkness.get('fully_dark'):
+            details.append("Dark sky")
+        elif darkness:
+            details.append("Daylight / twilight")
+        for index, detail in enumerate(details[:3]):
+            draw.text((8, 72 + index * 16), detail, font=detail_font, fill="black")
+
+    image = image.rotate(display_rotation, expand=True)
+    with return_display_lock():
+        buffer = epd.getbuffer(image)
+        if hasattr(epd, 'displayPartial'):
+            epd.displayPartial(buffer)
+        else:
+            epd.display(buffer)
 
 
 

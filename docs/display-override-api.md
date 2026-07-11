@@ -24,11 +24,12 @@ transport before exposing the listener there. The default lease is 300 seconds
 and the default priority is 30; both can be changed with
 `display_override_duration_seconds` and `display_override_priority`.
 
-Request one of `token`, `weather`, `transit`, `calendar`, or `flights` (`codex`
+Request one of `token`, `weather`, `transit`, `calendar`, `iss`, or `flights` (`codex`
 remains an accepted alias for `token`):
 
 ```bash
 curl -X POST http://DISPLAY_HOST:5003/api/display/token
+curl -X POST http://DISPLAY_HOST:5003/api/display/iss
 curl -X POST http://DISPLAY_HOST:5003/api/display \
   -H 'Content-Type: application/json' \
   -d '{"module":"weather"}'
@@ -45,6 +46,13 @@ not poll either flight service. Live nearby-flight claims retain their higher
 priority and can interrupt this history screen.
 A successful request can therefore be accepted without immediately rendering
 when data is unavailable or a higher-priority owner controls the screen.
+
+`iss` shows the next future overflight already known to the ISS tracker,
+including its start time, countdown, duration, and peak direction/elevation.
+It does not make a fresh prediction request on demand. If the tracker is
+disabled, still warming up, or has no future cached pass, the screen says that
+no prediction is available. A live overhead pass keeps its existing higher
+priority and replaces this prediction card until the pass ends.
 
 Inspect or clear the lease with:
 

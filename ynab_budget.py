@@ -109,6 +109,7 @@ class YnabBudgetClient:
         self._snapshot: Optional[YnabSnapshot] = None
         self._last_fetch_monotonic = 0.0
         self._lock = threading.Lock()
+        self._fetch_lock = threading.Lock()
 
     def _request(self) -> Dict[str, Any]:
         if not self.access_token:
@@ -177,7 +178,14 @@ class YnabBudgetClient:
     def get_snapshot(self, force: bool = False) -> Optional[YnabSnapshot]:
         if not self.enabled:
             return None
-        with self._lock:
+        if (
+            not force
+            and self._last_fetch_monotonic
+            and time.monotonic() - self._last_fetch_monotonic
+            < self.refresh_interval
+        ):
+            return self._snapshot
+        with self._fetch_lock:
             if (
                 not force
                 and self._last_fetch_monotonic
@@ -188,16 +196,18 @@ class YnabBudgetClient:
             try:
                 normalized = self._normalize(self._request())
                 self._write_cache(normalized)
-                self._snapshot = YnabSnapshot.from_dict(normalized)
+                snapshot = YnabSnapshot.from_dict(normalized)
             except Exception as exc:
                 # HTTP errors can include the private budget URL. Log only the
                 # exception type and keep identifiers out of service logs.
                 logger.warning(
                     "YNAB refresh failed (%s); using cache", type(exc).__name__
                 )
-                self._snapshot = self._load_stale()
-            self._last_fetch_monotonic = time.monotonic()
-            return self._snapshot
+                snapshot = self._load_stale()
+            with self._lock:
+                self._snapshot = snapshot
+                self._last_fetch_monotonic = time.monotonic()
+            return snapshot
 
 
 def configured_views() -> List[str]:

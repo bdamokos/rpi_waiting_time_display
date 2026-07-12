@@ -1,5 +1,6 @@
 import json
 import threading
+import time
 from datetime import datetime
 
 from ynab_budget import (
@@ -109,6 +110,37 @@ def test_concurrent_snapshot_requests_share_one_refresh(monkeypatch, tmp_path):
     assert request_count == 1
     assert len(results) == 2
     assert results[0] is results[1]
+
+
+def test_cached_snapshot_remains_readable_during_forced_refresh(monkeypatch, tmp_path):
+    monkeypatch.setenv("ynab_enabled", "true")
+    monkeypatch.setenv("ynab_cache_file", str(tmp_path / "ynab.json"))
+    client = YnabBudgetClient()
+    cached = client._snapshot = YnabSnapshot.from_dict(client._normalize(RAW))
+    client._last_fetch_monotonic = time.monotonic()
+    request_started = threading.Event()
+    release_request = threading.Event()
+
+    def request():
+        request_started.set()
+        assert release_request.wait(timeout=2)
+        return RAW
+
+    monkeypatch.setattr(client, "_request", request)
+    refresh = threading.Thread(target=lambda: client.get_snapshot(force=True))
+    refresh.start()
+    assert request_started.wait(timeout=2)
+
+    result = []
+    reader = threading.Thread(target=lambda: result.append(client.get_snapshot()))
+    reader.start()
+    reader.join(timeout=0.2)
+
+    assert not reader.is_alive()
+    assert result == [cached]
+    release_request.set()
+    refresh.join(timeout=2)
+    assert not refresh.is_alive()
 
 
 def test_failed_refresh_is_throttled_without_cached_snapshot(monkeypatch, tmp_path):

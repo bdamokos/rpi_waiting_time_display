@@ -64,7 +64,7 @@ cryptography>=46.0.5
 filelock>=3.20.3
 h11>=0.16.0
 pydantic==2.13.3
-google-auth>=2.40.0,<3
+google-auth==2.55.2
 ical==11.1.0
 cairosvg==2.9.0
 niquests==3.17.0

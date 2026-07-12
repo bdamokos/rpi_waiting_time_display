@@ -5,7 +5,12 @@ from zoneinfo import ZoneInfo
 
 import requests
 
-from calendar_service import CalendarClient, IcsCalendarSource, parse_ics_events
+from calendar_service import (
+    CalendarClient,
+    GoogleCalendarApiSource,
+    IcsCalendarSource,
+    parse_ics_events,
+)
 
 TIMEZONE = ZoneInfo("Europe/Brussels")
 NOW = datetime(2026, 7, 11, 8, 0, tzinfo=TIMEZONE)
@@ -37,14 +42,20 @@ END:VCALENDAR
 
 
 class FakeResponse:
-    def __init__(self, status_code, text="", headers=None):
+    def __init__(self, status_code, text="", headers=None, json_data=None):
         self.status_code = status_code
         self.text = text
         self.headers = headers or {}
+        self.json_data = json_data
 
     def raise_for_status(self):
         if self.status_code >= 400:
             raise requests.HTTPError(f"HTTP {self.status_code}")
+
+    def json(self):
+        if self.json_data is None:
+            raise ValueError("no JSON response")
+        return self.json_data
 
 
 class FakeSession:
@@ -58,6 +69,11 @@ class FakeSession:
         if isinstance(response, Exception):
             raise response
         return response
+
+
+class FakeCredentials:
+    valid = True
+    token = "test-token"
 
 
 def test_parser_expands_recurring_events_and_skips_cancelled():
@@ -223,6 +239,121 @@ def test_file_source_reads_local_ics(tmp_path):
 
     assert len(events) == 2
     assert all(not event.stale for event in events)
+
+
+def _api_event(index, *, day=12):
+    return {
+        "id": f"instance-{index}",
+        "iCalUID": "weekly@example.test",
+        "status": "confirmed",
+        "summary": f"Meeting {index}",
+        "start": {"dateTime": f"2026-07-{day:02d}T10:00:00+02:00"},
+        "end": {"dateTime": f"2026-07-{day:02d}T10:30:00+02:00"},
+    }
+
+
+def test_google_api_requests_bounded_server_expanded_window(tmp_path):
+    session = FakeSession([FakeResponse(200, json_data={"items": [_api_event(1)]})])
+    source = GoogleCalendarApiSource(
+        "private-calendar@example.test",
+        credentials_file=tmp_path / "unused.json",
+        cache_dir=tmp_path,
+        timeout=5,
+        max_stale_seconds=3600,
+        max_events=20,
+        session=session,
+        credentials=FakeCredentials(),
+    )
+
+    events = source.events_between(
+        NOW,
+        NOW + timedelta(days=3),
+        timezone=TIMEZONE,
+        include_all_day=False,
+        show_details=True,
+    )
+
+    assert len(events) == 1
+    url, request = session.calls[0]
+    assert "@" not in url
+    assert "%40" in url
+    assert request["params"]["timeMin"] == NOW.isoformat()
+    assert request["params"]["timeMax"] == (NOW + timedelta(days=3)).isoformat()
+    assert request["params"]["singleEvents"] == "true"
+    assert request["params"]["orderBy"] == "startTime"
+    assert request["params"]["maxResults"] == 20
+
+
+def test_google_api_caps_pagination_and_private_cache_size(tmp_path):
+    session = FakeSession(
+        [
+            FakeResponse(
+                200,
+                json_data={
+                    "items": [_api_event(index) for index in range(80)],
+                    "nextPageToken": "more",
+                },
+            )
+        ]
+    )
+    source = GoogleCalendarApiSource(
+        "calendar-id",
+        credentials_file=tmp_path / "unused.json",
+        cache_dir=tmp_path,
+        timeout=5,
+        max_stale_seconds=3600,
+        max_events=25,
+        session=session,
+        credentials=FakeCredentials(),
+    )
+
+    events = source.events_between(
+        NOW,
+        NOW + timedelta(days=3),
+        timezone=TIMEZONE,
+        include_all_day=False,
+        show_details=True,
+    )
+
+    assert len(events) == 25
+    assert len(session.calls) == 1
+    assert source.cache_file.stat().st_size < 20_000
+    assert stat.S_IMODE(source.cache_file.stat().st_mode) == 0o600
+
+
+def test_google_api_uses_stale_bounded_cache(tmp_path):
+    source = GoogleCalendarApiSource(
+        "calendar-id",
+        credentials_file=tmp_path / "unused.json",
+        cache_dir=tmp_path,
+        timeout=5,
+        max_stale_seconds=3600,
+        session=FakeSession(
+            [
+                FakeResponse(200, json_data={"items": [_api_event(1)]}),
+                requests.ConnectionError("offline"),
+            ]
+        ),
+        credentials=FakeCredentials(),
+    )
+    source.events_between(
+        NOW,
+        NOW + timedelta(days=3),
+        timezone=TIMEZONE,
+        include_all_day=False,
+        show_details=True,
+    )
+
+    events = source.events_between(
+        NOW,
+        NOW + timedelta(days=3),
+        timezone=TIMEZONE,
+        include_all_day=False,
+        show_details=True,
+    )
+
+    assert len(events) == 1
+    assert events[0].stale is True
 
 
 def test_calendar_client_reads_configured_file_source(tmp_path, monkeypatch):

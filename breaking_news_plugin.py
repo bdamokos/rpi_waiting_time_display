@@ -7,29 +7,33 @@ from collections import deque
 
 from breaking_news_display import draw_breaking_news
 from breaking_news_service import BreakingNewsWatcher
+from plugins import OverrideCapability, normalize_plugin_context
 from rss_service import env_int
 
 logger = logging.getLogger(__name__)
 
 
 class BreakingNewsPlugin:
+    name = "breaking-news"
     OWNER = "breaking-news"
 
     def __init__(
         self,
         epd,
-        arbiter,
-        display_lock,
+        arbiter=None,
+        display_lock=None,
         *,
         watcher=None,
         on_render=None,
         clock=None,
     ):
-        self.epd = epd
-        self.arbiter = arbiter
-        self.display_lock = display_lock
+        context = normalize_plugin_context(epd, arbiter, display_lock, on_render)
+        self.context = context
+        self.epd = context.epd
+        self.arbiter = context.arbiter
+        self.display_lock = context.display_lock
         self.watcher = watcher or BreakingNewsWatcher()
-        self.on_render = on_render
+        self.on_render = on_render if on_render is not None else context.on_render
         self.clock = clock or time.monotonic
         self.enabled = self.watcher.enabled
         self.poll_seconds = max(60, env_int("breaking_news_poll_seconds", 300))
@@ -42,9 +46,18 @@ class BreakingNewsPlugin:
         self._thread = None
         self._stop_event = threading.Event()
 
+    @property
+    def override_capabilities(self):
+        return (OverrideCapability(self.OWNER, self.priority),)
+
+    @property
+    def display_overrides(self):
+        return ()
+
     def start(self):
-        if not self.enabled or self._thread:
+        if not self.enabled or (self._thread and self._thread.is_alive()):
             return
+        self._stop_event.clear()
         self._thread = threading.Thread(
             target=self._run, name="BreakingNewsPlugin", daemon=True
         )
@@ -58,6 +71,8 @@ class BreakingNewsPlugin:
         self._stop_event.set()
         if self._thread:
             self._thread.join(timeout=1.0)
+            if not self._thread.is_alive():
+                self._thread = None
         self.arbiter.release(self.OWNER)
 
     def _run(self):

@@ -19,6 +19,9 @@ def _enabled(name: str, default: str = "false") -> bool:
 
 
 class YnabGlancePlugin:
+    name = "ynab-glance"
+    display_overrides = ()
+    override_capabilities = ()
     OWNER = "ynab-glance"
 
     def __init__(

@@ -8,22 +8,33 @@ import time
 from collections import deque
 
 from rss_display import draw_feed_entry
+from plugins import OverrideCapability, normalize_plugin_context
 from rss_service import RSSWatcher, env_int
 
 logger = logging.getLogger(__name__)
 
 
 class RSSPlugin:
+    name = "rss"
     OWNER = "rss-watch"
 
     def __init__(
-        self, epd, arbiter, display_lock, *, watcher=None, on_render=None, clock=None
+        self,
+        epd,
+        arbiter=None,
+        display_lock=None,
+        *,
+        watcher=None,
+        on_render=None,
+        clock=None,
     ):
-        self.epd = epd
-        self.arbiter = arbiter
-        self.display_lock = display_lock
+        context = normalize_plugin_context(epd, arbiter, display_lock, on_render)
+        self.context = context
+        self.epd = context.epd
+        self.arbiter = context.arbiter
+        self.display_lock = context.display_lock
         self.watcher = watcher or RSSWatcher()
-        self.on_render = on_render
+        self.on_render = on_render if on_render is not None else context.on_render
         self.clock = clock or time.monotonic
         self.enabled = self.watcher.enabled
         self.poll_seconds = max(15, env_int("rss_watch_poll_seconds", 60))
@@ -36,9 +47,18 @@ class RSSPlugin:
         self._thread = None
         self._stop_event = threading.Event()
 
+    @property
+    def override_capabilities(self):
+        return (OverrideCapability(self.OWNER, self.priority),)
+
+    @property
+    def display_overrides(self):
+        return ()
+
     def start(self):
-        if not self.enabled or self._thread:
+        if not self.enabled or (self._thread and self._thread.is_alive()):
             return
+        self._stop_event.clear()
         self._thread = threading.Thread(target=self._run, name="RSSPlugin", daemon=True)
         self._thread.start()
         logger.info("RSS watcher started for %d feeds", len(self.watcher.sources))
@@ -47,6 +67,8 @@ class RSSPlugin:
         self._stop_event.set()
         if self._thread:
             self._thread.join(timeout=1.0)
+            if not self._thread.is_alive():
+                self._thread = None
         self.arbiter.release(self.OWNER)
 
     def _run(self):

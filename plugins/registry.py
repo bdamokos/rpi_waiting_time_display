@@ -16,15 +16,19 @@ class DisplayPlugin(Protocol):
 
     name: str
 
-    def start(self) -> None: ...
+    def start(self) -> None:
+        """Start background work."""
 
-    def stop(self) -> None: ...
+    def stop(self) -> None:
+        """Stop background work."""
 
     @property
-    def override_capabilities(self) -> Sequence[OverrideCapability]: ...
+    def override_capabilities(self) -> Sequence[OverrideCapability]:
+        """Return the claims this plugin may make."""
 
     @property
-    def display_overrides(self) -> Sequence[DisplayOverride]: ...
+    def display_overrides(self) -> Sequence[DisplayOverride]:
+        """Return forced-display API capabilities."""
 
 
 class PluginRegistry:

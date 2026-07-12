@@ -222,8 +222,14 @@ def draw_usage_limits(epd, snapshot: TokenUsageSnapshot, set_base_image: bool = 
         fonts,
         resets_available=snapshot.resets_available,
     )
-    _limit_bar(draw, black, white, 31, "5 HOUR", snapshot.primary, fonts)
-    _limit_bar(draw, black, white, 76, "WEEK", snapshot.secondary, fonts)
+    if snapshot.primary.available:
+        _limit_bar(draw, black, white, 31, "5 HOUR", snapshot.primary, fonts)
+        _limit_bar(draw, black, white, 76, "WEEK", snapshot.secondary, fonts)
+    else:
+        # CodexBar omits rate windows that the service does not return. Keep
+        # the same semantics here and let the weekly view breathe while the
+        # temporary session-limit removal is active.
+        _limit_bar(draw, black, white, 53, "WEEK", snapshot.secondary, fonts)
     _finish(epd, image, set_base_image)
 
 

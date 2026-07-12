@@ -104,21 +104,23 @@ class SnapshotBuilder:
                 resets_available = max(0, int(reset_credits.get("availableCount", 0)))
             except (TypeError, ValueError):
                 resets_available = 0
+            limits = {
+                "resets_available": resets_available,
+                "secondary": {
+                    "used_percent": float(secondary.get("usedPercent", 0)),
+                    "resets_at": secondary.get("resetsAt"),
+                },
+            }
+            if primary:
+                limits["primary"] = {
+                    "used_percent": float(primary.get("usedPercent", 0)),
+                    "resets_at": primary.get("resetsAt"),
+                }
             self._cached = {
                 "schema_version": 1,
                 "generated_at": datetime.now().astimezone().isoformat(),
                 "currency": cost.get("currencyCode", "USD"),
-                "limits": {
-                    "resets_available": resets_available,
-                    "primary": {
-                        "used_percent": float(primary.get("usedPercent", 0)),
-                        "resets_at": primary.get("resetsAt"),
-                    },
-                    "secondary": {
-                        "used_percent": float(secondary.get("usedPercent", 0)),
-                        "resets_at": secondary.get("resetsAt"),
-                    },
-                },
+                "limits": limits,
                 "month_to_date": {
                     "cost_usd": round(sum(item["cost_usd"] for item in daily), 6),
                     "total_tokens": sum(item["total_tokens"] for item in daily),

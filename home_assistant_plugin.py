@@ -1,0 +1,229 @@
+"""First-class Home Assistant rotating-screen plugin."""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+import threading
+import time
+from pathlib import Path
+
+from home_assistant_display import draw_home_assistant_screen, screen_has_content
+from home_assistant_models import parse_config
+from home_assistant_service import HomeAssistantService
+from plugins import OverrideCapability
+
+logger = logging.getLogger(__name__)
+
+
+def load_home_assistant_config(value):
+    if not value:
+        raise ValueError(
+            "home_assistant_config is required when Home Assistant is enabled"
+        )
+    stripped = value.strip()
+    data = (
+        json.loads(stripped)
+        if stripped.startswith(("{", "["))
+        else json.loads(Path(stripped).read_text())
+    )
+    return parse_config(data)
+
+
+class HomeAssistantPlugin:
+    name = "home-assistant"
+    display_overrides = ()
+
+    def __init__(
+        self,
+        context,
+        *,
+        config,
+        service,
+        enabled=True,
+        clock=time.monotonic,
+        poll_seconds=1.0,
+    ):
+        self.context = context
+        self.config = config
+        self.service = service
+        self.enabled = enabled
+        self.clock = clock
+        self.poll_seconds = poll_seconds
+        self._stop = threading.Event()
+        self._thread = None
+        self._screen_index = 0
+        self._screen_started = None
+        self._next_cycle = 0.0
+        self._last_key = None
+        self._takeover = None
+        self._last_trigger = {}
+        self._state_lock = threading.RLock()
+        service.add_listener(self._state_changed)
+
+    @classmethod
+    def from_env(cls, context):
+        enabled = os.getenv("home_assistant_enabled", "false").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        if not enabled:
+            return None
+        config = load_home_assistant_config(os.getenv("home_assistant_config", ""))
+        ids = {
+            entity.entity_id for screen in config.screens for entity in screen.entities
+        }
+        ids.update(trigger.entity_id for trigger in config.triggers)
+        service = HomeAssistantService(
+            os.environ["home_assistant_url"], os.environ["home_assistant_token"], ids
+        )
+        return cls(context, config=config, service=service)
+
+    @property
+    def override_capabilities(self):
+        result = [
+            OverrideCapability(f"ha:{screen.screen_id}", screen.priority)
+            for screen in self.config.screens
+        ]
+        result.extend(
+            OverrideCapability(f"ha-event:{trigger.screen_id}", trigger.priority)
+            for trigger in self.config.triggers
+        )
+        return tuple(result)
+
+    def start(self):
+        if not self.enabled or (self._thread and self._thread.is_alive()):
+            return
+        self._stop.clear()
+        self.service.start()
+        self._thread = threading.Thread(
+            target=self._run, name="HomeAssistantDisplay", daemon=True
+        )
+        self._thread.start()
+
+    def stop(self):
+        self._stop.set()
+        self.service.stop()
+        if self._thread:
+            self._thread.join(timeout=max(2, self.poll_seconds * 2))
+            if not self._thread.is_alive():
+                self._thread = None
+        for capability in self.override_capabilities:
+            self.context.arbiter.release(capability.owner)
+
+    def _run(self):
+        while not self._stop.is_set():
+            try:
+                self.tick()
+            except Exception:
+                logger.exception("Home Assistant display update failed")
+            self._stop.wait(self.poll_seconds)
+
+    def _visible(self):
+        states = self.service.snapshot()
+        return [
+            screen
+            for screen in self.config.screens
+            if screen_has_content(screen, states)
+        ]
+
+    def tick(self, now=None):
+        now = self.clock() if now is None else now
+        states = self.service.snapshot()
+        with self._state_lock:
+            takeover = self._takeover
+        if takeover and now < takeover[1]:
+            screen, until, priority = takeover
+            return self._render(screen, states, now, priority, until - now, event=True)
+        with self._state_lock:
+            self._takeover = None
+        screens = self._visible()
+        if not screens or now < self._next_cycle:
+            return False
+        self._screen_index %= len(screens)
+        screen = screens[self._screen_index]
+        if (
+            self._screen_started is not None
+            and now >= self._screen_started + screen.duration_seconds
+        ):
+            self.context.arbiter.release(f"ha:{screen.screen_id}")
+            self._screen_index += 1
+            self._screen_started = now
+            if self._screen_index >= len(screens):
+                self._screen_index = 0
+                self._screen_started = None
+                self._next_cycle = now + self.config.interval_seconds
+                return False
+            screen = screens[self._screen_index]
+        remaining = (
+            screen.duration_seconds
+            if self._screen_started is None
+            else max(0.1, self._screen_started + screen.duration_seconds - now)
+        )
+        rendered = self._render(screen, states, now, screen.priority, remaining)
+        if (
+            self._screen_started is None
+            and self.context.arbiter.active_owner() == f"ha:{screen.screen_id}"
+        ):
+            self._screen_started = now
+        return rendered
+
+    def _render(self, screen, states, now, priority, ttl, event=False):
+        owner = f"ha-event:{screen.screen_id}" if event else f"ha:{screen.screen_id}"
+        if not self.context.arbiter.claim(owner, priority, ttl):
+            return False
+        key = (
+            owner,
+            tuple(
+                (entity.entity_id, states.get(entity.entity_id))
+                for entity in screen.entities
+            ),
+        )
+        if key == self._last_key:
+            return False
+        with self.context.display_lock:
+            if not self.context.arbiter.can_render(owner):
+                return False
+            draw_home_assistant_screen(
+                self.context.epd,
+                screen,
+                states,
+                stale_seconds=self.config.stale_seconds,
+                now_monotonic=now,
+            )
+        self._last_key = key
+        if self.context.on_render:
+            self.context.on_render(owner)
+        return True
+
+    def _state_changed(self, entity_id, previous, current):
+        now = self.clock()
+        for trigger in self.config.triggers:
+            if trigger.entity_id != entity_id:
+                continue
+            before = str(previous.state).lower() if previous else ""
+            after = str(current.state).lower() if current else ""
+            active = set(trigger.active_states)
+            if before in active or after not in active:
+                continue
+            if (
+                now - self._last_trigger.get(entity_id, float("-inf"))
+                < trigger.debounce_seconds
+            ):
+                continue
+            screen = next(
+                screen
+                for screen in self.config.screens
+                if screen.screen_id == trigger.screen_id
+            )
+            with self._state_lock:
+                self._last_trigger[entity_id] = now
+                self._takeover = (
+                    screen,
+                    now + trigger.duration_seconds,
+                    trigger.priority,
+                )
+                self._last_key = None

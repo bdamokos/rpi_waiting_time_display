@@ -18,6 +18,8 @@ from wifi_manager import is_connected, no_wifi_loop, get_hostname
 from display_adapter import return_display_lock
 import threading
 import math
+from contextlib import nullcontext
+from functools import partial
 from flights import (
     RecentFlightCache,
     check_flights,
@@ -46,7 +48,9 @@ from rss_plugin import RSSPlugin
 from breaking_news_plugin import BreakingNewsPlugin
 from calendar_plugin import CalendarPlugin
 from ynab_plugin import YnabGlancePlugin
+from home_assistant_plugin import HomeAssistantPlugin
 from display_override_api import DisplayOverrideServer
+from plugins import DisplayOverride, PluginContext, PluginRegistry
 
 logger = logging.getLogger(__name__)
 # Set logging level for PIL.PngImagePlugin and urllib3.connectionpool to warning
@@ -360,11 +364,14 @@ class DisplayManager:
         self.current_display_mode = None
         self.current_token_view = None
         self.current_ynab_view = None
-        self.calendar_plugin = CalendarPlugin(
+        plugin_context = PluginContext(
             epd,
             self.screen_arbiter,
             self._display_lock,
-            on_render=self._calendar_rendered,
+            self._plugin_rendered,
+        )
+        self.calendar_plugin = CalendarPlugin(
+            plugin_context,
             base_mode_at=self.display_schedule.mode_at,
         )
         self.ynab_glance_plugin = YnabGlancePlugin(
@@ -378,22 +385,23 @@ class DisplayManager:
             is_current=lambda: self.current_display_mode == YnabGlancePlugin.OWNER,
             base_mode_at=self.display_schedule.mode_at,
         )
+        self.rss_plugin = RSSPlugin(plugin_context)
+        self.breaking_news_plugin = BreakingNewsPlugin(plugin_context)
+        self.home_assistant_plugin = HomeAssistantPlugin.from_env(plugin_context)
+        self.plugin_registry = PluginRegistry(
+            [plugin for plugin in [
+                self.calendar_plugin,
+                self.rss_plugin,
+                self.breaking_news_plugin,
+                self.ynab_glance_plugin,
+                self.home_assistant_plugin,
+            ] if plugin is not None]
+        )
+        self._configure_display_overrides()
         self.override_server = DisplayOverrideServer(
             self.request_display_override,
             self.clear_display_override,
             self.display_override_status,
-        )
-        self.rss_plugin = RSSPlugin(
-            epd,
-            self.screen_arbiter,
-            self._display_lock,
-            on_render=self._plugin_rendered,
-        )
-        self.breaking_news_plugin = BreakingNewsPlugin(
-            epd,
-            self.screen_arbiter,
-            self._display_lock,
-            on_render=self._plugin_rendered,
         )
         logger.info(f"DisplayManager initialized with min refresh interval: {self.min_refresh_interval}s")
         logger.info(f"DisplayManager initialized with coordinates: {self.coordinates_lat}, {self.coordinates_lng}")
@@ -506,14 +514,53 @@ class DisplayManager:
         self.in_weather_mode = False
         return True
 
+    def _configure_display_overrides(self):
+        overrides = [
+            DisplayOverride(
+                "transit", partial(self._render_base_override, "transit"), aliases=("bus",)
+            ),
+            DisplayOverride("weather", partial(self._render_base_override, "weather")),
+            DisplayOverride(
+                "token", partial(self._render_base_override, "token"), aliases=("codex",)
+            ),
+            DisplayOverride("flights", partial(self._render_base_override, "flights")),
+            DisplayOverride("iss", partial(self._render_base_override, "iss")),
+            *self.plugin_registry.display_overrides,
+        ]
+        aliases = {}
+        handlers = {}
+        for override in overrides:
+            if override.module in handlers:
+                raise ValueError(f"duplicate display override module: {override.module}")
+            handlers[override.module] = override.render
+            for name in override.accepted_names:
+                if name in aliases:
+                    raise ValueError(f"duplicate display override name: {name}")
+                aliases[name] = override.module
+        if any(
+            aliases.get(name) != module
+            for name, module in self.OVERRIDE_MODULE_ALIASES.items()
+        ):
+            raise ValueError("declarative display overrides changed the public module API")
+        self._display_override_aliases = aliases
+        self._display_override_handlers = handlers
+
+    def _override_aliases(self):
+        return getattr(self, "_display_override_aliases", self.OVERRIDE_MODULE_ALIASES)
+
+    def _display_lock_context(self):
+        display_lock = getattr(self, "_display_lock", None)
+        return display_lock if display_lock is not None else nullcontext()
+
     def request_display_override(self, module):
         requested = module.strip().lower()
-        normalized = self.OVERRIDE_MODULE_ALIASES.get(requested)
+        aliases = self._override_aliases()
+        normalized = aliases.get(requested)
         if not normalized:
             return {
                 "accepted": False,
                 "error": "unknown module",
-                "modules": sorted(self.OVERRIDE_MODULE_ALIASES),
+                "modules": sorted(aliases),
             }
         with self._override_lock:
             self._override_generation += 1
@@ -565,6 +612,10 @@ class DisplayManager:
             self._override_generation += 1
             self._override_module = None
             was_active = self.screen_arbiter.release(self.OVERRIDE_SCREEN_OWNER)
+        # Wait for any renderer that passed its final generation check before
+        # returning, so a cleared override cannot draw after this response.
+        with self._display_lock_context():
+            pass
         if was_active:
             self._force_display_update()
         return {"cleared": True, "active_owner": self.screen_arbiter.active_owner()}
@@ -577,7 +628,7 @@ class DisplayManager:
             "module": module,
             "active_owner": self.screen_arbiter.active_owner(),
             "duration_seconds": self.override_duration_seconds,
-            "modules": sorted(set(self.OVERRIDE_MODULE_ALIASES.values())),
+            "modules": sorted(set(self._override_aliases().values())),
         }
 
     def _render_display_override(self, module=None, generation=None):
@@ -593,23 +644,36 @@ class DisplayManager:
                     or module != self._override_module
                 ):
                     return False
-            return self._render_display_override_locked(module, generation)
+        return self._render_display_override_locked(module, generation)
+
+    def _override_is_current(self, module, generation):
+        with self._override_lock:
+            return (
+                generation == self._override_generation
+                and module == self._override_module
+            )
 
     def _render_display_override_locked(self, module, generation):
         if not module or not self.screen_arbiter.can_render(self.OVERRIDE_SCREEN_OWNER):
             return False
-        if module == "calendar":
-            return self.calendar_plugin.render_forced_agenda(
-                self.OVERRIDE_SCREEN_OWNER
-            )
+        handlers = getattr(self, "_display_override_handlers", None)
+        if handlers is None:
+            if module == "calendar":
+                handler = self.calendar_plugin.render_forced_agenda
+            else:
+                handler = partial(self._render_base_override, module)
+        else:
+            handler = handlers.get(module)
+        if handler is None:
+            return False
+        return handler(
+            self.OVERRIDE_SCREEN_OWNER,
+            partial(self._override_is_current, module, generation),
+        )
+
+    def _render_base_override(self, module, owner, is_current):
         with self._display_lock:
-            with self._override_lock:
-                if (
-                    generation != self._override_generation
-                    or module != self._override_module
-                ):
-                    return False
-            if not self.screen_arbiter.can_render(self.OVERRIDE_SCREEN_OWNER):
+            if not is_current() or not self.screen_arbiter.can_render(owner):
                 return False
             now = datetime.now()
             if module == "token":
@@ -691,13 +755,10 @@ class DisplayManager:
         # Initialize ISS tracking if enabled
         self.initialize_iss_tracking()
 
-        # Calendar events are fetched and rendered independently of the base
-        # transit/weather/token data sources.
-        self.calendar_plugin.start()
-        self.ynab_glance_plugin.start()
+        # Plugins fetch and render independently of the base transit, weather,
+        # token, and YNAB schedules.
+        self.plugin_registry.start_all()
         self.override_server.start()
-        self.rss_plugin.start()
-        self.breaking_news_plugin.start()
         
         # Token views do not depend on transit either. The normal update loop
         # will prefetch it when a transit or automatic window becomes active.
@@ -1201,10 +1262,7 @@ class DisplayManager:
             self.iss_tracker.stop()
 
         self.override_server.stop()
-        self.calendar_plugin.stop()
-        self.ynab_glance_plugin.stop()
-        self.rss_plugin.stop()
-        self.breaking_news_plugin.stop()
+        self.plugin_registry.stop_all()
             
         for thread in [self._check_data_thread, self._flight_thread, self._iss_thread]:
             if thread:

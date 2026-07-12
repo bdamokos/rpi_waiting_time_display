@@ -10,6 +10,7 @@ from typing import Callable, Iterable, Optional
 
 from calendar_display import draw_calendar_agenda, draw_upcoming_event
 from calendar_service import CalendarClient, CalendarEvent
+from plugins import DisplayOverride, OverrideCapability, normalize_plugin_context
 
 logger = logging.getLogger(__name__)
 
@@ -19,24 +20,27 @@ def _enabled(name: str, default: str = "false") -> bool:
 
 
 class CalendarPlugin:
+    name = "calendar"
     EVENT_OWNER = "calendar-event"
     AGENDA_OWNER = "calendar-agenda"
 
     def __init__(
         self,
         epd,
-        arbiter,
-        display_lock,
+        arbiter=None,
+        display_lock=None,
         *,
         client: Optional[CalendarClient] = None,
         on_render: Optional[Callable[[str], None]] = None,
         base_mode_at: Optional[Callable[[datetime], str]] = None,
     ):
-        self.epd = epd
-        self.arbiter = arbiter
-        self.display_lock = display_lock
+        context = normalize_plugin_context(epd, arbiter, display_lock, on_render)
+        self.context = context
+        self.epd = context.epd
+        self.arbiter = context.arbiter
+        self.display_lock = context.display_lock
         self.client = client or CalendarClient()
-        self.on_render = on_render
+        self.on_render = on_render if on_render is not None else context.on_render
         self.base_mode_at = base_mode_at
         self.enabled = self.client.enabled
         self.poll_seconds = max(1, int(os.getenv("calendar_poll_seconds", "1")))
@@ -83,9 +87,26 @@ class CalendarPlugin:
         self._stop_event = threading.Event()
         self._thread = None
 
+    @property
+    def override_capabilities(self):
+        return (
+            OverrideCapability(self.EVENT_OWNER, self.upcoming_priority),
+            OverrideCapability(
+                self.EVENT_OWNER,
+                self.exclusive_priority,
+                exclusive=True,
+            ),
+            OverrideCapability(self.AGENDA_OWNER, self.agenda_priority),
+        )
+
+    @property
+    def display_overrides(self):
+        return (DisplayOverride("calendar", self.render_forced_agenda),)
+
     def start(self):
-        if not self.enabled or self._thread:
+        if not self.enabled or (self._thread and self._thread.is_alive()):
             return
+        self._stop_event.clear()
         self._thread = threading.Thread(
             target=self._run,
             name="CalendarPlugin",
@@ -98,6 +119,8 @@ class CalendarPlugin:
         self._stop_event.set()
         if self._thread:
             self._thread.join(timeout=1.0)
+            if not self._thread.is_alive():
+                self._thread = None
         self.arbiter.release(self.EVENT_OWNER)
         self.arbiter.release(self.AGENDA_OWNER)
 
@@ -229,7 +252,7 @@ class CalendarPlugin:
         mode = self.base_mode_at(now)
         return isinstance(mode, str) and mode.strip().lower() in self.default_modes
 
-    def render_forced_agenda(self, owner: str) -> bool:
+    def render_forced_agenda(self, owner: str, is_current=None) -> bool:
         """Render the current agenda while an external arbiter owner is active."""
 
         if not self.enabled:
@@ -242,7 +265,9 @@ class CalendarPlugin:
             logger.error("Failed to fetch events for forced agenda: %s", exc)
             return False
         with self.display_lock:
-            if not self.arbiter.can_render(owner):
+            if (is_current is not None and not is_current()) or not self.arbiter.can_render(
+                owner
+            ):
                 return False
             draw_calendar_agenda(
                 self.epd,
@@ -250,6 +275,8 @@ class CalendarPlugin:
                 now,
                 set_base_image=True,
             )
-        if self.on_render:
-            self.on_render("calendar")
-        return True
+            if is_current is not None and not is_current():
+                return False
+            if self.on_render:
+                self.on_render("calendar")
+            return True

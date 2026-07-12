@@ -13,6 +13,7 @@ A Raspberry Pi project that displays bus waiting times using an e-Paper display 
 - 💶 Optional: Recurring read-only YNAB glances based only on the current month's assignments
 - 📅 Optional calendar plugin with upcoming-event alerts and agenda glances
 - 📰 Optional RSS/Nitter plugin with compact new-entry notifications
+- 🏠 Optional generic Home Assistant cards and event takeovers
 - 🎛️ Screen arbitration, weekday-aware schedules, and a private-network display override API
 
 [View detailed features and screenshots →](https://bdamokos.github.io/rpi_waiting_time_display/features/)
@@ -22,6 +23,9 @@ A Raspberry Pi project that displays bus waiting times using an e-Paper display 
 The calendar, YNAB glance, and RSS plugins share the screen safely with
 transit, weather, flight, ISS, and Codex views through the screen arbiter. Each
 plugin is disabled by default and configured in the untracked `.env` file.
+
+See the [Home Assistant setup](docs/home-assistant-display.md) and
+[plugin authoring guide](docs/plugin-authoring.md).
 
 ### Calendar
 
@@ -107,4 +111,3 @@ Basic setup (Raspberry Pi Zero 2W + display): **~€60**
 - Certain included data and assets are under a specific license:
   - [Font Awesome Free](https://fontawesome.com) - Icons used in the setup interface under the [Font Awesome Free License](https://fontawesome.com/license/free), icons used in the display under Creative Commons Attribution 4.0 International License
   - [Open-Meteo](https://open-meteo.com/) - Weather data under a [Creative Commons Attribution 4.0 International License](https://creativecommons.org/licenses/by/4.0/)
-

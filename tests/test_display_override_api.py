@@ -6,6 +6,49 @@ from display_override_api import (
 from screen_arbiter import ScreenArbiter
 
 
+def _blocking_calendar_override(manager, monkeypatch):
+    import threading
+    from types import SimpleNamespace
+
+    from calendar_plugin import CalendarPlugin
+    from plugins import PluginContext
+
+    fetch_started = threading.Event()
+    fetch_continue = threading.Event()
+    rendered = []
+
+    def get_events(now):
+        fetch_started.set()
+        assert fetch_continue.wait(timeout=2)
+        return []
+
+    client = SimpleNamespace(
+        enabled=True,
+        timezone=None,
+        get_events=get_events,
+    )
+    plugin = CalendarPlugin(
+        PluginContext(
+            manager.epd,
+            manager.screen_arbiter,
+            manager._display_lock,
+        ),
+        client=client,
+    )
+    monkeypatch.setattr(
+        "calendar_plugin.draw_calendar_agenda",
+        lambda *args, **kwargs: rendered.append(True),
+    )
+    manager.calendar_plugin = plugin
+    manager._display_override_handlers = {
+        "calendar": plugin.render_forced_agenda,
+        "token": lambda owner, is_current: is_current(),
+    }
+    manager._display_override_aliases = manager.OVERRIDE_MODULE_ALIASES
+    manager._force_display_update = lambda: None
+    return fetch_started, fetch_continue, rendered
+
+
 def _display_manager_for_override(monkeypatch, tmp_path):
     import threading
     from types import SimpleNamespace
@@ -91,6 +134,47 @@ def test_override_api_validates_access_auth_and_payload():
         == 400
     )
     assert client.post("/api/display/nope", headers=headers).status_code == 404
+
+
+def test_unknown_override_preserves_legacy_alias_response_shape():
+    from basic import DisplayManager
+
+    manager = DisplayManager.__new__(DisplayManager)
+
+    assert manager.request_display_override("nope") == {
+        "accepted": False,
+        "error": "unknown module",
+        "modules": [
+            "bus",
+            "calendar",
+            "codex",
+            "flights",
+            "iss",
+            "token",
+            "transit",
+            "weather",
+        ],
+    }
+
+
+def test_declarative_plugin_override_extends_legacy_modules():
+    from types import SimpleNamespace
+
+    from basic import DisplayManager
+    from plugins import DisplayOverride
+
+    manager = DisplayManager.__new__(DisplayManager)
+    calendar = DisplayOverride("calendar", lambda owner, is_current: is_current())
+    extra = DisplayOverride("extra", lambda owner, is_current: is_current())
+    manager.plugin_registry = SimpleNamespace(display_overrides=(calendar, extra))
+
+    manager._configure_display_overrides()
+
+    assert manager._display_override_aliases == {
+        **manager.OVERRIDE_MODULE_ALIASES,
+        "extra": "extra",
+    }
+    assert manager._display_override_handlers["extra"] is extra.render
 
 
 def test_iss_override_renders_cached_prediction(monkeypatch, tmp_path):
@@ -205,3 +289,57 @@ def test_failed_request_does_not_release_a_newer_override():
     assert not older["rendered"]
     assert manager._override_module == "token"
     assert manager.screen_arbiter.active_owner() == manager.OVERRIDE_SCREEN_OWNER
+
+
+def test_slow_calendar_override_is_superseded_without_rendering(
+    monkeypatch, tmp_path
+):
+    import threading
+
+    manager = _display_manager_for_override(monkeypatch, tmp_path)
+    fetch_started, fetch_continue, rendered = _blocking_calendar_override(
+        manager, monkeypatch
+    )
+    result = {}
+    request = threading.Thread(
+        target=lambda: result.update(manager.request_display_override("calendar"))
+    )
+    request.start()
+    assert fetch_started.wait(timeout=2)
+
+    newer = manager.request_display_override("codex")
+    fetch_continue.set()
+    request.join(timeout=2)
+
+    assert newer["rendered"] is True
+    assert result["rendered"] is False
+    assert rendered == []
+    assert manager._override_module == "token"
+    assert manager.screen_arbiter.active_owner() == manager.OVERRIDE_SCREEN_OWNER
+
+
+def test_clear_supersedes_slow_calendar_override_without_rendering(
+    monkeypatch, tmp_path
+):
+    import threading
+
+    manager = _display_manager_for_override(monkeypatch, tmp_path)
+    fetch_started, fetch_continue, rendered = _blocking_calendar_override(
+        manager, monkeypatch
+    )
+    result = {}
+    request = threading.Thread(
+        target=lambda: result.update(manager.request_display_override("calendar"))
+    )
+    request.start()
+    assert fetch_started.wait(timeout=2)
+
+    cleared = manager.clear_display_override()
+    fetch_continue.set()
+    request.join(timeout=2)
+
+    assert cleared == {"cleared": True, "active_owner": None}
+    assert result["rendered"] is False
+    assert rendered == []
+    assert manager._override_module is None
+    assert manager.screen_arbiter.active_owner() is None

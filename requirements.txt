@@ -45,6 +45,7 @@ spidev==3.8
 typing-extensions==4.15.0
     # via qrcode
 urllib3>=2.6.3
+websocket-client>=1.8.0
     # via
     #   -r requirements.in
     #   requests

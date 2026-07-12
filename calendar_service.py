@@ -9,7 +9,9 @@ import os
 import threading
 import time
 from dataclasses import dataclass, replace
-from datetime import date, datetime, time as datetime_time, timedelta
+from datetime import date, datetime
+from datetime import time as datetime_time
+from datetime import timedelta
 from pathlib import Path
 from typing import Iterable, List, Optional
 from urllib.parse import quote
@@ -24,6 +26,7 @@ logging.getLogger("ical").setLevel(logging.WARNING)
 GOOGLE_CALENDAR_READONLY_SCOPE = (
     "https://www.googleapis.com/auth/calendar.events.readonly"
 )
+GOOGLE_TASKS_READONLY_SCOPE = "https://www.googleapis.com/auth/tasks.readonly"
 
 
 def _enabled(name: str, default: str = "false") -> bool:
@@ -327,7 +330,8 @@ class GoogleCalendarApiSource:
 
     def _fetch(self, range_start, range_end, timezone):
         if not getattr(self.credentials, "valid", False):
-            from google.auth.transport.requests import Request as GoogleAuthRequest
+            from google.auth.transport.requests import \
+                Request as GoogleAuthRequest
 
             self.credentials.refresh(GoogleAuthRequest(session=self.session))
         url = (
@@ -460,6 +464,192 @@ class GoogleCalendarApiSource:
             return None
 
 
+class GoogleTasksApiSource:
+    """Read incomplete due tasks from Google Tasks within a bounded date window."""
+
+    def __init__(
+        self,
+        *,
+        credentials_file: Path,
+        cache_dir: Path,
+        timeout: float,
+        max_stale_seconds: int,
+        max_tasks: int = 100,
+        max_tasklists: int = 20,
+        session=None,
+        credentials=None,
+    ):
+        if max_tasks < 1 or max_tasklists < 1:
+            raise ValueError("Google Tasks limits must be positive")
+        self.timeout = timeout
+        self.max_stale_seconds = max_stale_seconds
+        self.max_tasks = max_tasks
+        self.max_tasklists = max_tasklists
+        self.session = session or requests.Session()
+        self.label = "google-tasks"
+        self.cache_file = cache_dir / "calendar-google-tasks.json"
+        if credentials is None:
+            from google.oauth2.credentials import Credentials
+
+            credentials = Credentials.from_authorized_user_file(
+                str(credentials_file), scopes=[GOOGLE_TASKS_READONLY_SCOPE]
+            )
+        self.credentials = credentials
+
+    def events_between(
+        self,
+        range_start: datetime,
+        range_end: datetime,
+        *,
+        timezone: ZoneInfo,
+        include_all_day: bool,
+        show_details: bool,
+    ) -> List[CalendarEvent]:
+        if not include_all_day:
+            return []
+        try:
+            items = self._fetch(range_start, range_end, timezone)
+            events = self._normalize(
+                items, range_start, range_end, timezone, show_details, stale=False
+            )
+            self._write_cache(items)
+            return events
+        except Exception as exc:
+            logger.warning(
+                "Calendar source %s unavailable (%s)", self.label, type(exc).__name__
+            )
+            cached = self._read_cache()
+            if cached is None:
+                return []
+            return self._normalize(
+                cached, range_start, range_end, timezone, show_details, stale=True
+            )
+
+    def _fetch(self, range_start, range_end, timezone):
+        if not getattr(self.credentials, "valid", False):
+            from google.auth.transport.requests import \
+                Request as GoogleAuthRequest
+
+            self.credentials.refresh(GoogleAuthRequest(session=self.session))
+        headers = {
+            "Authorization": f"Bearer {self.credentials.token}",
+            "Accept": "application/json",
+            "User-Agent": "rpi-waiting-time-display/1",
+        }
+        list_response = self.session.get(
+            "https://tasks.googleapis.com/tasks/v1/users/@me/lists",
+            params={"maxResults": self.max_tasklists, "fields": "items(id,title)"},
+            headers=headers,
+            timeout=self.timeout,
+        )
+        list_response.raise_for_status()
+        tasklists = list_response.json().get("items", [])
+        if not isinstance(tasklists, list):
+            raise ValueError("Google Tasks returned invalid task lists")
+        due_min = range_start.replace(hour=0, minute=0, second=0, microsecond=0)
+        due_max = range_end.replace(hour=0, minute=0, second=0, microsecond=0)
+        items = []
+        for tasklist in tasklists[: self.max_tasklists]:
+            if not isinstance(tasklist, dict) or not tasklist.get("id"):
+                continue
+            params = {
+                "showCompleted": "false",
+                "showDeleted": "false",
+                "showHidden": "false",
+                "dueMin": due_min.astimezone(ZoneInfo("UTC"))
+                .isoformat()
+                .replace("+00:00", "Z"),
+                "dueMax": due_max.astimezone(ZoneInfo("UTC"))
+                .isoformat()
+                .replace("+00:00", "Z"),
+                "maxResults": min(self.max_tasks - len(items), 100),
+                "fields": "items(id,title,notes,status,due,deleted,hidden),nextPageToken",
+            }
+            url = (
+                "https://tasks.googleapis.com/tasks/v1/lists/"
+                + quote(str(tasklist["id"]), safe="")
+                + "/tasks"
+            )
+            while len(items) < self.max_tasks:
+                response = self.session.get(
+                    url, params=params, headers=headers, timeout=self.timeout
+                )
+                response.raise_for_status()
+                page = response.json()
+                page_items = page.get("items", [])
+                if not isinstance(page_items, list):
+                    raise ValueError("Google Tasks returned invalid items")
+                for item in page_items[: self.max_tasks - len(items)]:
+                    if isinstance(item, dict):
+                        item = dict(item)
+                        item["taskListTitle"] = str(tasklist.get("title") or "Tasks")
+                        items.append(item)
+                token = page.get("nextPageToken")
+                if not token or len(items) >= self.max_tasks:
+                    break
+                params["pageToken"] = token
+                params["maxResults"] = min(self.max_tasks - len(items), 100)
+            if len(items) >= self.max_tasks:
+                break
+        return items
+
+    @staticmethod
+    def _normalize(items, range_start, range_end, timezone, show_details, *, stale):
+        events = []
+        start_date = range_start.astimezone(timezone).date()
+        end_date = range_end.astimezone(timezone).date()
+        for item in items:
+            if not isinstance(item, dict) or item.get("status") == "completed":
+                continue
+            try:
+                due_date = date.fromisoformat(str(item.get("due") or "")[:10])
+            except ValueError:
+                continue
+            if due_date < start_date or due_date >= end_date:
+                continue
+            start = datetime.combine(due_date, datetime_time.min, timezone)
+            title = str(item.get("title") or "Untitled task")
+            events.append(
+                CalendarEvent(
+                    uid=f"task:{item.get('id') or title}:{due_date.isoformat()}",
+                    summary=f"☐ {title}" if show_details else "Task",
+                    start=start,
+                    end=start + timedelta(days=1),
+                    location=(
+                        str(item.get("taskListTitle") or "Tasks")
+                        if show_details
+                        else ""
+                    ),
+                    all_day=True,
+                    stale=stale,
+                )
+            )
+        return sorted(events, key=lambda event: (event.start, event.summary))
+
+    def _write_cache(self, items):
+        try:
+            self.cache_file.parent.mkdir(parents=True, exist_ok=True)
+            temporary = self.cache_file.with_suffix(".tmp")
+            temporary.write_text(json.dumps(items, separators=(",", ":")), "utf-8")
+            temporary.chmod(0o600)
+            temporary.replace(self.cache_file)
+        except OSError as exc:
+            logger.warning(
+                "Could not persist calendar cache %s (%s)",
+                self.label,
+                type(exc).__name__,
+            )
+
+    def _read_cache(self):
+        try:
+            if time.time() - self.cache_file.stat().st_mtime > self.max_stale_seconds:
+                return None
+            data = json.loads(self.cache_file.read_text("utf-8"))
+            return data if isinstance(data, list) else None
+        except (OSError, ValueError):
+            return None
+
+
 class CalendarClient:
     """Combine configured sources and cache a normalized upcoming event list."""
 
@@ -509,7 +699,7 @@ class CalendarClient:
                 credentials_file = Path(credentials_value).expanduser()
                 max_events = int(os.getenv("calendar_google_max_events", "100"))
                 delegated_user = os.getenv("calendar_google_delegated_user", "").strip()
-                return [
+                sources = [
                     GoogleCalendarApiSource(
                         calendar_id,
                         credentials_file=credentials_file,
@@ -521,6 +711,31 @@ class CalendarClient:
                     )
                     for calendar_id in calendar_ids
                 ]
+                if _enabled("calendar_google_tasks_enabled"):
+                    tasks_credentials = os.getenv(
+                        "calendar_google_tasks_credentials_file", ""
+                    ).strip()
+                    if not tasks_credentials:
+                        if self.enabled:
+                            logger.error(
+                                "Google Tasks enabled but OAuth credentials are missing"
+                            )
+                    else:
+                        sources.append(
+                            GoogleTasksApiSource(
+                                credentials_file=Path(tasks_credentials).expanduser(),
+                                cache_dir=cache_dir,
+                                timeout=timeout,
+                                max_stale_seconds=max_stale,
+                                max_tasks=int(
+                                    os.getenv("calendar_google_tasks_max", "100")
+                                ),
+                                max_tasklists=int(
+                                    os.getenv("calendar_google_tasks_max_lists", "20")
+                                ),
+                            )
+                        )
+                return sources
             if source_type == "file":
                 value = os.getenv(
                     "calendar_ics_files", os.getenv("calendar_ics_file", "")

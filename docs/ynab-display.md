@@ -12,13 +12,32 @@ ynab_currency_symbol=€
 ynab_views=month,daily,active,funding,exception
 ynab_daily_categories=Restaurants,Groceries
 ynab_funding_categories=Vacation,Drier,New laptop
-display_schedule=ynab@weekends@09:00-12:00,transit@00:00-00:00
+
+ynab_glance_enabled=true
+ynab_glance_poll_seconds=1
+ynab_glance_interval_seconds=1800
+ynab_glance_duration_seconds=60
+ynab_glance_offset_seconds=900
+ynab_glance_priority=20
 ```
 
-`ynab` and `ynab-always` are schedule modes. Both show the latest current-month
-snapshot; `ynab-always` is provided for consistency with the token display.
-When YNAB is unavailable, `ynab_fallback_mode` is used. A recent last-good
-snapshot may be shown with a `STALE` header.
+The glance settings add YNAB to the normal information flow without reserving a
+fixed clock-time block in `display_schedule`. With the values above, a YNAB view
+appears for 60 seconds at `:15` and `:45` each hour. Successive appearances
+advance through the configured `ynab_views`. The 15-minute offset avoids the
+calendar agenda's default `:00` and `:30` cadence.
+
+YNAB glances use a low-priority, non-exclusive screen claim. Upcoming calendar
+events, RSS entries, flights, ISS passes, breaking news, and display overrides
+can interrupt them. The normal scheduled base display is restored after the
+claim ends. If YNAB has no usable snapshot, the glance is skipped; a recent
+last-good snapshot may be shown with a `STALE` header.
+
+For intentionally fixed YNAB periods, `ynab` and `ynab-always` remain supported
+`display_schedule` modes. Both show the latest current-month snapshot;
+`ynab-always` is provided for consistency with the token display. A recurring
+glance is suppressed while either fixed YNAB mode is already scheduled. When a
+fixed YNAB period is unavailable, `ynab_fallback_mode` is used.
 
 ## Calculation policy
 

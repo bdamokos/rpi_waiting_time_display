@@ -10,7 +10,7 @@ A Raspberry Pi project that displays bus waiting times using an e-Paper display 
 - ✈️ Optional: Overhead flight tracking
 - 🛰️ Optional: ISS tracking when visible
 - 📊 Optional: Scheduled token-usage dashboards with month-to-date estimates and remaining-capacity bars
-- 💶 Optional: Read-only YNAB views based only on the current month's assignments
+- 💶 Optional: Recurring read-only YNAB glances based only on the current month's assignments
 - 📅 Optional calendar plugin with upcoming-event alerts and agenda glances
 - 📰 Optional RSS/Nitter plugin with compact new-entry notifications
 - 🎛️ Screen arbitration, weekday-aware schedules, and a private-network display override API
@@ -19,9 +19,9 @@ A Raspberry Pi project that displays bus waiting times using an e-Paper display 
 
 ## Optional Display Plugins
 
-The calendar and RSS plugins share the screen safely with transit, weather,
-flight, ISS, and Codex views through the screen arbiter. Each plugin is disabled
-by default and configured in the untracked `.env` file.
+The calendar, YNAB glance, and RSS plugins share the screen safely with
+transit, weather, flight, ISS, and Codex views through the screen arbiter. Each
+plugin is disabled by default and configured in the untracked `.env` file.
 
 ### Calendar
 
@@ -65,8 +65,9 @@ documentation.
 ### YNAB monthly budget views
 
 YNAB screens distinguish current-month spending permission from historical
-rollover. They never treat Ready to Assign as safe-to-spend money. See the
-[configuration and calculation policy](docs/ynab-display.md).
+rollover. They can appear as low-priority recurring glances without replacing
+the normal scheduled display, and never treat Ready to Assign as safe-to-spend
+money. See the [configuration and calculation policy](docs/ynab-display.md).
 
 | Monthly plan | Daily allowance | Active envelopes |
 |---|---|---|

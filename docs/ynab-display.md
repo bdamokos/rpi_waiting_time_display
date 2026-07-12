@@ -28,13 +28,10 @@ The views follow an allocation-first model:
 current-month remainder = assigned this month - current-month outflows
 ```
 
-Positive rollover and Ready to Assign are never included in spending guidance.
 The daily view divides the selected categories' current-month remainder by the
 calendar days remaining, including today. The active view ranks assigned
 categories by the proportion of this month's assignment already spent. The
 funding view shows direct current-month contributions, not accumulated balances.
 Activity in a category with no current-month assignment is flagged for review.
 
-Category and group names are configurable because YNAB budgets are personal and
-may use localized names. The cache contains normalized category names and
-amounts, so protect the display host and its filesystem accordingly.
+Category and group names are configurable.

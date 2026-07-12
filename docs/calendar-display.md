@@ -57,6 +57,26 @@ Workspace administrator may instead grant domain-wide delegation; set
 configured. The implementation requests only the
 `calendar.events.readonly` OAuth scope.
 
+### Including Google Tasks
+
+Google Tasks are not Calendar Events API resources, even though Calendar shows
+them in the same interface. To include incomplete tasks with due dates, enable
+the Google Tasks API and create an OAuth authorized-user JSON file with only the
+`https://www.googleapis.com/auth/tasks.readonly` scope. Store that file outside
+the repository with owner-only permissions, then add:
+
+```dotenv
+calendar_google_tasks_enabled=true
+calendar_google_tasks_credentials_file=/path/to/tasks-reader.json
+calendar_google_tasks_max=100
+calendar_google_tasks_max_lists=20
+```
+
+The display queries every visible task list with server-side `dueMin` and
+`dueMax` bounds matching the calendar lookahead window. Completed, deleted,
+hidden, undated, and out-of-window tasks are omitted. A hard task cap and a
+mode-0600 last-good cache bound memory and stale fallback behavior.
+
 ### Migrating from a Google secret ICS URL
 
 Replace `calendar_source=ics` and `calendar_ics_urls=...` with the API settings

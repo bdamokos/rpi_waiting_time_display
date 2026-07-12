@@ -5,12 +5,9 @@ from zoneinfo import ZoneInfo
 
 import requests
 
-from calendar_service import (
-    CalendarClient,
-    GoogleCalendarApiSource,
-    IcsCalendarSource,
-    parse_ics_events,
-)
+from calendar_service import (CalendarClient, GoogleCalendarApiSource,
+                              GoogleTasksApiSource, IcsCalendarSource,
+                              parse_ics_events)
 
 TIMEZONE = ZoneInfo("Europe/Brussels")
 NOW = datetime(2026, 7, 11, 8, 0, tzinfo=TIMEZONE)
@@ -74,6 +71,63 @@ class FakeSession:
 class FakeCredentials:
     valid = True
     token = "test-token"
+
+
+def _task(index, *, day=13):
+    return {
+        "id": f"task-{index}",
+        "title": f"Task {index}",
+        "status": "needsAction",
+        "due": f"2026-07-{day:02d}T00:00:00.000Z",
+    }
+
+
+def test_google_tasks_requests_bounded_due_window_and_normalizes(tmp_path):
+    session = FakeSession(
+        [
+            FakeResponse(
+                200, json_data={"items": [{"id": "default", "title": "My Tasks"}]}
+            ),
+            FakeResponse(200, json_data={"items": [_task(1)]}),
+        ]
+    )
+    source = GoogleTasksApiSource(
+        credentials_file=tmp_path / "unused.json",
+        cache_dir=tmp_path,
+        timeout=5,
+        max_stale_seconds=3600,
+        session=session,
+        credentials=FakeCredentials(),
+    )
+    events = source.events_between(
+        NOW,
+        NOW + timedelta(days=3),
+        timezone=TIMEZONE,
+        include_all_day=True,
+        show_details=True,
+    )
+    assert [event.summary for event in events] == ["☐ Task 1"]
+    assert events[0].location == "My Tasks"
+    params = session.calls[1][1]["params"]
+    assert params["dueMin"] == "2026-07-10T22:00:00Z"
+    assert params["dueMax"] == "2026-07-13T22:00:00Z"
+    assert stat.S_IMODE(source.cache_file.stat().st_mode) == 0o600
+
+
+def test_google_tasks_hides_details_and_skips_completed_or_undated(tmp_path):
+    events = GoogleTasksApiSource._normalize(
+        [
+            _task(1),
+            {**_task(2), "status": "completed"},
+            {"id": "undated", "title": "Later"},
+        ],
+        NOW,
+        NOW + timedelta(days=3),
+        TIMEZONE,
+        False,
+        stale=False,
+    )
+    assert [event.summary for event in events] == ["Task"]
 
 
 def test_parser_expands_recurring_events_and_skips_cancelled():

@@ -44,7 +44,7 @@ proportional to the next few days, not to the age of the calendar.
 ```dotenv
 calendar_enabled=true
 calendar_source=google_api
-calendar_google_credentials_file=/home/bence/.config/display/calendar-reader.json
+calendar_google_credentials_file=/path/to/calendar-reader.json
 calendar_google_calendar_ids=REDACTED_CALENDAR_ID
 calendar_google_max_events=100
 calendar_timezone=Europe/Brussels

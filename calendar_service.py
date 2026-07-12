@@ -381,14 +381,19 @@ class GoogleCalendarApiSource:
     ):
         events = []
         for item in items:
+            if not isinstance(item, dict):
+                continue
             if item.get("status", "confirmed").upper() == "CANCELLED":
                 continue
-            start, all_day = GoogleCalendarApiSource._api_datetime(
-                item.get("start", {}), timezone
-            )
-            end, _ = GoogleCalendarApiSource._api_datetime(
-                item.get("end") or item.get("start", {}), timezone
-            )
+            try:
+                start, all_day = GoogleCalendarApiSource._api_datetime(
+                    item.get("start") or {}, timezone
+                )
+                end, _ = GoogleCalendarApiSource._api_datetime(
+                    item.get("end") or item.get("start") or {}, timezone
+                )
+            except (TypeError, ValueError):
+                continue
             if (all_day and end <= range_start) or (
                 not all_day and start < range_start
             ):
@@ -415,6 +420,8 @@ class GoogleCalendarApiSource:
 
     @staticmethod
     def _api_datetime(value, timezone):
+        if not isinstance(value, dict):
+            raise ValueError("Google Calendar event has no start/end date")
         if value.get("dateTime"):
             parsed = datetime.fromisoformat(value["dateTime"].replace("Z", "+00:00"))
             if parsed.tzinfo is None:
@@ -493,12 +500,11 @@ class CalendarClient:
                         os.getenv("calendar_google_calendar_id", ""),
                     )
                 )
-                if self.enabled and (not calendar_ids or not credentials_value):
-                    logger.error(
-                        "Calendar display enabled but Google API configuration is incomplete"
-                    )
-                    return []
-                if not calendar_ids:
+                if not calendar_ids or not credentials_value:
+                    if self.enabled:
+                        logger.error(
+                            "Calendar display enabled but Google API configuration is incomplete"
+                        )
                     return []
                 credentials_file = Path(credentials_value).expanduser()
                 max_events = int(os.getenv("calendar_google_max_events", "100"))

@@ -107,5 +107,9 @@ tokens, session names, and project paths are not exposed.
 can be applied from the Codex usage page. Older sources may omit it; the display
 then hides the corner badge.
 
+`limits.primary` is optional. When CodexBar omits the session window because no
+session limit applies, the display also omits the five-hour bar and gives the
+weekly limit the full limits view.
+
 The cost shown from local Codex logs is an estimated API-price equivalent. It
 is not an invoice or the amount charged for a ChatGPT subscription.

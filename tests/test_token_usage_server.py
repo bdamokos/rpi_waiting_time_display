@@ -30,7 +30,8 @@ def test_bridge_normalizes_and_removes_identity_fields(monkeypatch, tmp_path):
     ]
     activity_file = tmp_path / "session.jsonl"
     activity_file.write_text("{}\n", encoding="utf-8")
-    builder = SnapshotBuilder("codexbar", 300, RecentJsonActivity([tmp_path], 300))
+    activity = RecentJsonActivity([tmp_path], 300)
+    builder = SnapshotBuilder("codexbar", 300, activity)
 
     def fake_run(*arguments):
         return usage if arguments[0] == "usage" else cost
@@ -45,6 +46,21 @@ def test_bridge_normalizes_and_removes_identity_fields(monkeypatch, tmp_path):
     assert snapshot["active"] is True
     assert "email" not in serialized
     assert "project" not in serialized
+
+
+def test_bridge_omits_primary_limit_when_codexbar_does(monkeypatch, tmp_path):
+    usage = [{"usage": {"secondary": {"usedPercent": 40}}}]
+    cost = [{"currencyCode": "USD", "daily": []}]
+    builder = SnapshotBuilder("codexbar", 300, RecentJsonActivity([tmp_path], 300))
+
+    monkeypatch.setattr(
+        builder,
+        "_run",
+        lambda *arguments: usage if arguments[0] == "usage" else cost,
+    )
+    monkeypatch.setattr("tools.token_usage_server.datetime", _JulyDatetime)
+
+    assert "primary" not in builder.build()["limits"]
 
 
 def test_recent_json_activity_uses_modification_window(tmp_path):

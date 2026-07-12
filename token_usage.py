@@ -131,6 +131,7 @@ class DisplaySchedule:
 class RateWindow:
     used_percent: float
     resets_at: Optional[str] = None
+    available: bool = True
 
     @property
     def remaining_percent(self) -> float:
@@ -180,10 +181,14 @@ class TokenUsageSnapshot:
         return cls(
             generated_at=str(payload.get("generated_at") or ""),
             primary=RateWindow(
-                float(primary.get("used_percent", 0)), primary.get("resets_at")
+                float(primary.get("used_percent", 0)),
+                primary.get("resets_at"),
+                available=bool(primary),
             ),
             secondary=RateWindow(
-                float(secondary.get("used_percent", 0)), secondary.get("resets_at")
+                float(secondary.get("used_percent", 0)),
+                secondary.get("resets_at"),
+                available=bool(secondary),
             ),
             daily=daily,
             month_cost_usd=float(

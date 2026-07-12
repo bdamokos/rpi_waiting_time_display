@@ -86,6 +86,16 @@ def test_snapshot_reports_remaining_capacity():
     assert snapshot.month_cost_usd == 123.5
 
 
+def test_snapshot_preserves_an_absent_primary_limit():
+    payload = deepcopy(SAMPLE)
+    del payload["limits"]["primary"]
+
+    snapshot = TokenUsageSnapshot.from_dict(payload)
+
+    assert snapshot.primary.available is False
+    assert snapshot.secondary.available is True
+
+
 def test_snapshot_tolerates_invalid_reset_count():
     payload = {
         **SAMPLE,

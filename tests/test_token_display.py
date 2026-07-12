@@ -78,3 +78,20 @@ def test_month_view_uses_snapshot_date_for_today_total():
     snapshot = TokenUsageSnapshot.from_dict(SAMPLE)
 
     assert _today_cost(snapshot) == 83.5
+
+
+def test_limits_view_omits_absent_session_limit(monkeypatch):
+    payload = {**SAMPLE, "limits": {**SAMPLE["limits"]}}
+    payload["limits"].pop("primary")
+    snapshot = TokenUsageSnapshot.from_dict(payload)
+    calls = []
+
+    monkeypatch.setattr(
+        "token_display._limit_bar",
+        lambda draw, black, white, y, title, window, fonts: calls.append((y, title)),
+    )
+    monkeypatch.setattr("token_display._finish", lambda *args: None)
+
+    draw_usage_limits(MockDisplay(), snapshot)
+
+    assert calls == [(53, "WEEK")]

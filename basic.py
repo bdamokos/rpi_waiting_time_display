@@ -45,6 +45,7 @@ from screen_arbiter import ScreenArbiter
 from rss_plugin import RSSPlugin
 from breaking_news_plugin import BreakingNewsPlugin
 from calendar_plugin import CalendarPlugin
+from ynab_plugin import YnabGlancePlugin
 from display_override_api import DisplayOverrideServer
 
 logger = logging.getLogger(__name__)
@@ -366,6 +367,17 @@ class DisplayManager:
             on_render=self._calendar_rendered,
             base_mode_at=self.display_schedule.mode_at,
         )
+        self.ynab_glance_plugin = YnabGlancePlugin(
+            epd,
+            self.screen_arbiter,
+            self._display_lock,
+            client=self.ynab_client,
+            views=self.ynab_views,
+            on_render=self._plugin_rendered,
+            on_release=self._ynab_glance_released,
+            is_current=lambda: self.current_display_mode == YnabGlancePlugin.OWNER,
+            base_mode_at=self.display_schedule.mode_at,
+        )
         self.override_server = DisplayOverrideServer(
             self.request_display_override,
             self.clear_display_override,
@@ -402,8 +414,14 @@ class DisplayManager:
     def _plugin_rendered(self, owner):
         self.current_display_mode = owner
         self.current_token_view = None
+        self.current_ynab_view = None
         self.in_weather_mode = False
         self.last_display_update = datetime.now()
+
+    def _ynab_glance_released(self):
+        if self.screen_arbiter.can_render():
+            self._last_screen_owner = None
+            self._force_display_update()
 
     def _scheduled_mode(self, current_time):
         scheduled_mode = self.display_schedule.mode_at(current_time)
@@ -676,6 +694,7 @@ class DisplayManager:
         # Calendar events are fetched and rendered independently of the base
         # transit/weather/token data sources.
         self.calendar_plugin.start()
+        self.ynab_glance_plugin.start()
         self.override_server.start()
         self.rss_plugin.start()
         self.breaking_news_plugin.start()
@@ -1183,6 +1202,7 @@ class DisplayManager:
 
         self.override_server.stop()
         self.calendar_plugin.stop()
+        self.ynab_glance_plugin.stop()
         self.rss_plugin.stop()
         self.breaking_news_plugin.stop()
             

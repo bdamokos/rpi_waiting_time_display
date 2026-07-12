@@ -1,8 +1,8 @@
 # Screen ownership arbiter
 
-The scheduled transit, weather, or token screen is the base display. Optional
-plugins must claim the screen through `ScreenArbiter` before rendering an
-interrupting view.
+The scheduled transit, weather, token, or fixed-window YNAB screen is the base
+display. Optional plugins must claim the screen through `ScreenArbiter` before
+rendering an interrupting view.
 
 A claim has four properties:
 
@@ -33,6 +33,12 @@ Flights default to priority `50`. ISS defaults to `60` when the existing
 
 Future plugins should use bounded claims and check `can_render(owner)` again
 while holding the display lock immediately before writing to the device.
+
+Recurring calendar agenda and YNAB glances both default to priority `20`. Their
+default cadences are offset: calendar appears around `:00` and `:30`, while YNAB
+appears around `:15` and `:45`. Both claims are bounded and non-exclusive, so
+higher-priority information interrupts them and the scheduled base display
+returns afterward.
 
 The RSS watcher defaults to priority `30`: it interrupts the scheduled base
 screen and calendar agenda glances, but yields to upcoming calendar events,

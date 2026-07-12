@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import threading
 import time
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -107,6 +108,7 @@ class YnabBudgetClient:
         )
         self._snapshot: Optional[YnabSnapshot] = None
         self._last_fetch_monotonic = 0.0
+        self._lock = threading.Lock()
 
     def _request(self) -> Dict[str, Any]:
         if not self.access_token:
@@ -175,26 +177,27 @@ class YnabBudgetClient:
     def get_snapshot(self, force: bool = False) -> Optional[YnabSnapshot]:
         if not self.enabled:
             return None
-        if (
-            not force
-            and self._snapshot is not None
-            and time.monotonic() - self._last_fetch_monotonic
-            < self.refresh_interval
-        ):
+        with self._lock:
+            if (
+                not force
+                and self._last_fetch_monotonic
+                and time.monotonic() - self._last_fetch_monotonic
+                < self.refresh_interval
+            ):
+                return self._snapshot
+            try:
+                normalized = self._normalize(self._request())
+                self._write_cache(normalized)
+                self._snapshot = YnabSnapshot.from_dict(normalized)
+            except Exception as exc:
+                # HTTP errors can include the private budget URL. Log only the
+                # exception type and keep identifiers out of service logs.
+                logger.warning(
+                    "YNAB refresh failed (%s); using cache", type(exc).__name__
+                )
+                self._snapshot = self._load_stale()
+            self._last_fetch_monotonic = time.monotonic()
             return self._snapshot
-        try:
-            normalized = self._normalize(self._request())
-            self._write_cache(normalized)
-            self._snapshot = YnabSnapshot.from_dict(normalized)
-        except Exception as exc:
-            # HTTP errors can include the private budget URL. Log only the
-            # exception type and keep identifiers out of service logs.
-            logger.warning(
-                "YNAB refresh failed (%s); using cache", type(exc).__name__
-            )
-            self._snapshot = self._load_stale()
-        self._last_fetch_monotonic = time.monotonic()
-        return self._snapshot
 
 
 def configured_views() -> List[str]:

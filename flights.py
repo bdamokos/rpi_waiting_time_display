@@ -68,6 +68,7 @@ lon = os.getenv('Coordinates_LNG')
 
 radius = int(os.getenv('flight_max_radius', 3))
 flight_check_interval = int(os.getenv('flight_check_interval', 10))
+ADSB_REQUEST_INTERVAL = max(1, int(os.getenv('adsb_request_interval', 15)))
 aeroapi_enabled = os.getenv("aeroapi_enabled", "false").lower() == "true"
 aeroapi_key = os.getenv("aeroapi_key")
 aeroapi_enable_paid_usage = os.getenv("aeroapi_enable_paid_usage", "false").lower() == "true"
@@ -229,6 +230,11 @@ def fetch_adsb_point(lat, lon, radius):
     return None
 
 
+def get_adsb_request_interval(display_check_interval):
+    """Keep external position requests slower than local display checks."""
+    return max(display_check_interval, ADSB_REQUEST_INTERVAL)
+
+
 @lru_cache(maxsize=1024)
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371000
@@ -249,6 +255,7 @@ def gather_flights_within_radius(lat, lon, radius=radius*2, distance_threshold=r
     stop_event = Event()  # Create stop_event here
     # Initialize backoff with 1 minute initial and 1 hour max
     _backoff = ExponentialBackoff(initial_backoff=60, max_backoff=3600)
+    request_interval = get_adsb_request_interval(flight_check_interval)
     logger.debug(f"Monitoring flights within {radius}km of {lat}, {lon}, with threshold {distance_threshold} km")
     
     def gather_data():
@@ -258,7 +265,7 @@ def gather_flights_within_radius(lat, lon, radius=radius*2, distance_threshold=r
             current_time = time.time()
             
             # Ensure minimum interval between checks
-            if current_time - last_check_time < flight_check_interval:
+            if current_time - last_check_time < request_interval:
                 time.sleep(1)  # Short sleep to prevent CPU spinning
                 continue
 
@@ -313,10 +320,10 @@ def gather_flights_within_radius(lat, lon, radius=radius*2, distance_threshold=r
             except Exception as e:
                 _backoff.update_backoff_state(False)
                 logger.error(f"Error gathering flight data: {e}")
-                time.sleep(flight_check_interval)  # Sleep on error
+                time.sleep(request_interval)  # Sleep on error
             
             # Sleep for the remaining interval time
-            time_to_sleep = max(0, flight_check_interval - (time.time() - current_time))
+            time_to_sleep = max(0, request_interval - (time.time() - current_time))
             if time_to_sleep > 0:
                 time.sleep(time_to_sleep)
 

@@ -3,7 +3,13 @@ from threading import Lock, RLock
 from unittest.mock import Mock, patch
 
 from display_adapter import MockDisplay
-from flights import RecentFlightCache, update_display_with_recent_flights
+from flights import (
+    ADSB_API_BASE_URLS,
+    RecentFlightCache,
+    fetch_adsb_point,
+    flight_session,
+    update_display_with_recent_flights,
+)
 from screen_arbiter import ScreenArbiter
 
 
@@ -25,6 +31,47 @@ def test_recent_flight_cache_rejects_entries_without_an_identifier():
 
     assert not cache.record({"origin_code": "BRU"})
     assert cache.recent() == []
+
+
+def test_adsb_point_fetch_falls_back_to_next_compatible_provider(monkeypatch):
+    class Response:
+        def __init__(self, status_code, payload=None):
+            self.status_code = status_code
+            self._payload = payload
+
+        def json(self):
+            return self._payload
+
+    calls = []
+    responses = iter([Response(403), Response(200, {"ac": [{"hex": "abc"}]})])
+
+    def get(url, **kwargs):
+        calls.append((url, kwargs))
+        return next(responses)
+
+    monkeypatch.setattr("flights.ADSB_API_BASE_URLS", ("https://one", "https://two"))
+    monkeypatch.setattr("flights.flight_session.get", get)
+
+    assert fetch_adsb_point(50.0, 4.0, 6) == {"ac": [{"hex": "abc"}]}
+    assert [call[0] for call in calls] == [
+        "https://one/v2/point/50.0/4.0/6",
+        "https://two/v2/point/50.0/4.0/6",
+    ]
+    assert all(call[1]["timeout"] == 10 for call in calls)
+
+
+def test_all_configured_adsb_providers_bypass_the_flight_cache():
+    for base_url in ADSB_API_BASE_URLS:
+        assert flight_session.settings.urls_expire_after[f"{base_url}/v2/point"] == 0
+
+
+def test_adsb_point_fetch_rejects_invalid_payloads(monkeypatch):
+    response = Mock(status_code=200)
+    response.json.return_value = {"ac": None}
+    monkeypatch.setattr("flights.ADSB_API_BASE_URLS", ("https://one",))
+    monkeypatch.setattr("flights.flight_session.get", lambda *args, **kwargs: response)
+
+    assert fetch_adsb_point(50.0, 4.0, 6) is None
 
 
 def test_recent_flights_renderer_handles_partial_and_missing_route_data(monkeypatch):

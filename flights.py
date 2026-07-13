@@ -33,13 +33,26 @@ if not AEROAPI_BASE_URL.endswith('/aeroapi'):
 # Ensure the base URL doesn't end with a slash to prevent double slashes in requests
 AEROAPI_BASE_URL = AEROAPI_BASE_URL.rstrip('/')
 
+ADSB_API_BASE_URLS = tuple(
+    url.strip().rstrip('/')
+    for url in os.getenv(
+        'ADSB_API_BASE_URLS',
+        'https://api.adsb.lol,https://api.adsb.one',
+    ).split(',')
+    if url.strip()
+)
+ADSB_REQUEST_HEADERS = {
+    'Accept': 'application/json',
+    'User-Agent': 'rpi-waiting-time-display/1.0',
+}
+
 # Create a cached session specifically for flight requests
 flight_session = CachedSession(
     'flight_cache',
     backend='memory',
     expire_after=3600,  # Cache expires after 1 hour
     urls_expire_after={
-        'https://api.adsb.one/v2/point': 0,  # Do not cache ADS-B API calls
+        **{f'{url}/v2/point': 0 for url in ADSB_API_BASE_URLS},
         f'{AEROAPI_BASE_URL}/account/usage': 0,  # Do not cache usage endpoint check
     }
 )
@@ -190,6 +203,32 @@ def is_aeroapi_active():
     return False
 
 
+def fetch_adsb_point(lat, lon, radius):
+    """Fetch nearby aircraft from the first healthy compatible ADS-B API."""
+    for base_url in ADSB_API_BASE_URLS:
+        try:
+            response = flight_session.get(
+                f"{base_url}/v2/point/{lat}/{lon}/{radius}",
+                headers=ADSB_REQUEST_HEADERS,
+                timeout=10,
+            )
+            if response.status_code != 200:
+                logger.warning(
+                    "ADS-B provider %s returned HTTP %s",
+                    base_url,
+                    response.status_code,
+                )
+                continue
+            payload = response.json()
+            if not isinstance(payload, dict) or not isinstance(payload.get('ac'), list):
+                logger.warning("ADS-B provider %s returned an invalid payload", base_url)
+                continue
+            return payload
+        except Exception as exc:
+            logger.warning("ADS-B provider %s failed: %s", base_url, exc)
+    return None
+
+
 @lru_cache(maxsize=1024)
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371000
@@ -230,10 +269,8 @@ def gather_flights_within_radius(lat, lon, radius=radius*2, distance_threshold=r
                 continue
                 
             try:
-                # Use the cached session instead of global requests
-                response = flight_session.get(f"https://api.adsb.one/v2/point/{lat}/{lon}/{radius}")
-                if response.status_code == 200:
-                    data = response.json()
+                data = fetch_adsb_point(lat, lon, radius)
+                if data is not None:
                     logger.debug(f"Found {len(data['ac']) if data and 'ac' in data else 0} flights.")
                     
                     with lock:
@@ -269,7 +306,7 @@ def gather_flights_within_radius(lat, lon, radius=radius*2, distance_threshold=r
                     _backoff.update_backoff_state(True)
                 else:
                     _backoff.update_backoff_state(False)
-                    logger.error(f"Error response from flight API: {response.status_code}")
+                    logger.error("All configured ADS-B providers failed")
 
                 last_check_time = current_time
                 

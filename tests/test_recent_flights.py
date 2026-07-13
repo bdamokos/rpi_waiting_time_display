@@ -3,7 +3,13 @@ from threading import Lock, RLock
 from unittest.mock import Mock, patch
 
 from display_adapter import MockDisplay
-from flights import RecentFlightCache, fetch_adsb_point, update_display_with_recent_flights
+from flights import (
+    ADSB_API_BASE_URLS,
+    RecentFlightCache,
+    fetch_adsb_point,
+    flight_session,
+    update_display_with_recent_flights,
+)
 from screen_arbiter import ScreenArbiter
 
 
@@ -52,6 +58,11 @@ def test_adsb_point_fetch_falls_back_to_next_compatible_provider(monkeypatch):
         "https://two/v2/point/50.0/4.0/6",
     ]
     assert all(call[1]["timeout"] == 10 for call in calls)
+
+
+def test_all_configured_adsb_providers_bypass_the_flight_cache():
+    for base_url in ADSB_API_BASE_URLS:
+        assert flight_session.settings.urls_expire_after[f"{base_url}/v2/point"] == 0
 
 
 def test_adsb_point_fetch_rejects_invalid_payloads(monkeypatch):

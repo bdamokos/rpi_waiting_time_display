@@ -52,8 +52,7 @@ flight_session = CachedSession(
     backend='memory',
     expire_after=3600,  # Cache expires after 1 hour
     urls_expire_after={
-        'https://api.adsb.lol/v2/point': 0,  # Do not cache ADS-B API calls
-        'https://api.adsb.one/v2/point': 0,  # Do not cache ADS-B API calls
+        **{f'{url}/v2/point': 0 for url in ADSB_API_BASE_URLS},
         f'{AEROAPI_BASE_URL}/account/usage': 0,  # Do not cache usage endpoint check
     }
 )

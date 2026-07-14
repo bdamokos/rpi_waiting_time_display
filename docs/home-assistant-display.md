@@ -14,6 +14,11 @@ Empty screens are skipped. Cards default to 30 seconds before returning to the
 base display for three minutes. Triggers can claim a target screen on an
 inactive-to-active transition with configurable debounce, priority and TTL.
 
+An entity row may use `entity_ids` instead of `entity_id` to group binary
+sensors. The row is active when any available member is active and clear only
+when every available member is clear. List each member separately in `triggers`
+when either member should claim the screen.
+
 Tokens and household entity IDs belong only in ignored deployment config. The
 service does not log URLs, tokens, headers, or authentication payloads.
 Unavailable updates retain the previous useful value with a stale marker.

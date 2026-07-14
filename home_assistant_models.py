@@ -9,6 +9,11 @@ class EntityConfig:
     entity_id: str
     label: str = ""
     attribute: str = ""
+    entity_ids: Tuple[str, ...] = ()
+
+    @property
+    def source_entity_ids(self) -> Tuple[str, ...]:
+        return self.entity_ids or (self.entity_id,)
 
 
 @dataclass(frozen=True)
@@ -46,14 +51,28 @@ def parse_config(data) -> HomeAssistantConfig:
         kind = str(item.get("type", "entities")).lower()
         if kind not in known:
             raise ValueError(f"unknown Home Assistant screen type: {kind}")
-        entities = tuple(
-            EntityConfig(
-                str(entity["entity_id"]),
-                str(entity.get("label", "")),
-                str(entity.get("attribute", "")),
+        entities = []
+        for entity in item.get("entities", []):
+            raw_source_ids = entity.get("entity_ids") or ()
+            if not isinstance(raw_source_ids, (list, tuple)):
+                raise ValueError("Home Assistant entity_ids must be a list")
+            source_ids = tuple(dict.fromkeys(str(value) for value in raw_source_ids))
+            entity_id = str(
+                entity.get("entity_id") or (source_ids[0] if source_ids else "")
             )
-            for entity in item.get("entities", [])
-        )
+            if not entity_id:
+                raise ValueError(
+                    "Home Assistant entities require entity_id or entity_ids"
+                )
+            entities.append(
+                EntityConfig(
+                    entity_id,
+                    str(entity.get("label", "")),
+                    str(entity.get("attribute", "")),
+                    source_ids,
+                )
+            )
+        entities = tuple(entities)
         if not entities:
             raise ValueError("Home Assistant screens require entities")
         screens.append(

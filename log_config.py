@@ -5,7 +5,15 @@ from logging.handlers import RotatingFileHandler
 
 def configured_log_level(value=None):
     """Return a safe logging level for the display's constrained runtime."""
-    name = (value or os.getenv("display_log_level", "INFO")).strip().upper()
+    if value is None:
+        value = os.getenv("display_log_level", "INFO")
+    if isinstance(value, int):
+        return value
+    if not isinstance(value, str):
+        return logging.INFO
+    name = value.strip().upper()
+    if name.isdigit():
+        return int(name)
     level = getattr(logging, name, None)
     return level if isinstance(level, int) else logging.INFO
 

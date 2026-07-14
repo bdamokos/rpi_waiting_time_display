@@ -22,3 +22,5 @@ when either member should claim the screen.
 Tokens and household entity IDs belong only in ignored deployment config. The
 service does not log URLs, tokens, headers, or authentication payloads.
 Unavailable updates retain the previous useful value with a stale marker.
+The lights card uses a compact seven-row layout when more than four configured
+rows are active, and replaces only true overflow beyond seven rows with a count.

@@ -62,6 +62,14 @@ def resolve_entity_state(entity, states):
     return max(active or usable, key=lambda state: state.received_monotonic)
 
 
+def light_rows(items, limit=7):
+    """Keep every active light visible, using a summary row only past capacity."""
+    if len(items) <= limit:
+        return items
+    hidden = len(items) - (limit - 1)
+    return items[: limit - 1] + [(f"+{hidden} more", "on", False, None)]
+
+
 def screen_has_content(screen, states):
     if screen.type in {"lights", "climate"}:
         return any(
@@ -107,7 +115,7 @@ def draw_home_assistant_screen(
             for label, value, stale, state in items
             if state and str(state.state).lower() == "on"
         ]
-        items = on or [("All lights", "off", False, None)]
+        items = light_rows(on) if on else [("All lights", "off", False, None)]
     elif screen.type == "climate":
         active = [
             item
@@ -125,8 +133,10 @@ def draw_home_assistant_screen(
             if stale:
                 draw.text((x, 96), "STALE", font=body, fill=black)
     else:
-        for index, (label, value, stale, state) in enumerate(items[:4]):
-            y = 32 + index * 21
+        compact = screen.type == "lights" and len(items) > 4
+        rows = items if screen.type == "lights" else items[:4]
+        for index, (label, value, stale, state) in enumerate(rows):
+            y = 29 + index * 13 if compact else 32 + index * 21
             if screen.type == "climate" and state:
                 current = state.attributes.get("current_temperature")
                 target = state.attributes.get("temperature")
@@ -134,9 +144,10 @@ def draw_home_assistant_screen(
                     value = f"{current} → {target}°"
             suffix = " !" if stale else ""
             draw.text((7, y), _text(draw, label, body, 145), font=body, fill=black)
-            rendered = _text(draw, f"{value}{suffix}", heading, 88)
-            width = draw.textbbox((0, 0), rendered, font=heading)[2]
-            draw.text((243 - width, y - 1), rendered, font=heading, fill=black)
+            value_font = body if compact else heading
+            rendered = _text(draw, f"{value}{suffix}", value_font, 88)
+            width = draw.textbbox((0, 0), rendered, font=value_font)[2]
+            draw.text((243 - width, y - 1), rendered, font=value_font, fill=black)
 
     image = image.rotate(ROTATION, expand=True)
     buffer = epd.getbuffer(image)

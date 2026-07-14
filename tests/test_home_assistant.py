@@ -3,7 +3,11 @@ import threading
 from datetime import datetime, timezone
 
 from display_adapter import MockDisplay
-from home_assistant_display import draw_home_assistant_screen, resolve_entity_state
+from home_assistant_display import (
+    draw_home_assistant_screen,
+    light_rows,
+    resolve_entity_state,
+)
 from home_assistant_models import parse_config
 from home_assistant_plugin import HomeAssistantPlugin
 from home_assistant_service import EntityState, HomeAssistantService
@@ -272,6 +276,23 @@ def test_grouped_entity_parser_handles_null_and_rejects_invalid_types():
         assert str(exc) == "Home Assistant entity_ids must be a list"
     else:
         raise AssertionError("invalid entity_ids should be rejected")
+
+
+def test_light_rows_show_seven_rooms_and_summarize_only_true_overflow():
+    items = [(f"Room {index}", "on", False, None) for index in range(1, 10)]
+
+    assert [item[0] for item in light_rows(items[:7])] == [
+        f"Room {index}" for index in range(1, 8)
+    ]
+    assert [item[0] for item in light_rows(items)] == [
+        "Room 1",
+        "Room 2",
+        "Room 3",
+        "Room 4",
+        "Room 5",
+        "Room 6",
+        "+3 more",
+    ]
 
 
 def test_unavailable_state_preserves_last_good_value():

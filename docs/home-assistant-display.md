@@ -22,3 +22,6 @@ when either member should claim the screen.
 Tokens and household entity IDs belong only in ignored deployment config. The
 service does not log URLs, tokens, headers, or authentication payloads.
 Unavailable updates retain the previous useful value with a stale marker.
+The lights card keeps the normal four-row font size and paginates additional
+active rows. Pages default to 15 seconds and can be adjusted per screen with
+`page_seconds`; the screen duration expands when needed so every page is shown.

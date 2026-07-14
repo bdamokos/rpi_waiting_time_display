@@ -23,6 +23,7 @@ class ScreenConfig:
     title: str
     entities: Tuple[EntityConfig, ...]
     duration_seconds: float = 30.0
+    page_seconds: float = 15.0
     priority: int = 18
 
 
@@ -82,6 +83,7 @@ def parse_config(data) -> HomeAssistantConfig:
                 str(item.get("title", item["id"])),
                 entities,
                 float(item.get("duration_seconds", 30)),
+                max(1.0, float(item.get("page_seconds", 15))),
                 int(item.get("priority", 18)),
             )
         )

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import math
 import os
+
 from PIL import Image, ImageDraw, ImageFont
 
 from font_utils import get_font_paths
@@ -62,6 +64,26 @@ def resolve_entity_state(entity, states):
     return max(active or usable, key=lambda state: state.received_monotonic)
 
 
+def light_page(items, page, page_size=4):
+    """Return one readable page of active light rows."""
+    if not items:
+        return []
+    page_count = math.ceil(len(items) / page_size)
+    page = page % page_count
+    start = page * page_size
+    return items[start : start + page_size]
+
+
+def light_page_count(screen, states, page_size=4):
+    active = sum(
+        1
+        for entity in screen.entities
+        if (state := resolve_entity_state(entity, states))
+        and str(state.state).lower() == "on"
+    )
+    return max(1, math.ceil(active / page_size))
+
+
 def screen_has_content(screen, states):
     if screen.type in {"lights", "climate"}:
         return any(
@@ -76,7 +98,7 @@ def screen_has_content(screen, states):
 
 
 def draw_home_assistant_screen(
-    epd, screen, states, *, stale_seconds=600, now_monotonic=None
+    epd, screen, states, *, stale_seconds=600, now_monotonic=None, page=0
 ):
     white = 1 if epd.is_bw_display else epd.WHITE
     black = 0 if epd.is_bw_display else epd.BLACK
@@ -107,7 +129,7 @@ def draw_home_assistant_screen(
             for label, value, stale, state in items
             if state and str(state.state).lower() == "on"
         ]
-        items = on or [("All lights", "off", False, None)]
+        items = light_page(on, page) if on else [("All lights", "off", False, None)]
     elif screen.type == "climate":
         active = [
             item

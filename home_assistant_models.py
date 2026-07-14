@@ -53,8 +53,8 @@ def parse_config(data) -> HomeAssistantConfig:
             raise ValueError(f"unknown Home Assistant screen type: {kind}")
         entities = []
         for entity in item.get("entities", []):
-            raw_source_ids = entity.get("entity_ids", ())
-            if isinstance(raw_source_ids, (str, bytes)):
+            raw_source_ids = entity.get("entity_ids") or ()
+            if not isinstance(raw_source_ids, (list, tuple)):
                 raise ValueError("Home Assistant entity_ids must be a list")
             source_ids = tuple(dict.fromkeys(str(value) for value in raw_source_ids))
             entity_id = str(

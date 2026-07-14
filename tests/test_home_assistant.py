@@ -242,6 +242,38 @@ def test_plugin_subscribes_to_every_group_member(monkeypatch):
     }
 
 
+def test_grouped_entity_parser_handles_null_and_rejects_invalid_types():
+    config = parse_config(
+        {
+            "screens": [
+                {
+                    "id": "motion",
+                    "entities": [
+                        {"entity_id": "binary_sensor.hall", "entity_ids": None}
+                    ],
+                }
+            ]
+        }
+    )
+    assert config.screens[0].entities[0].source_entity_ids == ("binary_sensor.hall",)
+
+    try:
+        parse_config(
+            {
+                "screens": [
+                    {
+                        "id": "motion",
+                        "entities": [{"entity_ids": 123}],
+                    }
+                ]
+            }
+        )
+    except ValueError as exc:
+        assert str(exc) == "Home Assistant entity_ids must be a list"
+    else:
+        raise AssertionError("invalid entity_ids should be rejected")
+
+
 def test_unavailable_state_preserves_last_good_value():
     service = HomeAssistantService("http://ha.test", "secret", ["sensor.left"])
     service._store({"entity_id": "sensor.left", "state": "11", "attributes": {}}, False)

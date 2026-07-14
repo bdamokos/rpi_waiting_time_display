@@ -55,7 +55,9 @@ def resolve_entity_state(entity, states):
     available = [state for state in candidates if state.available]
     usable = available or candidates
     active = [
-        state for state in usable if str(state.state).strip().lower() in ACTIVE_STATES
+        state
+        for state in usable
+        if state.state and state.state.strip().lower() in ACTIVE_STATES
     ]
     return max(active or usable, key=lambda state: state.received_monotonic)
 

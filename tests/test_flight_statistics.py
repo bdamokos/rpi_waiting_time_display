@@ -4,6 +4,7 @@ from unittest.mock import Mock, patch
 from display_adapter import MockDisplay
 from flight_statistics import (
     FlightStatisticsStore,
+    _record_rows,
     update_display_with_flight_records,
     update_display_with_flight_statistics,
 )
@@ -54,7 +55,9 @@ def test_store_preserves_falsy_identifiers(tmp_path):
     store = FlightStatisticsStore(tmp_path / "flights.sqlite3")
 
     assert store.record({"callsign": 0}, datetime(2026, 7, 14, 9, 0))
-    assert store.summary("day", datetime(2026, 7, 14, 12))["encounters"] == 1
+    summary = store.summary("day", datetime(2026, 7, 14, 12))
+    assert summary["encounters"] == 1
+    assert summary["repeat"] is None
 
 
 def test_calendar_periods_and_fun_records_use_available_metadata(tmp_path):
@@ -122,12 +125,13 @@ def test_statistics_renderers_handle_rich_data(monkeypatch):
         "youngest": {"label": "OO-NEW", "year": 2024},
         "repeat": ("OO-ABC", 3),
         "closest": ("OO-NEAR", 0.8),
-        "fastest": None,
+        "fastest": ("OO-FAST", 475),
     }
 
     assert update_display_with_flight_statistics(display, summary, set_base_image=True)
     assert update_display_with_flight_records(display, records, set_base_image=True)
     assert len(displayed) == 2
+    assert _record_rows(records)[-1] == ("Fastest", "OO-FAST", "475 kt")
 
 
 def test_week_statistics_override_uses_persisted_store():

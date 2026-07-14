@@ -56,7 +56,8 @@ mean the current local calendar day, Monday-based week, and calendar month.
 Each period highlights the busiest routes and operators that have metadata,
 then falls back to aircraft type, repeat visitor, and busiest-hour facts when
 route data is sparse. `flight_records` uses all retained history for oldest and
-youngest known airframes, the most-seen aircraft, and the closest flyby.
+youngest known airframes, the most-seen aircraft, the closest flyby, and the
+fastest observed groundspeed in knots.
 Aircraft age appears only when the ADS-B source supplies a plausible manufacture
 year. Retention, encounter gap, write throttle, and the ignored database path
 are configurable with the `flight_statistics_*` settings in `.env.example`.

@@ -294,7 +294,7 @@ class FlightStatisticsStore:
         row = connection.execute(
             "SELECT COALESCE(MAX(registration), MAX(callsign), MAX(hex), identity) "
             "AS label, COUNT(*) AS total FROM flight_encounters "
-            f"WHERE {where} GROUP BY identity "
+            f"WHERE {where} GROUP BY identity HAVING COUNT(*) > 1 "
             "ORDER BY total DESC, label ASC LIMIT 1",
             params,
         ).fetchone()
@@ -496,13 +496,7 @@ def update_display_with_flight_statistics(epd, summary, set_base_image=False):
     return _finish(epd, image, set_base_image)
 
 
-def update_display_with_flight_records(epd, records, set_base_image=False):
-    image, draw, (header, bold, detail) = _canvas(epd)
-    draw.text((7, 4), "Flight records", fill="black", font=header)
-    draw.text(
-        (7, 21), f"{records['encounters']} recorded flybys", fill="black", font=detail
-    )
-    draw.line([(7, 34), (image.width - 7, 34)], fill="black", width=1)
+def _record_rows(records):
     rows = []
     for title in ("oldest", "youngest"):
         item = records[title]
@@ -514,10 +508,25 @@ def update_display_with_flight_records(epd, records, set_base_image=False):
         rows.append(
             ("Closest", records["closest"][0], f"{records['closest'][1]:.1f} km")
         )
+    if records["fastest"]:
+        rows.append(
+            ("Fastest", records["fastest"][0], f"{records['fastest'][1]:.0f} kt")
+        )
+    return rows
+
+
+def update_display_with_flight_records(epd, records, set_base_image=False):
+    image, draw, (header, bold, detail) = _canvas(epd)
+    draw.text((7, 4), "Flight records", fill="black", font=header)
+    draw.text(
+        (7, 21), f"{records['encounters']} recorded flybys", fill="black", font=detail
+    )
+    draw.line([(7, 34), (image.width - 7, 34)], fill="black", width=1)
+    rows = _record_rows(records)
     if not rows:
         draw.text((7, 54), "More sightings needed", fill="black", font=bold)
-    for index, (kind, label, value) in enumerate(rows[:4]):
-        top = 39 + index * 20
+    for index, (kind, label, value) in enumerate(rows[:5]):
+        top = 38 + index * 16
         draw.text((7, top), kind, fill="black", font=detail)
         value_width = draw.textbbox((0, 0), value, font=detail)[2]
         label = _fit_text(draw, label, bold, image.width - 67 - value_width - 12)

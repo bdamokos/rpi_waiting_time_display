@@ -9,7 +9,11 @@ import threading
 import time
 from pathlib import Path
 
-from home_assistant_display import draw_home_assistant_screen, screen_has_content
+from home_assistant_display import (
+    draw_home_assistant_screen,
+    light_page_count,
+    screen_has_content,
+)
 from home_assistant_models import parse_config
 from home_assistant_service import HomeAssistantService
 from plugins import OverrideCapability
@@ -148,9 +152,10 @@ class HomeAssistantPlugin:
             return False
         self._screen_index %= len(screens)
         screen = screens[self._screen_index]
+        screen_duration = self._screen_duration(screen, states)
         if (
             self._screen_started is not None
-            and now >= self._screen_started + screen.duration_seconds
+            and now >= self._screen_started + screen_duration
         ):
             self.context.arbiter.release(f"ha:{screen.screen_id}")
             self._screen_index += 1
@@ -161,10 +166,11 @@ class HomeAssistantPlugin:
                 self._next_cycle = now + self.config.interval_seconds
                 return False
             screen = screens[self._screen_index]
+            screen_duration = self._screen_duration(screen, states)
         remaining = (
-            screen.duration_seconds
+            screen_duration
             if self._screen_started is None
-            else max(0.1, self._screen_started + screen.duration_seconds - now)
+            else max(0.1, self._screen_started + screen_duration - now)
         )
         rendered = self._render(screen, states, now, screen.priority, remaining)
         if (
@@ -174,12 +180,26 @@ class HomeAssistantPlugin:
             self._screen_started = now
         return rendered
 
+    @staticmethod
+    def _screen_duration(screen, states):
+        if screen.type != "lights":
+            return screen.duration_seconds
+        return max(
+            screen.duration_seconds,
+            screen.page_seconds * light_page_count(screen, states),
+        )
+
     def _render(self, screen, states, now, priority, ttl, event=False):
         owner = f"ha-event:{screen.screen_id}" if event else f"ha:{screen.screen_id}"
         if not self.context.arbiter.claim(owner, priority, ttl):
             return False
+        page = 0
+        if screen.type == "lights" and self._screen_started is not None:
+            page = int((now - self._screen_started) // screen.page_seconds)
+            page %= light_page_count(screen, states)
         key = (
             owner,
+            page,
             tuple(
                 (entity_id, states.get(entity_id))
                 for entity in screen.entities
@@ -197,6 +217,7 @@ class HomeAssistantPlugin:
                 states,
                 stale_seconds=self.config.stale_seconds,
                 now_monotonic=now,
+                page=page,
             )
         self._last_key = key
         if self.context.on_render:

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import math
 import os
+
 from PIL import Image, ImageDraw, ImageFont
 
 from font_utils import get_font_paths
@@ -62,12 +64,24 @@ def resolve_entity_state(entity, states):
     return max(active or usable, key=lambda state: state.received_monotonic)
 
 
-def light_rows(items, limit=7):
-    """Keep every active light visible, using a summary row only past capacity."""
-    if len(items) <= limit:
-        return items
-    hidden = len(items) - (limit - 1)
-    return items[: limit - 1] + [(f"+{hidden} more", "on", False, None)]
+def light_page(items, page, page_size=4):
+    """Return one readable page of active light rows."""
+    if not items:
+        return []
+    page_count = math.ceil(len(items) / page_size)
+    page = page % page_count
+    start = page * page_size
+    return items[start : start + page_size]
+
+
+def light_page_count(screen, states, page_size=4):
+    active = sum(
+        1
+        for entity in screen.entities
+        if (state := resolve_entity_state(entity, states))
+        and str(state.state).lower() == "on"
+    )
+    return max(1, math.ceil(active / page_size))
 
 
 def screen_has_content(screen, states):
@@ -84,7 +98,7 @@ def screen_has_content(screen, states):
 
 
 def draw_home_assistant_screen(
-    epd, screen, states, *, stale_seconds=600, now_monotonic=None
+    epd, screen, states, *, stale_seconds=600, now_monotonic=None, page=0
 ):
     white = 1 if epd.is_bw_display else epd.WHITE
     black = 0 if epd.is_bw_display else epd.BLACK
@@ -115,7 +129,7 @@ def draw_home_assistant_screen(
             for label, value, stale, state in items
             if state and str(state.state).lower() == "on"
         ]
-        items = light_rows(on) if on else [("All lights", "off", False, None)]
+        items = light_page(on, page) if on else [("All lights", "off", False, None)]
     elif screen.type == "climate":
         active = [
             item
@@ -133,10 +147,8 @@ def draw_home_assistant_screen(
             if stale:
                 draw.text((x, 96), "STALE", font=body, fill=black)
     else:
-        compact = screen.type == "lights" and len(items) > 4
-        rows = items if screen.type == "lights" else items[:4]
-        for index, (label, value, stale, state) in enumerate(rows):
-            y = 29 + index * 13 if compact else 32 + index * 21
+        for index, (label, value, stale, state) in enumerate(items[:4]):
+            y = 32 + index * 21
             if screen.type == "climate" and state:
                 current = state.attributes.get("current_temperature")
                 target = state.attributes.get("temperature")
@@ -144,10 +156,9 @@ def draw_home_assistant_screen(
                     value = f"{current} → {target}°"
             suffix = " !" if stale else ""
             draw.text((7, y), _text(draw, label, body, 145), font=body, fill=black)
-            value_font = body if compact else heading
-            rendered = _text(draw, f"{value}{suffix}", value_font, 88)
-            width = draw.textbbox((0, 0), rendered, font=value_font)[2]
-            draw.text((243 - width, y - 1), rendered, font=value_font, fill=black)
+            rendered = _text(draw, f"{value}{suffix}", heading, 88)
+            width = draw.textbbox((0, 0), rendered, font=heading)[2]
+            draw.text((243 - width, y - 1), rendered, font=heading, fill=black)
 
     image = image.rotate(ROTATION, expand=True)
     buffer = epd.getbuffer(image)

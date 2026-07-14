@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from display_adapter import MockDisplay
 from home_assistant_display import (
     draw_home_assistant_screen,
-    light_rows,
+    light_page,
     resolve_entity_state,
 )
 from home_assistant_models import parse_config
@@ -278,21 +278,55 @@ def test_grouped_entity_parser_handles_null_and_rejects_invalid_types():
         raise AssertionError("invalid entity_ids should be rejected")
 
 
-def test_light_rows_show_seven_rooms_and_summarize_only_true_overflow():
-    items = [(f"Room {index}", "on", False, None) for index in range(1, 10)]
+def test_light_rows_paginate_at_the_readable_four_row_size():
+    items = [(f"Room {index}", "on", False, None) for index in range(1, 8)]
 
-    assert [item[0] for item in light_rows(items[:7])] == [
-        f"Room {index}" for index in range(1, 8)
-    ]
-    assert [item[0] for item in light_rows(items)] == [
+    assert [item[0] for item in light_page(items, 0)] == [
         "Room 1",
         "Room 2",
         "Room 3",
         "Room 4",
+    ]
+    assert [item[0] for item in light_page(items, 1)] == [
         "Room 5",
         "Room 6",
-        "+3 more",
+        "Room 7",
     ]
+    assert light_page(items, 2) == light_page(items, 0)
+
+
+def test_lights_card_switches_pages_after_configured_read_time(monkeypatch):
+    service = FakeService()
+    service.states = {
+        f"light.room_{index}": state(f"light.room_{index}", "on") for index in range(5)
+    }
+    config = parse_config(
+        {
+            "screens": [
+                {
+                    "id": "lights",
+                    "type": "lights",
+                    "duration_seconds": 30,
+                    "page_seconds": 15,
+                    "entities": [
+                        {"entity_id": entity_id} for entity_id in service.states
+                    ],
+                }
+            ]
+        }
+    )
+    pages = []
+    monkeypatch.setattr(
+        "home_assistant_plugin.draw_home_assistant_screen",
+        lambda *args, **kwargs: pages.append(kwargs["page"]),
+    )
+    context = PluginContext(MockDisplay(), ScreenArbiter(lambda: 0), threading.Lock())
+    plugin = HomeAssistantPlugin(context, config=config, service=service)
+
+    assert plugin.tick(0)
+    assert not plugin.tick(14)
+    assert plugin.tick(15)
+    assert pages == [0, 1]
 
 
 def test_unavailable_state_preserves_last_good_value():

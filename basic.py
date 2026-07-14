@@ -18,6 +18,7 @@ from wifi_manager import is_connected, no_wifi_loop, get_hostname
 from display_adapter import return_display_lock
 import threading
 import math
+import sqlite3
 from contextlib import nullcontext
 from functools import partial
 from flights import (
@@ -27,6 +28,11 @@ from flights import (
     gather_flights_within_radius,
     update_display_with_flights,
     update_display_with_recent_flights,
+)
+from flight_statistics import (
+    FlightStatisticsStore,
+    update_display_with_flight_records,
+    update_display_with_flight_statistics,
 )
 from threading import Lock, Event
 from PIL import Image
@@ -290,6 +296,13 @@ class DisplayManager:
         "bus": "transit",
         "calendar": "calendar",
         "codex": "token",
+        "flight-records": "flight_records",
+        "flight-stats": "flight_stats_week",
+        "flight_stats": "flight_stats_week",
+        "flight_records": "flight_records",
+        "flight_stats_day": "flight_stats_day",
+        "flight_stats_month": "flight_stats_month",
+        "flight_stats_week": "flight_stats_week",
         "flights": "flights",
         "iss": "iss",
         "token": "token",
@@ -323,6 +336,20 @@ class DisplayManager:
         self.coordinates_lng = float(os.getenv('Coordinates_LNG', '4.3517'))
         self.flight_getter = None
         self.recent_flights = RecentFlightCache(max_entries=4)
+        try:
+            self.flight_statistics = FlightStatisticsStore(
+                os.getenv("flight_statistics_db", "cache/flight_statistics.sqlite3"),
+                retention_days=int(os.getenv("flight_statistics_retention_days", "400")),
+                encounter_gap_minutes=int(
+                    os.getenv("flight_statistics_encounter_gap_minutes", "30")
+                ),
+                update_interval_seconds=int(
+                    os.getenv("flight_statistics_update_seconds", "120")
+                ),
+            )
+        except (OSError, sqlite3.Error, ValueError) as exc:
+            logger.warning("Flight statistics are unavailable: %s", exc)
+            self.flight_statistics = None
         self.in_flight_mode = False
         self.flight_mode_start = None
         self.flight_mode_duration = 30  # Duration in seconds for flight mode
@@ -524,6 +551,24 @@ class DisplayManager:
                 "token", partial(self._render_base_override, "token"), aliases=("codex",)
             ),
             DisplayOverride("flights", partial(self._render_base_override, "flights")),
+            DisplayOverride(
+                "flight_stats_week",
+                partial(self._render_base_override, "flight_stats_week"),
+                aliases=("flight_stats", "flight-stats"),
+            ),
+            DisplayOverride(
+                "flight_stats_day",
+                partial(self._render_base_override, "flight_stats_day"),
+            ),
+            DisplayOverride(
+                "flight_stats_month",
+                partial(self._render_base_override, "flight_stats_month"),
+            ),
+            DisplayOverride(
+                "flight_records",
+                partial(self._render_base_override, "flight_records"),
+                aliases=("flight-records",),
+            ),
             DisplayOverride("iss", partial(self._render_base_override, "iss")),
             *self.plugin_registry.display_overrides,
         ]
@@ -686,6 +731,29 @@ class DisplayManager:
                         self.epd, recent_flights, set_base_image=True
                     )
                     self.current_display_mode = "flights"
+                    self.current_token_view = None
+                    self.in_weather_mode = False
+            elif module.startswith("flight_stats_"):
+                period = module.removeprefix("flight_stats_")
+                rendered = self.flight_statistics is not None
+                if rendered:
+                    update_display_with_flight_statistics(
+                        self.epd,
+                        self.flight_statistics.summary(period, now=now),
+                        set_base_image=True,
+                    )
+                    self.current_display_mode = module
+                    self.current_token_view = None
+                    self.in_weather_mode = False
+            elif module == "flight_records":
+                rendered = self.flight_statistics is not None
+                if rendered:
+                    update_display_with_flight_records(
+                        self.epd,
+                        self.flight_statistics.records(now=now),
+                        set_base_image=True,
+                    )
+                    self.current_display_mode = module
                     self.current_token_view = None
                     self.in_weather_mode = False
             elif module == "iss":
@@ -861,6 +929,15 @@ class DisplayManager:
             logger.debug(f"Time since last flight mode: {(current_time - self.last_flight_mode_end).total_seconds():.1f}s, cooldown: {self.flight_mode_cooldown}s")
             return cooldown_passed
 
+    def _record_flight_observation(self, flight, observed_at):
+        """Update flight histories without allowing statistics to block live views."""
+        self.recent_flights.record(flight, observed_at=observed_at)
+        if self.flight_statistics is not None:
+            try:
+                self.flight_statistics.record(flight, observed_at=observed_at)
+            except Exception as exc:
+                logger.warning("Could not record flight statistics: %s", exc)
+
     def _check_flights(self):
         """Monitor flights and display when relevant"""
         while not self._stop_event.is_set():
@@ -900,8 +977,8 @@ class DisplayManager:
                                 logger.debug(f"Closest flight: {closest_flight}")
                                 enhanced_flight = enhance_flight_data(closest_flight)
                                 logger.debug(f"Enhanced flight: {enhanced_flight}")
-                                self.recent_flights.record(
-                                    enhanced_flight, observed_at=current_time
+                                self._record_flight_observation(
+                                    enhanced_flight, current_time
                                 )
                                 
                                 with self._display_lock:

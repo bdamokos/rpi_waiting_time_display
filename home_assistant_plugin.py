@@ -74,7 +74,10 @@ class HomeAssistantPlugin:
             return None
         config = load_home_assistant_config(os.getenv("home_assistant_config", ""))
         ids = {
-            entity.entity_id for screen in config.screens for entity in screen.entities
+            entity_id
+            for screen in config.screens
+            for entity in screen.entities
+            for entity_id in entity.source_entity_ids
         }
         ids.update(trigger.entity_id for trigger in config.triggers)
         service = HomeAssistantService(
@@ -178,8 +181,9 @@ class HomeAssistantPlugin:
         key = (
             owner,
             tuple(
-                (entity.entity_id, states.get(entity.entity_id))
+                (entity_id, states.get(entity_id))
                 for entity in screen.entities
+                for entity_id in entity.source_entity_ids
             ),
         )
         if key == self._last_key:

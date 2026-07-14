@@ -3,7 +3,7 @@ import threading
 from datetime import datetime, timezone
 
 from display_adapter import MockDisplay
-from home_assistant_display import draw_home_assistant_screen
+from home_assistant_display import draw_home_assistant_screen, resolve_entity_state
 from home_assistant_models import parse_config
 from home_assistant_plugin import HomeAssistantPlugin
 from home_assistant_service import EntityState, HomeAssistantService
@@ -171,6 +171,75 @@ def test_plugin_rotates_and_motion_transition_takes_over(monkeypatch):
     assert plugin.tick(0)
     assert context.arbiter.active_owner() == "ha-event:pair"
     assert renders == ["pair", "pair"]
+
+
+def test_grouped_binary_entity_is_active_when_either_or_both_members_are_active():
+    config = parse_config(
+        {
+            "screens": [
+                {
+                    "id": "motion",
+                    "type": "entities",
+                    "entities": [
+                        {
+                            "entity_ids": [
+                                "binary_sensor.hall_eve",
+                                "binary_sensor.hall_hue",
+                            ],
+                            "label": "Hall",
+                        }
+                    ],
+                }
+            ]
+        }
+    )
+    entity = config.screens[0].entities[0]
+
+    for eve, hue, expected in (
+        ("off", "off", "off"),
+        ("on", "off", "on"),
+        ("off", "on", "on"),
+        ("on", "on", "on"),
+    ):
+        states = {
+            "binary_sensor.hall_eve": state("binary_sensor.hall_eve", eve, 1),
+            "binary_sensor.hall_hue": state("binary_sensor.hall_hue", hue, 2),
+        }
+        assert resolve_entity_state(entity, states).state == expected
+
+
+def test_plugin_subscribes_to_every_group_member(monkeypatch):
+    monkeypatch.setenv("home_assistant_enabled", "true")
+    monkeypatch.setenv("home_assistant_url", "http://ha.test")
+    monkeypatch.setenv("home_assistant_token", "secret")
+    monkeypatch.setenv(
+        "home_assistant_config",
+        json.dumps(
+            {
+                "screens": [
+                    {
+                        "id": "motion",
+                        "entities": [
+                            {
+                                "entity_ids": [
+                                    "binary_sensor.hall_eve",
+                                    "binary_sensor.hall_hue",
+                                ]
+                            }
+                        ],
+                    }
+                ]
+            }
+        ),
+    )
+    context = PluginContext(MockDisplay(), ScreenArbiter(), threading.Lock())
+
+    plugin = HomeAssistantPlugin.from_env(context)
+
+    assert plugin.service.entity_ids == {
+        "binary_sensor.hall_eve",
+        "binary_sensor.hall_hue",
+    }
 
 
 def test_unavailable_state_preserves_last_good_value():

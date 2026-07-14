@@ -8,6 +8,7 @@ from PIL import Image, ImageDraw, ImageFont
 from font_utils import get_font_paths
 
 ROTATION = int(os.getenv("screen_rotation", 90))
+ACTIVE_STATES = {"on", "active", "detected", "true"}
 
 
 def _fonts():
@@ -45,13 +46,31 @@ def _value(entity, state):
     return f"{raw}{unit}", stale
 
 
+def resolve_entity_state(entity, states):
+    """Resolve a row, treating grouped binary entities as active when any is active."""
+    candidates = [states.get(entity_id) for entity_id in entity.source_entity_ids]
+    candidates = [state for state in candidates if state is not None]
+    if not candidates:
+        return None
+    available = [state for state in candidates if state.available]
+    usable = available or candidates
+    active = [
+        state for state in usable if str(state.state).strip().lower() in ACTIVE_STATES
+    ]
+    return max(active or usable, key=lambda state: state.received_monotonic)
+
+
 def screen_has_content(screen, states):
     if screen.type in {"lights", "climate"}:
         return any(
-            (states.get(item.entity_id) and states[item.entity_id].available)
-            for item in screen.entities
+            state and state.available
+            for state in (
+                resolve_entity_state(item, states) for item in screen.entities
+            )
         )
-    return any(states.get(item.entity_id) is not None for item in screen.entities)
+    return any(
+        resolve_entity_state(item, states) is not None for item in screen.entities
+    )
 
 
 def draw_home_assistant_screen(
@@ -73,7 +92,7 @@ def draw_home_assistant_screen(
     )
     items = []
     for entity in screen.entities:
-        state = states.get(entity.entity_id)
+        state = resolve_entity_state(entity, states)
         value, stale = _value(entity, state)
         label = entity.label or entity.entity_id.split(".")[-1].replace("_", " ")
         if now_monotonic is not None and state is not None:

@@ -50,6 +50,13 @@ def test_store_deduplicates_one_pass_but_counts_a_returning_plane(tmp_path):
     assert records["closest"] == ("OO-ABC", 1.2)
 
 
+def test_store_preserves_falsy_identifiers(tmp_path):
+    store = FlightStatisticsStore(tmp_path / "flights.sqlite3")
+
+    assert store.record({"callsign": 0}, datetime(2026, 7, 14, 9, 0))
+    assert store.summary("day", datetime(2026, 7, 14, 12))["encounters"] == 1
+
+
 def test_calendar_periods_and_fun_records_use_available_metadata(tmp_path):
     store = FlightStatisticsStore(tmp_path / "flights.sqlite3")
     observations = [
@@ -153,3 +160,20 @@ def test_week_statistics_override_uses_persisted_store():
     assert result["module"] == "flight_stats_week"
     assert result["rendered"]
     render.assert_called_once()
+
+
+def test_statistics_failure_does_not_block_recent_flight_history():
+    from basic import DisplayManager
+
+    manager = DisplayManager.__new__(DisplayManager)
+    manager.recent_flights = Mock()
+    manager.flight_statistics = Mock()
+    manager.flight_statistics.record.side_effect = ValueError("bad statistics row")
+    flight = {"hex": "abc"}
+    observed_at = datetime(2026, 7, 14, 9, 0)
+
+    manager._record_flight_observation(flight, observed_at)
+
+    manager.recent_flights.record.assert_called_once_with(
+        flight, observed_at=observed_at
+    )

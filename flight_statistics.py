@@ -17,7 +17,7 @@ display_lock = return_display_lock()
 
 
 def _text(value):
-    return str(value or "").strip()
+    return str(value).strip() if value is not None else ""
 
 
 def _number(value):

@@ -929,6 +929,15 @@ class DisplayManager:
             logger.debug(f"Time since last flight mode: {(current_time - self.last_flight_mode_end).total_seconds():.1f}s, cooldown: {self.flight_mode_cooldown}s")
             return cooldown_passed
 
+    def _record_flight_observation(self, flight, observed_at):
+        """Update flight histories without allowing statistics to block live views."""
+        self.recent_flights.record(flight, observed_at=observed_at)
+        if self.flight_statistics is not None:
+            try:
+                self.flight_statistics.record(flight, observed_at=observed_at)
+            except Exception as exc:
+                logger.warning("Could not record flight statistics: %s", exc)
+
     def _check_flights(self):
         """Monitor flights and display when relevant"""
         while not self._stop_event.is_set():
@@ -968,18 +977,9 @@ class DisplayManager:
                                 logger.debug(f"Closest flight: {closest_flight}")
                                 enhanced_flight = enhance_flight_data(closest_flight)
                                 logger.debug(f"Enhanced flight: {enhanced_flight}")
-                                self.recent_flights.record(
-                                    enhanced_flight, observed_at=current_time
+                                self._record_flight_observation(
+                                    enhanced_flight, current_time
                                 )
-                                if self.flight_statistics is not None:
-                                    try:
-                                        self.flight_statistics.record(
-                                            enhanced_flight, observed_at=current_time
-                                        )
-                                    except sqlite3.Error as exc:
-                                        logger.warning(
-                                            "Could not record flight statistics: %s", exc
-                                        )
                                 
                                 with self._display_lock:
                                     with self._flight_lock:

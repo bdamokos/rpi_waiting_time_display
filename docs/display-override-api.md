@@ -24,12 +24,15 @@ transport before exposing the listener there. The default lease is 300 seconds
 and the default priority is 30; both can be changed with
 `display_override_duration_seconds` and `display_override_priority`.
 
-Request one of `token`, `weather`, `transit`, `calendar`, `iss`, or `flights` (`codex`
-remains an accepted alias for `token`):
+Request one of `token`, `weather`, `transit`, `calendar`, `iss`, `flights`,
+`flight_stats_day`, `flight_stats_week`, `flight_stats_month`, or
+`flight_records` (`codex` remains an accepted alias for `token`, and
+`flight_stats` selects the weekly view):
 
 ```bash
 curl -X POST http://DISPLAY_HOST:5003/api/display/token
 curl -X POST http://DISPLAY_HOST:5003/api/display/iss
+curl -X POST http://DISPLAY_HOST:5003/api/display/flight_stats_month
 curl -X POST http://DISPLAY_HOST:5003/api/display \
   -H 'Content-Type: application/json' \
   -d '{"module":"weather"}'
@@ -44,6 +47,20 @@ that were actually available. The in-memory history starts empty after a
 restart and is populated by normal live flight monitoring; requesting it does
 not poll either flight service. Live nearby-flight claims retain their higher
 priority and can interrupt this history screen.
+
+The statistics screens use a bounded local SQLite history populated by the
+normal nearby-flight monitor; requesting a screen never polls a flight API.
+Repeated polls during one nearby pass count as one flyby, while the same plane
+returning after the configured encounter gap counts again. Day, week, and month
+mean the current local calendar day, Monday-based week, and calendar month.
+Each period highlights the busiest routes and operators that have metadata,
+then falls back to aircraft type, repeat visitor, and busiest-hour facts when
+route data is sparse. `flight_records` uses all retained history for oldest and
+youngest known airframes, the most-seen aircraft, and the closest flyby.
+Aircraft age appears only when the ADS-B source supplies a plausible manufacture
+year. Retention, encounter gap, write throttle, and the ignored database path
+are configurable with the `flight_statistics_*` settings in `.env.example`.
+
 A successful request can therefore be accepted without immediately rendering
 when data is unavailable or a higher-priority owner controls the screen.
 

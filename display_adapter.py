@@ -94,7 +94,7 @@ class DisplayAdapter:
                 image = image.rotate(-DISPLAY_SCREEN_ROTATION, expand=True)
                 debug_path = "debug_output.png"
                 image.save(debug_path)
-                logger.info(f"Debug image saved to {debug_path}")
+                logger.debug(f"Debug image saved to {debug_path}")
             else:
                 logger.debug(f"Skipping debug image save for unsupported type: {type(image)}")
         except Exception as e:

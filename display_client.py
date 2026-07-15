@@ -88,11 +88,12 @@ class HealthReporter:
         key = (health.state, health.sequence, health.etag, health.error)
         if key == self._last_key:
             return
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        descriptor, temporary = tempfile.mkstemp(
-            dir=self.path.parent, prefix=f".{self.path.name}.", suffix=".tmp"
-        )
+        temporary = None
         try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            descriptor, temporary = tempfile.mkstemp(
+                dir=self.path.parent, prefix=f".{self.path.name}.", suffix=".tmp"
+            )
             with os.fdopen(descriptor, "w") as handle:
                 json.dump(asdict(health), handle, sort_keys=True)
                 handle.write("\n")
@@ -101,10 +102,11 @@ class HealthReporter:
             os.replace(temporary, self.path)
             self._last_key = key
         except OSError as exc:
-            try:
-                os.unlink(temporary)
-            except FileNotFoundError:
-                pass
+            if temporary:
+                try:
+                    os.unlink(temporary)
+                except FileNotFoundError:
+                    pass
             logger.warning("Disabling secondary client health file: %s", exc)
             self.path = None
 
@@ -153,45 +155,56 @@ class FrameClient:
             timeout=self.timeout_seconds,
             stream=True,
         )
-        if response.status_code == 304:
-            created_at = response.headers.get("X-Display-Published-At")
-            if not created_at:
-                raise ValueError("not-modified response omitted frame timestamp")
+        try:
+            if response.status_code == 304:
+                if not self.etag or self.last_sequence == 0:
+                    raise ValueError("not-modified response arrived before a frame")
+                created_at = response.headers.get("X-Display-Published-At")
+                if not created_at:
+                    raise ValueError("not-modified response omitted frame timestamp")
+                self._validate_freshness(created_at)
+                self.last_frame_created_at = created_at
+                return PollResult(
+                    "not-modified", self.last_sequence or None, created_at
+                )
+            response.raise_for_status()
+            content_type = response.headers.get("Content-Type", "").split(";", 1)[0]
+            if content_type != "image/png":
+                raise ValueError(
+                    f"unexpected content type: {content_type or 'missing'}"
+                )
+            sequence = int(response.headers["X-Display-Sequence"])
+            created_at = response.headers["X-Display-Published-At"]
             self._validate_freshness(created_at)
+            if sequence <= self.last_sequence:
+                previous = (
+                    parse_utc(self.last_frame_created_at)
+                    if self.last_frame_created_at
+                    else None
+                )
+                if previous is None or parse_utc(created_at) <= previous:
+                    raise ValueError(
+                        "frame sequence moved backwards without a newer epoch"
+                    )
+            expected_length = response.headers.get("Content-Length")
+            if expected_length is not None and int(expected_length) > MAX_FRAME_BYTES:
+                raise ValueError("frame content length exceeds the accepted maximum")
+            content = self._read_bounded(response)
+            if expected_length is not None and int(expected_length) != len(content):
+                raise ValueError("frame content length does not match response")
+            expected_digest = response.headers.get("X-Display-SHA256")
+            if not expected_digest or not hmac_digest_equal(
+                hashlib.sha256(content).hexdigest(), expected_digest
+            ):
+                raise ValueError("frame digest does not match response")
+            frame = validate_frame_bytes(content)
+            self._display(frame)
+            self.last_sequence = sequence
+            self.etag = response.headers.get("ETag")
             self.last_frame_created_at = created_at
-            return PollResult("not-modified", self.last_sequence or None, created_at)
-        response.raise_for_status()
-        content_type = response.headers.get("Content-Type", "").split(";", 1)[0]
-        if content_type != "image/png":
-            raise ValueError(f"unexpected content type: {content_type or 'missing'}")
-        sequence = int(response.headers["X-Display-Sequence"])
-        created_at = response.headers["X-Display-Published-At"]
-        self._validate_freshness(created_at)
-        if sequence <= self.last_sequence:
-            previous = (
-                parse_utc(self.last_frame_created_at)
-                if self.last_frame_created_at
-                else None
-            )
-            if previous is None or parse_utc(created_at) <= previous:
-                raise ValueError("frame sequence moved backwards without a newer epoch")
-        expected_length = response.headers.get("Content-Length")
-        if expected_length is not None and int(expected_length) > MAX_FRAME_BYTES:
-            raise ValueError("frame content length exceeds the accepted maximum")
-        content = self._read_bounded(response)
-        if expected_length is not None and int(expected_length) != len(content):
-            raise ValueError("frame content length does not match response")
-        expected_digest = response.headers.get("X-Display-SHA256")
-        if not expected_digest or not hmac_digest_equal(
-            hashlib.sha256(content).hexdigest(), expected_digest
-        ):
-            raise ValueError("frame digest does not match response")
-        frame = validate_frame_bytes(content)
-        self._display(frame)
-        self.last_sequence = sequence
-        self.etag = response.headers.get("ETag")
-        self.last_frame_created_at = created_at
-        return PollResult("displayed", sequence, created_at)
+            return PollResult("displayed", sequence, created_at)
+        finally:
+            response.close()
 
     @staticmethod
     def _read_bounded(response) -> bytes:

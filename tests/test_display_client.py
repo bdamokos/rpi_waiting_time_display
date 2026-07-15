@@ -25,6 +25,7 @@ class FakeResponse:
         self.status_code = status
         self.content = content or b""
         self.headers = headers or {}
+        self.closed = False
 
     def raise_for_status(self):
         if self.status_code >= 400:
@@ -32,6 +33,9 @@ class FakeResponse:
 
     def iter_content(self, chunk_size):
         yield self.content
+
+    def close(self):
+        self.closed = True
 
 
 class FakeSession:
@@ -106,6 +110,23 @@ def test_client_validates_displays_and_uses_conditional_request(monkeypatch):
     assert client.poll_once().status == "not-modified"
     assert session.calls[1][1]["If-None-Match"] == '"1-etag"'
     assert session.calls[1][1]["Authorization"] == "Bearer secret"
+    assert not_modified.closed
+
+
+def test_client_rejects_not_modified_before_first_frame():
+    response = FakeResponse(
+        status=304,
+        headers={"X-Display-Published-At": NOW.isoformat()},
+    )
+    client = FrameClient(
+        FakeDisplay(),
+        url="http://server/frame.png",
+        session=FakeSession([response]),
+        clock=lambda: NOW,
+    )
+    with pytest.raises(ValueError, match="before a frame"):
+        client.poll_once()
+    assert response.closed
 
 
 @pytest.mark.parametrize(

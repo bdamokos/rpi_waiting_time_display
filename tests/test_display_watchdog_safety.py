@@ -30,7 +30,6 @@ def test_client_watchdog_has_no_whole_host_watchdog_or_power_action():
     paths = [
         ROOT / "display_watchdog.py",
         ROOT / "docs/service/display-watchdog.service",
-        ROOT / "docs/service/display-client.service.example",
         ROOT / "docs/service/display-watchdog.config.json",
     ]
     banned = (
@@ -47,11 +46,7 @@ def test_client_watchdog_has_no_whole_host_watchdog_or_power_action():
             assert fragment not in source, f"{fragment!r} found in {path}"
 
 
-def test_client_unit_bounds_systemd_watchdog_restarts():
-    unit = (ROOT / "docs/service/display-client.service.example").read_text()
-    assert "Type=notify" in unit
-    assert "NotifyAccess=main" in unit
-    assert "WatchdogSec=360" in unit
-    assert "Restart=on-failure" in unit
-    assert "StartLimitIntervalSec=6h" in unit
-    assert "StartLimitBurst=3" in unit
+def test_secondary_auditor_never_sends_systemd_notify_keepalives():
+    source = (ROOT / "display_watchdog.py").read_text()
+    assert "WATCHDOG=1" not in source
+    assert "READY=1" not in source

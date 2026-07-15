@@ -2,7 +2,7 @@
 set -eu
 
 RECOVERY_ENABLED=false
-SERVICE_NAME=display.service
+SERVICE_NAME=display-client.service
 
 usage() {
     echo "Usage: sudo $0 [--service NAME.service] [--enable-legacy-recovery]"

@@ -8,7 +8,6 @@ import inspect
 import traceback
 import time
 from pathlib import Path
-from display_runtime_health import instrument_display
 logger = logging.getLogger(__name__)
 import dotenv
 import os
@@ -344,7 +343,6 @@ def initialize_display():
                 # Initialize display using adapter
         logger.debug("About to initialize display")
         epd = DisplayAdapter.get_display()
-        instrument_display(epd)
 
         # Add debug logs before EPD commands
         logger.debug("About to call epd.init()")

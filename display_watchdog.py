@@ -25,9 +25,10 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 SCHEMA_VERSION = 1
+SPLIT_CLIENT_SERVICE = "display-client.service"
 SERVICE_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_.@:-]+\.service$")
 DEFAULT_CONFIG: dict[str, Any] = {
-    "service_name": "display.service",
+    "service_name": "display-client.service",
     "systemctl_path": "/bin/systemctl",
     "client_health_path": "/run/rpi-waiting-time-display/client-health.json",
     "legacy_debug_png_enabled": False,
@@ -37,6 +38,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "server_timeout_seconds": 3,
     "server_timestamp_fields": [
         "generated_at",
+        "published_at",
         "server_generated_at",
         "updated_at",
         "last_success_at",
@@ -169,6 +171,32 @@ def boot_id() -> str:
     return _read_text("/proc/sys/kernel/random/boot_id", "unknown")
 
 
+def _parse_systemd_usec(value: Any) -> int:
+    """Parse systemctl's raw integer or human-readable timespan as microseconds."""
+
+    if isinstance(value, (int, float)):
+        return max(0, int(value))
+    text = str(value or "").strip()
+    if text.isdigit():
+        return int(text)
+    factors = {
+        "us": 1,
+        "ms": 1_000,
+        "s": 1_000_000,
+        "min": 60_000_000,
+        "h": 3_600_000_000,
+        "d": 86_400_000_000,
+    }
+    matches = list(re.finditer(r"(\d+(?:\.\d+)?)\s*(us|ms|min|s|h|d)", text))
+    remainder = re.sub(r"(\d+(?:\.\d+)?)\s*(us|ms|min|s|h|d)", "", text)
+    if not matches or remainder.strip():
+        return 0
+    return max(
+        0,
+        int(sum(float(match.group(1)) * factors[match.group(2)] for match in matches)),
+    )
+
+
 def _parse_timestamp(value: Any) -> Optional[float]:
     if isinstance(value, (int, float)):
         return float(value)
@@ -191,7 +219,9 @@ def collect_service_status(
 ) -> dict[str, Any]:
     properties = (
         "Type,NotifyAccess,WatchdogUSec,Restart,ActiveState,SubState,MainPID,"
-        "NRestarts,ExecMainStatus,Result,ExecMainStartTimestampMonotonic"
+        "NRestarts,ExecMainStatus,Result,ExecMainStartTimestampMonotonic,"
+        "RestartUSec,TimeoutStartUSec,TimeoutStopUSec,StartLimitIntervalUSec,"
+        "StartLimitBurst,StartLimitAction"
     )
     command = [
         str(config["systemctl_path"]),
@@ -210,11 +240,19 @@ def collect_service_status(
         key, separator, value = line.partition("=")
         if separator:
             values[key] = value
-    for key in ("MainPID", "NRestarts", "ExecMainStatus", "WatchdogUSec"):
+    for key in ("MainPID", "NRestarts", "ExecMainStatus", "StartLimitBurst"):
         try:
             values[key] = int(values.get(key, 0))
         except (TypeError, ValueError):
             values[key] = 0
+    for key in (
+        "WatchdogUSec",
+        "RestartUSec",
+        "TimeoutStartUSec",
+        "TimeoutStopUSec",
+        "StartLimitIntervalUSec",
+    ):
+        values[key] = _parse_systemd_usec(values.get(key))
     try:
         started = int(values.get("ExecMainStartTimestampMonotonic", 0)) / 1_000_000
         uptime = float(_read_text("/proc/uptime", "0").split()[0])
@@ -402,6 +440,13 @@ def collect_client_health(
         "debug_fallback": debug_fallback,
         "debug_age_seconds": debug_age,
         "sequence": sequence,
+        "role": payload.get("role") if available else None,
+        "state": payload.get("state") if available else None,
+        "etag": payload.get("etag") if available else None,
+        "error": payload.get("error") if available else None,
+        "last_attempt_at": payload.get("last_attempt_at") if available else None,
+        "last_success_at": payload.get("last_success_at") if available else None,
+        "last_error_at": payload.get("last_error_at") if available else None,
         "sequence_advanced": sequence_advanced,
         "last_success_age_seconds": age,
         "unresolved_error": unresolved_error,
@@ -412,6 +457,9 @@ def collect_client_health(
             payload.get("server_generated_at") if available else None
         ),
         "server_received_at": payload.get("server_received_at") if available else None,
+        "frame_source_created_at": (
+            payload.get("frame_source_created_at") if available else None
+        ),
     }
 
 
@@ -592,9 +640,31 @@ def assess(
         and service.get("NotifyAccess") == "main"
         and int(service.get("WatchdogUSec", 0)) > 0
     )
+    split_client_target = str(config["service_name"]) == SPLIT_CLIENT_SERVICE
+    contract_expectations = {
+        "Type": "notify",
+        "NotifyAccess": "main",
+        "WatchdogUSec": 45_000_000,
+        "Restart": "on-failure",
+        "RestartUSec": 10_000_000,
+        "TimeoutStartUSec": 60_000_000,
+        "TimeoutStopUSec": 30_000_000,
+        "StartLimitIntervalUSec": 21_600_000_000,
+        "StartLimitBurst": 3,
+        "StartLimitAction": "none",
+    }
+    contract_mismatches = [
+        key
+        for key, expected in contract_expectations.items()
+        if service.get(key) != expected
+    ]
+    contract_matches = not split_client_target or not contract_mismatches
     client_identity_matches = True
     if client.get("available"):
-        client_identity_matches = client.get("boot_id") == current_boot
+        client_identity_matches = (
+            client.get("role") == "display-client"
+            and client.get("boot_id") == current_boot
+        )
         if systemd_guarded:
             client_identity_matches = client_identity_matches and int(
                 client.get("pid") or 0
@@ -604,14 +674,24 @@ def assess(
             client["display_success_fresh"] = False
     client["identity_matches"] = client_identity_matches
 
+    budget = _budget_status(config, now, persistent, current_boot)
+    systemd_budget_exhausted = systemd_guarded and (
+        budget["window_remaining"] == 0 or budget["boot_remaining"] == 0
+    )
+    guarded_unhealthy = not active or not client.get("fresh")
+
     if host.get("distress"):
         classification = "host_kernel_storage_distress"
     elif manager_recovery:
         classification = "service_manager_recovery"
-    elif not active:
-        classification = "service_failure"
+    elif active and split_client_target and not contract_matches:
+        classification = "systemd_contract_mismatch"
     elif startup_grace and not client.get("fresh"):
         classification = "startup_grace"
+    elif systemd_budget_exhausted and guarded_unhealthy:
+        classification = "systemd_restart_budget_exhausted"
+    elif not active:
+        classification = "service_failure"
     elif server.get("configured") and not server.get("fresh"):
         classification = "server_network_distress"
     elif not client.get("fresh"):
@@ -621,11 +701,14 @@ def assess(
     else:
         classification = "healthy"
 
-    fallback_failure = classification in {"service_failure", "render_failure"}
+    fallback_failure = (
+        classification in {"service_failure", "render_failure"}
+        and not split_client_target
+        and not systemd_guarded
+    )
     consecutive = int(runtime.get("consecutive_failures", 0))
     consecutive = consecutive + 1 if fallback_failure else 0
     runtime["consecutive_failures"] = consecutive
-    budget = _budget_status(config, now, persistent, current_boot)
     threshold_met = consecutive >= int(config["consecutive_failures"])
     recovery_requested = bool(
         config.get("recovery_enabled")
@@ -641,8 +724,14 @@ def assess(
         in {
             "host_kernel_storage_distress",
             "server_network_distress",
+            "systemd_contract_mismatch",
+            "systemd_restart_budget_exhausted",
         }
         or budget_exhausted
+        or (
+            classification == "service_failure"
+            and (split_client_target or systemd_guarded)
+        )
     )
     return {
         "schema_version": SCHEMA_VERSION,
@@ -651,6 +740,9 @@ def assess(
         "healthy": classification == "healthy",
         "service_active": active,
         "systemd_watchdog_primary": systemd_guarded,
+        "split_client_target": split_client_target,
+        "systemd_contract_matches": contract_matches,
+        "systemd_contract_mismatches": contract_mismatches,
         "startup_grace": startup_grace,
         "consecutive_failures": consecutive,
         "fallback_recovery_requested": recovery_requested,
@@ -751,6 +843,12 @@ def _metrics(result: dict[str, Any], persistent: dict[str, Any]) -> str:
     server = result["server"]
     budget = result["budget"]
     classification = result["classification"].replace('"', "")
+    display_success_fresh = int(bool(client.get("display_success_fresh")))
+    sequence_advanced = int(bool(client.get("sequence_advanced")))
+    swapout_rate = host.get("swapout_pages_per_second", 0)
+    restart_total = int(persistent.get("total_restart_count", 0))
+    reboot_recommendation = int(result.get("reboot_recommendation", False))
+    contract_matches = int(result["systemd_contract_matches"])
     values = [
         "# HELP display_watchdog_healthy Overall classified health.",
         "# TYPE display_watchdog_healthy gauge",
@@ -758,23 +856,24 @@ def _metrics(result: dict[str, Any], persistent: dict[str, Any]) -> str:
         f'display_watchdog_classification{{state="{classification}"}} 1',
         f"display_watchdog_service_active {int(result['service_active'])}",
         f"display_watchdog_systemd_primary {int(result['systemd_watchdog_primary'])}",
+        f"display_watchdog_systemd_contract_matches {contract_matches}",
         f"display_watchdog_client_fresh {int(bool(client.get('fresh')))}",
-        f"display_watchdog_display_success_fresh {int(bool(client.get('display_success_fresh')))}",
+        f"display_watchdog_display_success_fresh {display_success_fresh}",
         f"display_watchdog_frame_sequence {client.get('sequence') or 0}",
-        f"display_watchdog_frame_sequence_advanced {int(bool(client.get('sequence_advanced')))}",
+        f"display_watchdog_frame_sequence_advanced {sequence_advanced}",
         f"display_watchdog_server_configured {int(bool(server.get('configured')))}",
         f"display_watchdog_server_fresh {int(bool(server.get('fresh')))}",
         f"display_watchdog_host_distress {int(bool(host.get('distress')))}",
         f"display_watchdog_d_state_processes {host.get('d_state_processes', 0)}",
         f"display_watchdog_swap_used_ratio {host.get('swap_used_ratio', 0):.6f}",
-        f"display_watchdog_swapout_pages_per_second {host.get('swapout_pages_per_second', 0):.6f}",
+        f"display_watchdog_swapout_pages_per_second {swapout_rate:.6f}",
         f"display_watchdog_iowait_ratio {host.get('iowait_ratio', 0):.6f}",
         f"display_watchdog_consecutive_failures {result['consecutive_failures']}",
         f"display_watchdog_restart_window_remaining {budget['window_remaining']}",
         f"display_watchdog_restart_boot_remaining {budget['boot_remaining']}",
-        f"display_watchdog_restart_total {int(persistent.get('total_restart_count', 0))}",
+        f"display_watchdog_restart_total {restart_total}",
         f"display_watchdog_human_escalation {int(result['human_escalation'])}",
-        f"display_watchdog_reboot_recommendation {int(result.get('reboot_recommendation', False))}",
+        f"display_watchdog_reboot_recommendation {reboot_recommendation}",
         f"display_watchdog_last_check_timestamp_seconds {result['checked_at']:.3f}",
     ]
     return "\n".join(values) + "\n"
@@ -831,6 +930,7 @@ def run_check(
     budget_exhausted = result["human_escalation"] and result["classification"] in {
         "service_failure",
         "render_failure",
+        "systemd_restart_budget_exhausted",
     }
     target_matches = exact_physical_target_matches(
         config["physical_target"], physical_identity()

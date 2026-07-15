@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-SERVICE_NAME=display.service
+SERVICE_NAME=display-client.service
 PURGE=false
 
 while [ "$#" -gt 0 ]; do

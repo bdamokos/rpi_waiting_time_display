@@ -330,14 +330,22 @@ if __name__ == '__main__':
     main()
 
 
-def no_wifi_loop(epd):
+def no_wifi_loop(epd, on_tick=None, display_refresh_seconds=240):
     logger.info("Not connected to Wi-Fi. Starting Wi-Fi manager...")
     subprocess.Popen(['python3', 'wifi_manager.py'])
     show_no_wifi_display(epd)
+    last_display_update = time.monotonic()
+    if on_tick:
+        on_tick()
 
     # Wait and check for WiFi connection
     while not is_connected():
         logger.info("Waiting for WiFi connection...")
+        if time.monotonic() - last_display_update >= display_refresh_seconds:
+            show_no_wifi_display(epd)
+            last_display_update = time.monotonic()
+        if on_tick:
+            on_tick()
         time.sleep(30)  # Check every 30 seconds
 
     logger.info("WiFi connected. Continuing with main loop...")

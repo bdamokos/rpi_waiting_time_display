@@ -57,6 +57,7 @@ from ynab_plugin import YnabGlancePlugin
 from home_assistant_plugin import HomeAssistantPlugin
 from display_override_api import DisplayOverrideServer
 from plugins import DisplayOverride, PluginContext, PluginRegistry
+from systemd_notify import SystemdNotifier
 
 logger = logging.getLogger(__name__)
 # Set logging level for PIL.PngImagePlugin and urllib3.connectionpool to warning
@@ -177,6 +178,10 @@ class WeatherManager:
         while not self._stop_event.is_set():
             try:
                 current_time = datetime.now()
+                # Mark entry into the real control loop. If any operation below
+                # wedges, this timestamp ages out and systemd keepalives stop.
+                # A fast ``continue`` cannot bypass the marker.
+                self._control_loop_tick = time.monotonic()
                 if not self.last_update:
                     logger.debug("No previous update, updating weather now")
                     self._update_weather_once()
@@ -310,7 +315,7 @@ class DisplayManager:
         "weather": "weather",
     }
 
-    def __init__(self, epd):
+    def __init__(self, epd, systemd_notifier=None):
         self.epd = epd
         self.update_count = 0
         self.last_weather_data = None
@@ -328,6 +333,12 @@ class DisplayManager:
         self._check_data_thread = None
         self._flight_thread = None
         self._stop_event = threading.Event()
+        self._systemd_notifier = systemd_notifier or SystemdNotifier()
+        self._control_loop_tick = None
+        self._watchdog_display_max_age = max(
+            DISPLAY_REFRESH_INTERVAL * 3,
+            int(os.getenv("display_watchdog_success_max_age", "300")),
+        )
         self.min_refresh_interval = int(os.getenv("refresh_minimal_time", 30))
         self.flight_check_interval = int(os.getenv("flight_check_interval", 10))
         self.flights_enabled = os.getenv("flights_enabled", "false").lower() == "true"
@@ -1303,6 +1314,37 @@ class DisplayManager:
             # Sleep for a short time to prevent CPU spinning
             time.sleep(1)
 
+    def systemd_watchdog_tick(self):
+        """Notify systemd only when the client loop and display are healthy."""
+
+        if not self._systemd_notifier.enabled:
+            return False
+        reporter = getattr(self.epd, "_display_health_reporter", None)
+        if reporter is None or self._control_loop_tick is None:
+            return False
+
+        now_monotonic = time.monotonic()
+        loop_max_age = min(
+            15.0, max(3.0, self._systemd_notifier.watchdog_interval / 2)
+        )
+        loop_age = now_monotonic - self._control_loop_tick
+        snapshot = reporter.snapshot()
+        last_success_at = snapshot.get("last_success_at")
+        if last_success_at is None:
+            return False
+        display_age = max(0.0, time.time() - float(last_success_at))
+        if loop_age > loop_max_age or display_age > self._watchdog_display_max_age:
+            return False
+
+        status = (
+            f"client healthy; frame_sequence={snapshot.get('sequence', 0)}; "
+            f"display_age={display_age:.1f}s; loop_age={loop_age:.1f}s"
+        )
+        if not self._systemd_notifier.ready(status):
+            return False
+        self._systemd_notifier.watchdog(status)
+        return True
+
     def needs_full_refresh(self):
         return self.update_count >= (DISPLAY_REFRESH_FULL_INTERVAL // DISPLAY_REFRESH_INTERVAL)
         
@@ -1367,15 +1409,38 @@ def main():
         logger.info("E-ink Display Starting")
         start_debug_server()
         epd = initialize_display()
+        systemd_notifier = SystemdNotifier()
+
+        def startup_watchdog_tick():
+            reporter = getattr(epd, "_display_health_reporter", None)
+            if not systemd_notifier.enabled or reporter is None:
+                return False
+            snapshot = reporter.snapshot()
+            last_success_at = snapshot.get("last_success_at")
+            if last_success_at is None:
+                return False
+            display_age = max(0.0, time.time() - float(last_success_at))
+            if display_age > max(DISPLAY_REFRESH_INTERVAL * 3, 300):
+                return False
+            status = (
+                "client responsive in network setup; "
+                f"frame_sequence={snapshot.get('sequence', 0)}; "
+                f"display_age={display_age:.1f}s"
+            )
+            if not systemd_notifier.ready(status):
+                return False
+            systemd_notifier.watchdog(status)
+            return True
         
         if not is_connected():
-            no_wifi_loop(epd)
+            no_wifi_loop(epd, on_tick=startup_watchdog_tick)
             
-        display_manager = DisplayManager(epd)
+        display_manager = DisplayManager(epd, systemd_notifier=systemd_notifier)
         display_manager.start()
         
         # Main loop just keeps the program running and handles interrupts
         while True:
+            display_manager.systemd_watchdog_tick()
             time.sleep(1)
                 
     except KeyboardInterrupt:

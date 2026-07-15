@@ -1,0 +1,28 @@
+[Unit]
+Description=E-Paper display health auditor
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/lib/display-watchdog/display_watchdog.py check --config /etc/display-watchdog/config.json --quiet-healthy
+RuntimeDirectory=display-watchdog
+RuntimeDirectoryMode=0755
+StateDirectory=display-watchdog
+StateDirectoryMode=0700
+User=root
+Nice=10
+IOSchedulingClass=idle
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=read-only
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+MemoryHigh=32M
+MemoryMax=48M
+CPUQuota=20%
+TimeoutStartSec=20
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=display-watchdog

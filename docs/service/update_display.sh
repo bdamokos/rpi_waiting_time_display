@@ -2,7 +2,7 @@
 
 echo "----------------------------------------"
 echo "Display Programme Update Script"
-echo "Version: 0.0.4 (2025-01-13)"  # AUTO-INCREMENT
+echo "Version: 0.0.5 (2026-07-15)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024-2025 Bence Damokos"
 echo "----------------------------------------"
@@ -78,7 +78,6 @@ if confirm "Would you like to check and install required packages?"; then
         "git"
         "gh"
         "fonts-dejavu"
-        "watchdog"
         "python3-dev"
         "network-manager"
         "bluetooth"
@@ -100,27 +99,6 @@ if confirm "Would you like to check and configure SPI interface?"; then
         echo "SPI interface enabled"
     else
         echo "SPI interface already enabled"
-    fi
-fi
-
-# Check watchdog configuration
-if confirm "Would you like to check and configure watchdog?"; then
-    if ! grep -q "dtparam=watchdog=on" /boot/firmware/config.txt; then
-        echo "Watchdog not enabled in config.txt. Enabling..."
-        echo "dtparam=watchdog=on" >> /boot/firmware/config.txt
-    fi
-    
-    if [ ! -f "/etc/watchdog.conf" ] || ! grep -q "watchdog-device = /dev/watchdog" "/etc/watchdog.conf"; then
-        echo "Configuring watchdog..."
-        cat > /etc/watchdog.conf << EOL
-watchdog-device = /dev/watchdog
-watchdog-timeout = 15
-interval = 10
-max-load-1 = 3.0
-max-load-5 = 2.8
-EOL
-    else
-        echo "Watchdog already configured"
     fi
 fi
 
@@ -285,8 +263,6 @@ fi
 # Restart services if needed
 if confirm "Would you like to restart services?"; then
     systemctl daemon-reload
-    systemctl enable watchdog
-    systemctl start watchdog
     systemctl enable display.service
     systemctl restart display.service
     
@@ -301,4 +277,4 @@ echo "Update completed!"
 echo "You may need to restart your Raspberry Pi for some changes to take effect."
 if confirm "Would you like to restart now?"; then
     reboot
-fi 
+fi

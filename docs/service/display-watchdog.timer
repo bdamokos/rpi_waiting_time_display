@@ -1,0 +1,13 @@
+[Unit]
+Description=Run the E-Paper display health auditor
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=60s
+AccuracySec=15s
+RandomizedDelaySec=10s
+Persistent=false
+Unit=display-watchdog.service
+
+[Install]
+WantedBy=timers.target

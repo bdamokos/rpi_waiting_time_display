@@ -6,6 +6,9 @@ from PIL import Image
 import dotenv
 import inspect
 import traceback
+import time
+from pathlib import Path
+from display_runtime_health import instrument_display
 logger = logging.getLogger(__name__)
 import dotenv
 import os
@@ -79,6 +82,9 @@ class MockDisplay:
         DisplayAdapter.save_debug_image(image)
 
 class DisplayAdapter:
+    _debug_image_lock = Lock()
+    _last_debug_image_save = 0.0
+
     @staticmethod
     def save_debug_image(image):
         """Save a debug image of the current display buffer"""
@@ -90,9 +96,37 @@ class DisplayAdapter:
             
             # Only try to save if it's a PIL Image
             if isinstance(image, Image.Image):
+                mock_runtime = not bool(os.getenv("display_model"))
+                default_path = (
+                    "debug_output.png"
+                    if mock_runtime
+                    else "/run/rpi-waiting-time-display/debug_output.png"
+                )
+                configured_path = os.getenv("debug_image_path", "").strip()
+                debug_path = Path(configured_path or default_path)
+                minimum_interval = float(
+                    os.getenv(
+                        "debug_image_min_interval_seconds",
+                        "0" if mock_runtime else "5",
+                    )
+                )
+                now = time.monotonic()
+                with DisplayAdapter._debug_image_lock:
+                    if (
+                        minimum_interval > 0
+                        and now - DisplayAdapter._last_debug_image_save
+                        < minimum_interval
+                    ):
+                        return
+                    DisplayAdapter._last_debug_image_save = now
                 # Rotate the image back to normal orientation
                 image = image.rotate(-DISPLAY_SCREEN_ROTATION, expand=True)
-                debug_path = "debug_output.png"
+                if not mock_runtime and not configured_path and not debug_path.parent.exists():
+                    # The systemd RuntimeDirectory is installed separately.
+                    # Never fall back to a persistent checkout write, and do
+                    # not emit one error per frame before that setup exists.
+                    return
+                debug_path.parent.mkdir(parents=True, exist_ok=True)
                 image.save(debug_path)
                 logger.debug(f"Debug image saved to {debug_path}")
             else:
@@ -310,6 +344,7 @@ def initialize_display():
                 # Initialize display using adapter
         logger.debug("About to initialize display")
         epd = DisplayAdapter.get_display()
+        instrument_display(epd)
 
         # Add debug logs before EPD commands
         logger.debug("About to call epd.init()")

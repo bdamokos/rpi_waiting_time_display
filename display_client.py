@@ -10,6 +10,7 @@ import signal
 import socket
 import sys
 import tempfile
+import threading
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -287,18 +288,17 @@ def main() -> int:
     last_success_at = None
     last_error_at = None
     last_error = None
-    stopping = False
+    shutdown_event = threading.Event()
 
     def stop(_signum=None, _frame=None):
-        nonlocal stopping
-        stopping = True
+        shutdown_event.set()
 
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     notifier.notify("STATUS=Display initialized; waiting for a fresh frame")
     ready_sent = False
     try:
-        while not stopping:
+        while not shutdown_event.is_set():
             started = time.monotonic()
             last_attempt_at = utc_now().isoformat()
             try:
@@ -345,7 +345,7 @@ def main() -> int:
             )
             remaining = interval - (time.monotonic() - started)
             if remaining > 0:
-                time.sleep(remaining)
+                shutdown_event.wait(remaining)
     finally:
         notifier.notify("STOPPING=1", "STATUS=Stopping display client")
         client_display_cleanup(epd)

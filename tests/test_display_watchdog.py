@@ -1,8 +1,10 @@
 import json
+import stat
 import subprocess
 
 from display_watchdog import (
     DEFAULT_CONFIG,
+    _atomic_write,
     assess,
     collect_client_health,
     collect_server_health,
@@ -386,3 +388,12 @@ def test_runtime_outputs_must_stay_in_run():
         assert "must be under /run" in str(error)
     else:
         raise AssertionError("persistent metrics path was accepted")
+
+
+def test_public_diagnostics_and_private_state_file_modes(tmp_path):
+    public = tmp_path / "metrics.prom"
+    private = tmp_path / "recovery.json"
+    _atomic_write(public, "ok\n", 0o644)
+    _atomic_write(private, "{}\n")
+    assert stat.S_IMODE(public.stat().st_mode) == 0o644
+    assert stat.S_IMODE(private.stat().st_mode) == 0o600

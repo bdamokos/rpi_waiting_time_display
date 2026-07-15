@@ -207,6 +207,8 @@ architecture-owned client unit.
 - Per-check observations, status, metrics, and optional client diagnostics live
   only in `/run`. Persistent recovery state changes only when a restart is
   requested or a new systemd restart is observed.
+- Auditor observations, status, and metrics are installed as `0644` for local
+  diagnostics/scraping; persistent recovery history remains root-only `0600`.
 - Healthy checks are quiet, avoiding one journal entry per minute.
 - The system remains compatible with kernels that do not expose PSI; `/proc`
   swap, CPU, process-state, and memory deltas remain authoritative.

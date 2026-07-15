@@ -73,12 +73,14 @@ DEFAULT_CONFIG: dict[str, Any] = {
 }
 
 
-def _atomic_write(path: Path, content: str) -> None:
+def _atomic_write(path: Path, content: str, mode: Optional[int] = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(
         prefix=f".{path.name}.", dir=str(path.parent)
     )
     try:
+        if mode is not None:
+            os.fchmod(descriptor, mode)
         with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
             handle.write(content)
             handle.flush()
@@ -91,9 +93,11 @@ def _atomic_write(path: Path, content: str) -> None:
         raise
 
 
-def _write_json(path: str, payload: dict[str, Any]) -> None:
+def _write_json(path: str, payload: dict[str, Any], mode: Optional[int] = None) -> None:
     _atomic_write(
-        Path(path), json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
+        Path(path),
+        json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n",
+        mode,
     )
 
 
@@ -945,11 +949,13 @@ def run_check(
     transitioned = result["classification"] != runtime.get("last_classification")
     runtime["last_classification"] = result["classification"]
 
-    _write_json(str(config["runtime_state_path"]), runtime)
+    _write_json(str(config["runtime_state_path"]), runtime, 0o644)
     if persistent_changed:
         _write_json(str(config["persistent_state_path"]), persistent)
-    _write_json(str(config["status_path"]), result)
-    _atomic_write(Path(str(config["metrics_path"])), _metrics(result, persistent))
+    _write_json(str(config["status_path"]), result, 0o644)
+    _atomic_write(
+        Path(str(config["metrics_path"])), _metrics(result, persistent), 0o644
+    )
     if (
         not quiet_healthy
         or transitioned

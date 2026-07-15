@@ -11,7 +11,11 @@ usage() {
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --service)
-            SERVICE_NAME=${2:-}
+            if [ "$#" -lt 2 ]; then
+                usage >&2
+                exit 2
+            fi
+            SERVICE_NAME=$2
             shift 2
             ;;
         --enable-legacy-recovery)

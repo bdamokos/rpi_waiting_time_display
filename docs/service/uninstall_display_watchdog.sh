@@ -6,7 +6,14 @@ PURGE=false
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
-        --service) SERVICE_NAME=${2:-}; shift 2 ;;
+        --service)
+            if [ "$#" -lt 2 ]; then
+                echo "Missing value for --service" >&2
+                exit 2
+            fi
+            SERVICE_NAME=$2
+            shift 2
+            ;;
         --purge) PURGE=true; shift ;;
         -h|--help)
             echo "Usage: sudo $0 [--service NAME.service] [--purge]"

@@ -1,3 +1,4 @@
+import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
@@ -21,7 +22,7 @@ def test_setup_and_startup_do_not_manage_linux_hardware_watchdog():
         "dtparam=watchdog=on",
     )
     for path in paths:
-        source = path.read_text()
+        source = path.read_text(encoding="utf-8")
         for fragment in banned:
             assert fragment not in source, f"{fragment!r} remains in {path}"
 
@@ -41,12 +42,24 @@ def test_client_watchdog_has_no_whole_host_watchdog_or_power_action():
         "shutdown -",
     )
     for path in paths:
-        source = path.read_text()
+        source = path.read_text(encoding="utf-8")
         for fragment in banned:
             assert fragment not in source, f"{fragment!r} found in {path}"
 
 
 def test_secondary_auditor_never_sends_systemd_notify_keepalives():
-    source = (ROOT / "display_watchdog.py").read_text()
+    source = (ROOT / "display_watchdog.py").read_text(encoding="utf-8")
     assert "WATCHDOG=1" not in source
     assert "READY=1" not in source
+
+
+def test_installers_reject_missing_service_argument_cleanly():
+    for name in ("setup_display_watchdog.sh", "uninstall_display_watchdog.sh"):
+        completed = subprocess.run(
+            ["sh", str(ROOT / "docs/service" / name), "--service"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert completed.returncode == 2
+        assert "shift" not in completed.stderr.lower()

@@ -2,14 +2,19 @@ import json
 import stat
 import subprocess
 
+import pytest
+
 from display_watchdog import (
     DEFAULT_CONFIG,
     _atomic_write,
+    _reconcile_systemd_restarts,
+    _record_restart,
     assess,
     collect_client_health,
     collect_server_health,
     collect_service_status,
     exact_physical_target_matches,
+    load_config,
     restart_client_service,
     server_health_from_client,
     validate_config,
@@ -350,6 +355,14 @@ def test_server_not_ready_status_is_stale_even_with_recent_timestamp(tmp_path):
     assert not result["fresh"]
 
 
+def test_server_health_rejects_non_http_scheme_at_call_site():
+    result = collect_server_health(
+        config(server_health_url="file:///etc/passwd"), NOW, {}
+    )
+    assert not result["reachable"]
+    assert result["error"] == "ValueError"
+
+
 def test_corrupt_persistent_budget_entries_are_ignored():
     result = evaluate(
         persistent={
@@ -360,6 +373,42 @@ def test_corrupt_persistent_budget_entries_are_ignored():
     )
     assert result["budget"]["window_remaining"] == 1
     assert result["budget"]["boot_remaining"] == 3
+
+
+def test_loaded_timestamp_fields_do_not_share_default_list(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text("{}", encoding="utf-8")
+    first = load_config(str(path))
+    first["server_timestamp_fields"].append("mutated")
+    second = load_config(str(path))
+    assert "mutated" not in second["server_timestamp_fields"]
+    assert "mutated" not in DEFAULT_CONFIG["server_timestamp_fields"]
+
+
+def test_invalid_timestamp_field_configuration_is_rejected(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text('{"server_timestamp_fields":"generated_at"}', encoding="utf-8")
+    with pytest.raises(ValueError, match="server_timestamp_fields"):
+        load_config(str(path))
+
+
+def test_explicit_and_automatic_restarts_each_consume_one_budget_slot():
+    runtime = {}
+    persistent = {}
+    assert not _reconcile_systemd_restarts(
+        {"NRestarts": 0}, runtime, persistent, NOW, "boot"
+    )
+    _record_restart(persistent, NOW, "boot")
+    assert persistent["total_restart_count"] == 1
+
+    assert _reconcile_systemd_restarts(
+        {"NRestarts": 1}, runtime, persistent, NOW + 1, "boot"
+    )
+    assert persistent["total_restart_count"] == 2
+    assert not _reconcile_systemd_restarts(
+        {"NRestarts": 1}, runtime, persistent, NOW + 2, "boot"
+    )
+    assert persistent["total_restart_count"] == 2
 
 
 def test_embedded_server_freshness_is_independent_from_client_freshness():

@@ -117,16 +117,21 @@ class DisplayAdapter:
                         < minimum_interval
                     ):
                         return
+                    if (
+                        not mock_runtime
+                        and not configured_path
+                        and not debug_path.parent.exists()
+                    ):
+                        # The systemd RuntimeDirectory is installed separately.
+                        # Never fall back to a persistent checkout write, and do
+                        # not emit one error per frame before that setup exists.
+                        return
+                    # Serialize rotation and write so concurrent wrappers cannot
+                    # publish a partial/corrupt PNG at the shared path.
+                    image = image.rotate(-DISPLAY_SCREEN_ROTATION, expand=True)
+                    debug_path.parent.mkdir(parents=True, exist_ok=True)
+                    image.save(debug_path)
                     DisplayAdapter._last_debug_image_save = now
-                # Rotate the image back to normal orientation
-                image = image.rotate(-DISPLAY_SCREEN_ROTATION, expand=True)
-                if not mock_runtime and not configured_path and not debug_path.parent.exists():
-                    # The systemd RuntimeDirectory is installed separately.
-                    # Never fall back to a persistent checkout write, and do
-                    # not emit one error per frame before that setup exists.
-                    return
-                debug_path.parent.mkdir(parents=True, exist_ok=True)
-                image.save(debug_path)
                 logger.debug(f"Debug image saved to {debug_path}")
             else:
                 logger.debug(f"Skipping debug image save for unsupported type: {type(image)}")

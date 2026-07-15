@@ -114,6 +114,14 @@ def load_config(path: str) -> dict[str, Any]:
     supplied = _read_json(path, {})
     config = dict(DEFAULT_CONFIG)
     config.update(supplied)
+    timestamp_fields = supplied.get(
+        "server_timestamp_fields", DEFAULT_CONFIG["server_timestamp_fields"]
+    )
+    config["server_timestamp_fields"] = (
+        list(timestamp_fields)
+        if isinstance(timestamp_fields, list)
+        else timestamp_fields
+    )
     target = dict(DEFAULT_CONFIG["physical_target"])
     target.update(supplied.get("physical_target", {}))
     config["physical_target"] = target
@@ -163,6 +171,11 @@ def validate_config(config: dict[str, Any]) -> None:
     server_url = str(config.get("server_health_url", "")).strip()
     if server_url and urllib.parse.urlsplit(server_url).scheme not in {"http", "https"}:
         raise ValueError("server_health_url must use http or https")
+    timestamp_fields = config.get("server_timestamp_fields")
+    if not isinstance(timestamp_fields, list) or not all(
+        isinstance(field, str) and field.strip() for field in timestamp_fields
+    ):
+        raise ValueError("server_timestamp_fields must be a list of field names")
 
 
 def _read_text(path: str, default: str = "") -> str:
@@ -500,6 +513,8 @@ def collect_server_health(
             payload = json.loads(raw)
             token = hashlib.sha256(raw.encode("utf-8")).hexdigest()
         else:
+            if urllib.parse.urlsplit(url).scheme.lower() not in {"http", "https"}:
+                raise ValueError("unsupported server health URL scheme")
             request = urllib.request.Request(
                 url, headers={"Accept": "application/json"}
             )

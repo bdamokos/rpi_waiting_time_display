@@ -2,7 +2,7 @@
 
 echo "----------------------------------------"
 echo "Display Programme Setup Script"
-echo "Version: 0.0.44 (2026-07-10)"  # AUTO-INCREMENT
+echo "Version: 0.0.45 (2026-07-15)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024-2025 Bence Damokos"
 echo "----------------------------------------"
@@ -293,7 +293,7 @@ cleanup() {
     # Remove installed packages if selected
     if [ "$REMOVE_PACKAGES" = "yes" ]; then
         echo "Removing installed packages..."
-        apt-get remove -y git gh fonts-dejavu watchdog python3-dev
+        apt-get remove -y git gh fonts-dejavu python3-dev
     fi
     
     # Restore backed up files
@@ -514,13 +514,6 @@ echo "Enabling SPI interface..."
 raspi-config nonint do_spi 0
 check_error "Failed to enable SPI"
 
-# Enable watchdog
-echo "Setting up watchdog..."
-if ! grep -q "dtparam=watchdog=on" "$CONFIG_FILE"; then
-    echo "dtparam=watchdog=on" >> "$CONFIG_FILE"
-    NEED_REBOOT=1
-fi
-
 # Enable dwc2 overlay for USB gadget support
 echo "Enabling dwc2 overlay..."
 DWC2_ADDED=0
@@ -552,25 +545,8 @@ apt-get update
 check_error "Failed to update package list"
 
 # Install dependencies
-apt-get install -y git gh fonts-dejavu watchdog python3-dev network-manager libcairo2-dev pkg-config python3-dev python3-serial libmsgpack-dev build-essential fontconfig
+apt-get install -y git gh fonts-dejavu python3-dev network-manager libcairo2-dev pkg-config python3-dev python3-serial libmsgpack-dev build-essential fontconfig
 check_error "Failed to install packages"
-
-# Setup watchdog
-echo "Setting up watchdog..."
-if ! grep -q "dtparam=watchdog=on" /boot/firmware/config.txt; then
-    echo "dtparam=watchdog=on" >> /boot/firmware/config.txt
-fi
-
-cat > /etc/watchdog.conf << EOL
-watchdog-device = /dev/watchdog
-watchdog-timeout = 15
-interval = 10
-max-load-1 = 3.0
-max-load-5 = 2.8
-EOL
-
-systemctl enable watchdog
-systemctl start watchdog
 
 # Switch to actual user for git operations
 echo "Setting up git..."
@@ -913,12 +889,6 @@ systemctl enable display.service
 check_error "Failed to enable display.service"
 systemctl start display.service
 check_error "Failed to start display.service"
-
-# Start watchdog with error checking
-systemctl enable watchdog
-systemctl start watchdog
-check_error "Failed to start watchdog service"
-
 
 # Function to setup WebSerial support
 setup_webserial() {

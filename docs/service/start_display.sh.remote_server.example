@@ -6,18 +6,9 @@
 # chmod +x ~/start_display.sh
 echo "----------------------------------------"
 echo "Starting display service script"
-echo "Version: 0.0.13 (2026-07-10)"  # AUTO-INCREMENT
+echo "Version: 0.0.14 (2026-07-15)"  # AUTO-INCREMENT
 echo "----------------------------------------"
 echo "MIT License - Copyright (c) 2024-2025 Bence Damokos"
-echo "----------------------------------------"
-
-# Disable watchdog service if it exists
-if systemctl list-unit-files | grep -q watchdog.service; then
-    echo "Disabling watchdog service..."
-    sudo systemctl stop watchdog.service
-    sudo systemctl disable watchdog.service
-    echo "Watchdog service disabled."
-fi
 echo "----------------------------------------"
 
 # Create log directories if they don't exist

@@ -17,6 +17,7 @@ from werkzeug.serving import make_server
 
 from display_protocol import FramePublisher, parse_utc, utc_now
 from publication_display import PublicationDisplay
+from version import __version__
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,7 @@ def create_app(
         return jsonify(
             status="ok",
             service="display-render-server",
+            version=__version__,
             sequence=snapshot.metadata.sequence if snapshot else None,
             generated_at=snapshot.metadata.published_at if snapshot else None,
         )

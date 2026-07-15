@@ -15,7 +15,9 @@ def test_health_readiness_auth_and_conditional_frame(tmp_path, monkeypatch):
     app = create_app(publisher, token="secret", ready_max_age_seconds=300)
     client = app.test_client()
 
-    assert client.get("/healthz").get_json()["sequence"] is None
+    health = client.get("/healthz").get_json()
+    assert health["sequence"] is None
+    assert health["version"] == "0.3.0"
     assert client.get("/readyz").status_code == 503
     assert client.get("/api/v1/frame.png").status_code == 401
 

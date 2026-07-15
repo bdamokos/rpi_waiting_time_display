@@ -1,0 +1,30 @@
+services:
+  display-render-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    image: rpi-waiting-time-display-server:local
+    restart: unless-stopped
+    init: true
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      display_server_host: 0.0.0.0
+      display_server_port: "8787"
+      display_server_frame_dir: /run/rpi-waiting-time-display/frames
+    ports:
+      - "8787:8787"
+    read_only: true
+    tmpfs:
+      - /run/rpi-waiting-time-display:uid=10001,gid=10001,mode=0750
+      - /tmp:uid=10001,gid=10001,mode=1777
+    volumes:
+      - display-server-cache:/app/cache
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+volumes:
+  display-server-cache:

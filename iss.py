@@ -6,7 +6,7 @@ ISS next pass prediction inspired by https://github.com/open-notify/Open-Notify-
 
 '''
 
-from skyfield.api import load, wgs84
+from skyfield.api import wgs84
 from skyfield.framelib import ecliptic_frame
 from datetime import datetime, timedelta, timezone
 from time import time
@@ -23,7 +23,7 @@ from PIL import Image, ImageDraw, ImageFont
 from threading import Event
 from functools import lru_cache
 import humanize
-from astronomy_utils import get_moon_phase, get_appropriate_ephemeris
+from astronomy_utils import get_moon_phase, get_appropriate_ephemeris, load
 from backoff import ExponentialBackoff
 
 logger = logging.getLogger(__name__)

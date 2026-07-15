@@ -110,8 +110,15 @@ def get_font_paths():
             'emoji': os.path.expanduser('~/Library/Fonts/NotoEmoji[wght].ttf')  # Use user's Noto Emoji font
         }
     else:  # Assume Raspberry Pi/Linux
+        dejavu = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+        emoji = os.getenv('emoji_font_path', '/usr/local/share/fonts/noto/NotoEmoji-Regular.ttf')
+        if not os.path.isfile(emoji):
+            # Hardware setup installs Noto Emoji, while a minimal render-server
+            # container intentionally falls back to the always-present DejaVu
+            # symbols instead of failing the entire frame render.
+            emoji = dejavu
         return {
-            'dejavu': '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+            'dejavu': dejavu,
             'dejavu_bold': '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
-            'emoji': '/usr/local/share/fonts/noto/NotoEmoji-Regular.ttf'
+            'emoji': emoji
         }

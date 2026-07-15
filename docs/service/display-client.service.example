@@ -1,0 +1,26 @@
+[Unit]
+Description=E-Paper display frame client
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=6h
+StartLimitBurst=3
+StartLimitAction=none
+
+[Service]
+Type=notify
+NotifyAccess=main
+User=pi
+WorkingDirectory=/home/pi/display_programme
+EnvironmentFile=/home/pi/display_programme/.env
+RuntimeDirectory=rpi-waiting-time-display
+RuntimeDirectoryMode=0750
+ExecStart=/home/pi/display_env/bin/python /home/pi/display_programme/display_client.py
+Restart=on-failure
+RestartSec=10
+WatchdogSec=45
+TimeoutStartSec=60
+TimeoutStopSec=30
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

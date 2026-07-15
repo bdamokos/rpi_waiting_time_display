@@ -85,6 +85,16 @@ payee, transaction, or credential from a real YNAB budget is committed.
 2. Connect your display via USB
 3. Open the [setup interface](https://bdamokos.github.io/rpi_waiting_time_display/setup/) to configure
 
+### Split server/client mode
+
+For a low-resource display Pi, the full collector and renderer can run on a
+separate Linux server or in a hardened production container. The server uses
+the same schedules, arbitration, plugins, and private-extension boundaries, and
+publishes an atomic `250x120` PNG. A minimal hardware client can poll it every
+second using ETag/sequence semantics, reject stale or invalid frames, and keep
+the last good pixels while offline. See the [split architecture, setup,
+migration, rollback, and security guide](docs/split-server-client.md).
+
 ## Requirements
 - Raspberry Pi (tested on Zero 2W)
 - Waveshare 2.13" e-Paper display (see [supported models](https://bdamokos.github.io/rpi_waiting_time_display/hardware/))

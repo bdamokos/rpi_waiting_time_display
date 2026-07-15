@@ -1,0 +1,14 @@
+.git
+.github
+.venv
+__pycache__
+.pytest_cache
+htmlcov
+runtime
+cache
+debug_output.png
+.env
+.env.*
+!.env.example
+*.sqlite3
+*.sqlite3-*

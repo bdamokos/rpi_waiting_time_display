@@ -106,3 +106,10 @@ The setup script will install the backend server based on your chosen setup mode
 You'll need to configure the API keys and stops either through:
 - The web interface at http://raspberrypi.local:5002/debug/env
 - Manually editing the .env file
+# Deployment modes
+
+This guide describes the original all-in-one display service. For new
+low-resource deployments, first choose whether data collection/rendering should
+run on another host and the Pi should be client-only. The complete native and
+container setup, migration, rollback, health, authentication, and systemd
+watchdog procedure is in [Split render server and display client](split-server-client.md).

@@ -1,0 +1,25 @@
+[Unit]
+Description=E-Paper display render server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/display_programme
+EnvironmentFile=/home/pi/display_programme/.env
+Environment=display_file_logging=false
+RuntimeDirectory=rpi-waiting-time-display
+RuntimeDirectoryMode=0750
+ExecStart=/home/pi/display_server_env/bin/python /home/pi/display_programme/display_server.py
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=20
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/run/rpi-waiting-time-display /home/pi/display_programme/cache
+
+[Install]
+WantedBy=multi-user.target

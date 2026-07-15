@@ -1,0 +1,30 @@
+FROM python:3.12-slim@sha256:c3d81d25b3154142b0b42eb1e61300024426268edeb5b5a26dd7ddf64d9daf28
+
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y ca-certificates fonts-dejavu-core libcairo2 \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system --gid 10001 display \
+    && useradd --system --uid 10001 --gid display --home-dir /app display
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    display_server_host=0.0.0.0 \
+    display_server_port=8787 \
+    display_server_frame_dir=/run/rpi-waiting-time-display/frames \
+    display_file_logging=false \
+    skyfield_data_dir=/app/cache/skyfield
+
+WORKDIR /app
+COPY requirements.server.txt ./
+RUN pip install --no-cache-dir --requirement requirements.server.txt
+
+COPY --chown=display:display . .
+RUN mkdir -p /run/rpi-waiting-time-display /app/cache \
+    && chown display:display /run/rpi-waiting-time-display /app/cache
+
+USER display
+EXPOSE 8787
+HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8787/healthz', timeout=2)"
+
+CMD ["python", "display_server.py"]

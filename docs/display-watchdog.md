@@ -186,17 +186,17 @@ To stop all checks while preserving evidence:
 sudo systemctl disable --now display-watchdog.timer
 ```
 
-To remove the timer, auditor, and display-service runtime-directory drop-in without
-restarting the display:
+To remove the timer and auditor without restarting the display:
 
 ```bash
 sudo docs/service/uninstall_display_watchdog.sh
 ```
 
-For the migration monolith, pass `--service display.service`. Configuration and
-persistent recovery history are retained by default. Add `--purge` only after
-capturing any needed evidence. The uninstaller never removes or replaces the
-architecture-owned client unit.
+For the migration monolith, pass `--service display.service`; setup adds a small
+runtime-directory drop-in only for that legacy target, and uninstall removes it.
+Configuration and persistent recovery history are retained by default. Add
+`--purge` only after capturing any needed evidence. The installer/uninstaller
+never alters or replaces the architecture-owned client unit.
 
 ## Resource and write budget
 

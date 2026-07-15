@@ -63,3 +63,13 @@ def test_installers_reject_missing_service_argument_cleanly():
         )
         assert completed.returncode == 2
         assert "shift" not in completed.stderr.lower()
+
+
+def test_split_client_install_does_not_add_a_service_drop_in():
+    source = (ROOT / "docs/service/setup_display_watchdog.sh").read_text(
+        encoding="utf-8"
+    )
+    assert 'if [ "$SERVICE_NAME" != display-client.service ]; then' in source
+    assert source.index('if [ "$SERVICE_NAME" != display-client.service ]; then') < (
+        source.index('install -m 0644 "$SCRIPT_DIR/display-watchdog-health.conf"')
+    )

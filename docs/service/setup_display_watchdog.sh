@@ -54,11 +54,14 @@ if ! systemctl cat "$SERVICE_NAME" >/dev/null 2>&1; then
     exit 1
 fi
 
-install -d -m 0755 "$INSTALL_DIR" "$CONFIG_DIR" "$DROP_IN_DIR"
+install -d -m 0755 "$INSTALL_DIR" "$CONFIG_DIR"
 install -m 0755 "$REPO_DIR/display_watchdog.py" "$INSTALL_DIR/display_watchdog.py"
 install -m 0644 "$SCRIPT_DIR/display-watchdog.service" /etc/systemd/system/display-watchdog.service
 install -m 0644 "$SCRIPT_DIR/display-watchdog.timer" /etc/systemd/system/display-watchdog.timer
-install -m 0644 "$SCRIPT_DIR/display-watchdog-health.conf" "$DROP_IN_DIR/20-display-health.conf"
+if [ "$SERVICE_NAME" != display-client.service ]; then
+    install -d -m 0755 "$DROP_IN_DIR"
+    install -m 0644 "$SCRIPT_DIR/display-watchdog-health.conf" "$DROP_IN_DIR/20-display-health.conf"
+fi
 
 if [ ! -e "$CONFIG_DIR/config.json" ]; then
     temporary_config=$(mktemp)

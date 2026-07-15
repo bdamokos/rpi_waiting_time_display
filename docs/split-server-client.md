@@ -115,7 +115,11 @@ systemctl status display-client.service
 ```
 
 `display-client.service` uses `Type=notify`, `NotifyAccess=main`, and
-`WatchdogSec=45`. The main poll loop sends `READY=1` after hardware
+`WatchdogSec=45`. Its explicit `StartLimitIntervalSec=6h`,
+`StartLimitBurst=3`, and `StartLimitAction=none` budget prevents an unhealthy
+client from being restarted indefinitely: after three failed starts or
+watchdog terminations in six hours, systemd leaves the client stopped without
+escalating to a host action. The main poll loop sends `READY=1` after hardware
 initialization and its first successful fresh frame result, then sends
 `WATCHDOG=1` only after each successful, fresh `200` or `304` result. A
 separate helper cannot mask a wedged loop. Systemd may restart this client
@@ -134,6 +138,10 @@ version 1 fields are: `role`, `boot_id`, `pid`, `state`, `sequence`, `etag`,
 `last_attempt_at`, `last_success_at`, `last_error_at`, `error`,
 `frame_source_created_at`, `server_generated_at`, and `server_received_at`.
 Set `display_client_health_path=` to disable this secondary file.
+An external auditor may read this file and systemd state for diagnostics, but
+for a notify-guarded client it must remain observation-only. The service's
+systemd watchdog and restart budget are the recovery and loop-prevention
+mechanisms.
 
 ## Migration and rollback
 

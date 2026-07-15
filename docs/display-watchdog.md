@@ -214,8 +214,8 @@ architecture-owned client unit.
   swap, CPU, process-state, and memory deltas remain authoritative.
 
 An indicative macOS arm64 development measurement of an observe-only collection
-path on 2026-07-15 took 0.18 seconds wall time, reported 26,492,928 bytes maximum
-RSS (about 25.3 MiB), zero swaps, and zero block-input/output operations. That
+path on 2026-07-15 took 1.42 seconds wall time, reported 26,836,992 bytes maximum
+RSS (about 25.6 MiB), zero swaps, and zero block-input/output operations. That
 is evidence for the candidate's systemd limits, not a substitute for the
 device-side gate below; macOS lacks the target's `/proc` and systemd surfaces.
 

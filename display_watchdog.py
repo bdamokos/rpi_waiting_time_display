@@ -84,6 +84,7 @@ def _atomic_write(path: Path, content: str, mode: Optional[int] = None) -> None:
         with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
             handle.write(content)
             handle.flush()
+            os.fsync(handle.fileno())
         os.replace(temporary_name, path)
     except BaseException:
         try:
@@ -412,6 +413,7 @@ def collect_client_health(
     age = max(0.0, now - last_success) if last_success is not None else None
     fresh = bool(
         available
+        and payload.get("state") == "healthy"
         and age is not None
         and age <= float(config["client_max_age_seconds"])
         and not unresolved_error
@@ -530,7 +532,12 @@ def collect_server_health(
     if generated_at is None and token:
         generated_at = runtime.get("last_server_advance_at")
     age = max(0.0, now - generated_at) if generated_at is not None else None
-    payload_healthy = payload.get("healthy", payload.get("ok", True)) is not False
+    payload_status = str(payload.get("status", "")).strip().lower()
+    payload_healthy = (
+        payload_status in {"ok", "ready", "healthy"}
+        if payload_status
+        else payload.get("healthy", payload.get("ok", True)) is not False
+    )
     reachable = error is None
     fresh = bool(
         reachable
@@ -575,17 +582,21 @@ def _budget_status(
     config: dict[str, Any], now: float, persistent: dict[str, Any], current_boot: str
 ) -> dict[str, Any]:
     window_start = now - float(config["cycle_window_seconds"])
-    timestamps = [
-        float(value)
-        for value in persistent.get("restart_timestamps", [])
-        if float(value) >= window_start
-    ]
+    timestamps = []
+    for value in persistent.get("restart_timestamps", []):
+        try:
+            timestamp = float(value)
+        except (TypeError, ValueError):
+            continue
+        if timestamp >= window_start:
+            timestamps.append(timestamp)
     persistent["restart_timestamps"] = timestamps
-    boot_count = (
-        int(persistent.get("boot_restart_count", 0))
-        if persistent.get("boot_id") == current_boot
-        else 0
-    )
+    try:
+        boot_count = int(persistent.get("boot_restart_count", 0))
+    except (TypeError, ValueError):
+        boot_count = 0
+    if persistent.get("boot_id") != current_boot:
+        boot_count = 0
     last_restart = max(timestamps) if timestamps else None
     cooldown_remaining = (
         max(0.0, float(config["cooldown_seconds"]) - (now - last_restart))
@@ -750,6 +761,7 @@ def assess(
         "startup_grace": startup_grace,
         "consecutive_failures": consecutive,
         "fallback_recovery_requested": recovery_requested,
+        "recovery_budget_exhausted": budget_exhausted,
         "human_escalation": human_escalation,
         "budget": budget,
         "service": service,
@@ -813,12 +825,16 @@ def _record_restart(
     if persistent.get("boot_id") != current_boot:
         persistent["boot_id"] = current_boot
         persistent["boot_restart_count"] = 0
-    persistent["boot_restart_count"] = (
-        int(persistent.get("boot_restart_count", 0)) + count
-    )
-    persistent["total_restart_count"] = (
-        int(persistent.get("total_restart_count", 0)) + count
-    )
+    try:
+        boot_restart_count = int(persistent.get("boot_restart_count", 0))
+    except (TypeError, ValueError):
+        boot_restart_count = 0
+    try:
+        total_restart_count = int(persistent.get("total_restart_count", 0))
+    except (TypeError, ValueError):
+        total_restart_count = 0
+    persistent["boot_restart_count"] = boot_restart_count + count
+    persistent["total_restart_count"] = total_restart_count + count
     timestamps = list(persistent.get("restart_timestamps", []))
     timestamps.extend([now] * count)
     persistent["restart_timestamps"] = timestamps[-100:]
@@ -835,9 +851,13 @@ def _reconcile_systemd_restarts(
     current = int(service.get("NRestarts", 0))
     previous = runtime.get("last_nrestarts")
     runtime["last_nrestarts"] = current
-    if previous is None or current <= int(previous):
+    try:
+        previous_count = int(previous)
+    except (TypeError, ValueError):
         return False
-    _record_restart(persistent, now, current_boot, min(10, current - int(previous)))
+    if current <= previous_count:
+        return False
+    _record_restart(persistent, now, current_boot, min(10, current - previous_count))
     return True
 
 
@@ -931,11 +951,10 @@ def run_check(
     result["action"] = action
     result["action_detail"] = action_detail
 
-    budget_exhausted = result["human_escalation"] and result["classification"] in {
-        "service_failure",
-        "render_failure",
-        "systemd_restart_budget_exhausted",
-    }
+    budget_exhausted = bool(
+        result["recovery_budget_exhausted"]
+        or result["classification"] == "systemd_restart_budget_exhausted"
+    )
     target_matches = exact_physical_target_matches(
         config["physical_target"], physical_identity()
     )

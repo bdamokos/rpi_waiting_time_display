@@ -310,6 +310,22 @@ def test_client_health_uses_sequence_and_tmpfs_json(tmp_path):
     assert observed["last_sequence"] == 9
 
 
+def test_degraded_client_state_is_not_fresh_even_with_recent_success(tmp_path):
+    health_path = tmp_path / "health.json"
+    health_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "state": "degraded",
+                "last_success_at": NOW - 5,
+                "sequence": 9,
+            }
+        )
+    )
+    result = collect_client_health(config(client_health_path=str(health_path)), NOW, {})
+    assert not result["fresh"]
+
+
 def test_server_readyz_published_timestamp_is_accepted(tmp_path):
     path = tmp_path / "readyz.json"
     path.write_text(
@@ -324,6 +340,26 @@ def test_server_readyz_published_timestamp_is_accepted(tmp_path):
     result = collect_server_health(config(server_health_path=str(path)), NOW, {})
     assert result["reachable"]
     assert result["fresh"]
+
+
+def test_server_not_ready_status_is_stale_even_with_recent_timestamp(tmp_path):
+    path = tmp_path / "readyz.json"
+    path.write_text(json.dumps({"status": "not-ready", "published_at": NOW - 1}))
+    result = collect_server_health(config(server_health_path=str(path)), NOW, {})
+    assert result["reachable"]
+    assert not result["fresh"]
+
+
+def test_corrupt_persistent_budget_entries_are_ignored():
+    result = evaluate(
+        persistent={
+            "restart_timestamps": ["bad", None, NOW - 1],
+            "boot_id": "boot",
+            "boot_restart_count": "bad",
+        }
+    )
+    assert result["budget"]["window_remaining"] == 1
+    assert result["budget"]["boot_remaining"] == 3
 
 
 def test_embedded_server_freshness_is_independent_from_client_freshness():

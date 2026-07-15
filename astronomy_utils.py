@@ -2,7 +2,9 @@
 Utility functions for astronomical calculations using skyfield
 """
 
-from skyfield.api import load
+import os
+
+from skyfield.api import Loader
 from skyfield.framelib import ecliptic_frame
 from datetime import datetime, timezone, timedelta
 import logging
@@ -10,6 +12,7 @@ import log_config
 from functools import lru_cache
 from skyfield import almanac
 logger = logging.getLogger(__name__)
+load = Loader(os.getenv("skyfield_data_dir", "cache/skyfield"))
 
 @lru_cache(maxsize=256)
 def get_moon_phase(timestamp=None):

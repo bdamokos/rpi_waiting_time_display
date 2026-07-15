@@ -21,7 +21,15 @@ DEBUG_ENABLED = os.getenv("debug_port_enabled", "false").lower() == "true"
 FIRST_RUN = os.getenv("first_run", "false").lower() == "true"
 
 app = Flask(__name__)
-config_manager = ConfigManager()
+config_manager = None
+
+
+def get_config_manager():
+    """Create filesystem-backed configuration only when the editor is used."""
+    global config_manager
+    if config_manager is None:
+        config_manager = ConfigManager()
+    return config_manager
 
 def is_local_request():
     """Check if the request is from a local network"""
@@ -129,27 +137,28 @@ def edit_env():
         abort(403)
 
     try:
+        manager = get_config_manager()
         # Handle POST requests for saving/restoring
         if request.method == 'POST':
             if 'restore' in request.form:
                 config_type = request.form.get('config_type')
                 restore_file = request.form.get('restore_file')
-                if config_manager.restore_backup(config_type, restore_file):
+                if manager.restore_backup(config_type, restore_file):
                     return redirect(url_for('edit_env'))
                 return "Error restoring file", 500
 
             elif 'save' in request.form:
                 config_type = request.form.get('config_type')
                 new_content = request.form.get('content')
-                if config_manager.update_config(config_type, new_content):
+                if manager.update_config(config_type, new_content):
                     return redirect(url_for('edit_env'))
                 return "Error updating file", 500
 
         # Read configurations
         configs = {}
         for config_type in ['display_env', 'transit_env', 'transit_local']:
-            content, variables = config_manager.read_config(config_type, verbose=True)
-            backups = config_manager.get_backup_files(config_type)
+            content, variables = manager.read_config(config_type, verbose=True)
+            backups = manager.get_backup_files(config_type)
             configs[config_type] = {
                 'content': content,
                 'variables': variables,

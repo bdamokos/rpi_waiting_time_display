@@ -18,9 +18,12 @@ def configured_log_level(value=None):
     return level if isinstance(level, int) else logging.INFO
 
 
-# Create logs directory if it doesn't exist
-logs_dir = os.path.join(os.path.expanduser('~'), 'display_programme/logs')
-os.makedirs(logs_dir, exist_ok=True)
+file_logging_enabled = os.getenv("display_file_logging", "true").lower() == "true"
+logs_dir = os.getenv(
+    "display_log_dir", os.path.join(os.path.expanduser("~"), "display_programme/logs")
+)
+if file_logging_enabled:
+    os.makedirs(logs_dir, exist_ok=True)
 
 # Set up root logger
 logger = logging.getLogger()
@@ -37,12 +40,12 @@ console_handler.setLevel(log_level)
 console_handler.setFormatter(console_formatter)
 logger.addHandler(console_handler)
 
-# Rotating file handler
-file_handler = RotatingFileHandler(
-    os.path.join(logs_dir, 'app.log'),
-    maxBytes=1024 * 1024,  # 1MB
-    backupCount=5
-)
-file_handler.setLevel(log_level)
-file_handler.setFormatter(file_formatter)
-logger.addHandler(file_handler)
+if file_logging_enabled:
+    file_handler = RotatingFileHandler(
+        os.path.join(logs_dir, "app.log"),
+        maxBytes=1024 * 1024,  # 1MB
+        backupCount=5,
+    )
+    file_handler.setLevel(log_level)
+    file_handler.setFormatter(file_formatter)
+    logger.addHandler(file_handler)

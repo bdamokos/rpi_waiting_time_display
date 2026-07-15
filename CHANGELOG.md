@@ -2,7 +2,25 @@
 
 ## [Unreleased](https://github.com/bdamokos/rpi_waiting_time_display/tree/HEAD)
 
-[Full Changelog](https://github.com/bdamokos/rpi_waiting_time_display/compare/v0.2.0...HEAD)
+[Full Changelog](https://github.com/bdamokos/rpi_waiting_time_display/compare/v0.3.0...HEAD)
+
+## [v0.3.0](https://github.com/bdamokos/rpi_waiting_time_display/tree/v0.3.0) (2026-07-15)
+
+[Full Changelog](https://github.com/bdamokos/rpi_waiting_time_display/compare/v0.2.6...v0.3.0)
+
+**Implemented enhancements:**
+
+- Add a hardware-free render server that preserves the existing collection,
+  scheduling, arbitration, rendering, and plugin paths.
+- Add a minimal authenticated e-paper client with one-second polling,
+  freshness/content validation, ETag/sequence semantics, offline retention,
+  and systemd notify/watchdog integration.
+- Add native and hardened container deployment assets, health/readiness APIs,
+  migration and rollback guidance, and private-extension-safe release gates.
+
+**Merged pull requests:**
+
+- Add split render server and display client architecture [#137](https://github.com/bdamokos/rpi_waiting_time_display/pull/137)
 
 ## [v0.2.0](https://github.com/bdamokos/rpi_waiting_time_display/tree/v0.2.0) (2025-01-12)
 

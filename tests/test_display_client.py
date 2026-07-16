@@ -113,6 +113,23 @@ def test_client_validates_displays_and_uses_conditional_request(monkeypatch):
     assert not_modified.closed
 
 
+def test_client_pads_network_frame_to_physical_panel_width():
+    display = FakeDisplay()
+    display.width = 122
+    display.height = 250
+    client = FrameClient(
+        display,
+        url="http://server/api/v1/frame.png",
+        session=FakeSession([frame_response()]),
+        clock=lambda: NOW,
+    )
+
+    assert client.poll_once().status == "displayed"
+    assert display.base[0].size == (122, 250)
+    assert display.base[0].getpixel((0, 0)) == 1
+    assert display.base[0].getpixel((121, 249)) == 1
+
+
 def test_client_rejects_not_modified_before_first_frame():
     response = FakeResponse(
         status=304,

@@ -4,6 +4,7 @@ from display_adapter import DisplayAdapter, MockDisplay, return_display_lock
 from threading import Lock
 from unittest.mock import patch
 import os
+from types import SimpleNamespace
 
 @pytest.fixture
 def mock_display():
@@ -109,3 +110,43 @@ def test_getbuffer_wrapper(mock_display):
     assert buffer is not None
     assert buffer is test_image
     mock_save.assert_called_once_with(test_image)
+
+
+@patch('display_adapter.importlib.import_module')
+def test_partial_wrappers_accept_waveshare_list_buffers(mock_import, monkeypatch):
+    """A Waveshare list buffer must not be passed through getbuffer twice."""
+
+    class FakeEPD:
+        BLACK = 0x00
+        WHITE = 0xFF
+
+        def __init__(self):
+            self.base_images = []
+            self.partial_images = []
+
+        def init(self):
+            return None
+
+        def getbuffer(self, image):
+            assert isinstance(image, Image.Image)
+            return [0xFF]
+
+        def displayPartial(self, image):
+            self.partial_images.append(image)
+
+        def displayPartBaseImage(self, image):
+            self.base_images.append(image)
+
+    monkeypatch.setenv('display_model', 'fake')
+    mock_import.return_value = SimpleNamespace(
+        EPD=FakeEPD,
+        epdconfig=SimpleNamespace(module_exit=lambda cleanup=True: None),
+    )
+
+    display = DisplayAdapter.get_display()
+    buffer = display.getbuffer(Image.new('1', (122, 250), 1))
+    display.displayPartBaseImage(buffer)
+    display.displayPartial(buffer)
+
+    assert display.base_images == [[0xFF]]
+    assert display.partial_images == [[0xFF]]

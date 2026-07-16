@@ -242,7 +242,15 @@ class FrameClient:
                     f"({image.width}x{image.height} > "
                     f"{target_width}x{target_height})"
                 )
-            padded = Image.new("1", (target_width, target_height), 1)
+            bands = image.getbands()
+            white = 1 if image.mode == "1" else (
+                255 if len(bands) == 1 else tuple(255 for _ in bands)
+            )
+            padded = Image.new(
+                image.mode,
+                (target_width, target_height),
+                white,
+            )
             padded.paste(
                 image,
                 (

@@ -293,8 +293,9 @@ class DisplayAdapter:
                         logger.debug("Using native displayPartial mode")
                         # Save debug image before converting to buffer
                         DisplayAdapter.save_debug_image(image)
-                        # If image is already a bytearray, use it directly
-                        if isinstance(image, bytearray):
+                        # Waveshare drivers may return list, bytes, or bytearray
+                        # buffers. Only PIL images still need conversion.
+                        if not isinstance(image, Image.Image):
                             return original_displayPartial(image)
                         # Otherwise convert to buffer
                         return original_displayPartial(epd.getbuffer(image))
@@ -311,8 +312,9 @@ class DisplayAdapter:
                             logger.debug("Using native displayPartBaseImage mode")
                             # Save debug image before converting to buffer
                             DisplayAdapter.save_debug_image(image)
-                            # If image is already a bytearray, use it directly
-                            if isinstance(image, bytearray):
+                            # Waveshare drivers may return list, bytes, or
+                            # bytearray buffers. Only PIL images need conversion.
+                            if not isinstance(image, Image.Image):
                                 return original_displayPartBaseImage(image)
                             # Otherwise convert to buffer
                             return original_displayPartBaseImage(epd.getbuffer(image))

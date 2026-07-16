@@ -23,7 +23,7 @@ RUN mkdir -p /run/rpi-waiting-time-display /app/cache \
     && chown display:display /run/rpi-waiting-time-display /app/cache
 
 LABEL org.opencontainers.image.title="rpi-waiting-time-display render server" \
-      org.opencontainers.image.version="0.3.0" \
+      org.opencontainers.image.version="0.3.1" \
       org.opencontainers.image.source="https://github.com/bdamokos/rpi_waiting_time_display"
 
 USER display

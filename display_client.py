@@ -230,6 +230,35 @@ class FrameClient:
 
     def _display(self, frame: Image.Image) -> None:
         image = frame.rotate(self.rotation, expand=True)
+        target_width = getattr(self.epd, "width", None)
+        target_height = getattr(self.epd, "height", None)
+        if target_width and target_height and image.size != (
+            target_width,
+            target_height,
+        ):
+            if image.width > target_width or image.height > target_height:
+                raise ValueError(
+                    "frame does not fit the hardware buffer "
+                    f"({image.width}x{image.height} > "
+                    f"{target_width}x{target_height})"
+                )
+            bands = image.getbands()
+            white = 1 if image.mode == "1" else (
+                255 if len(bands) == 1 else tuple(255 for _ in bands)
+            )
+            padded = Image.new(
+                image.mode,
+                (target_width, target_height),
+                white,
+            )
+            padded.paste(
+                image,
+                (
+                    (target_width - image.width) // 2,
+                    (target_height - image.height) // 2,
+                ),
+            )
+            image = padded
         with self.display_lock:
             use_base = self.displayed_updates % self.full_refresh_every == 0
             if use_base and self.displayed_updates > 0:

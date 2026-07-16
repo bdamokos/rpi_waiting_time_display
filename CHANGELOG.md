@@ -2,7 +2,18 @@
 
 ## [Unreleased](https://github.com/bdamokos/rpi_waiting_time_display/tree/HEAD)
 
-[Full Changelog](https://github.com/bdamokos/rpi_waiting_time_display/compare/v0.3.0...HEAD)
+[Full Changelog](https://github.com/bdamokos/rpi_waiting_time_display/compare/v0.3.1...HEAD)
+
+## [v0.3.1](https://github.com/bdamokos/rpi_waiting_time_display/tree/v0.3.1) (2026-07-16)
+
+[Full Changelog](https://github.com/bdamokos/rpi_waiting_time_display/compare/v0.3.0...v0.3.1)
+
+**Fixed bugs:**
+
+- Accept list-based Waveshare partial-update buffers without converting them
+  through the driver twice.
+- Pad the validated 250x120 network frame to the physical panel's 122x250
+  hardware buffer after rotation.
 
 ## [v0.3.0](https://github.com/bdamokos/rpi_waiting_time_display/tree/v0.3.0) (2026-07-15)
 

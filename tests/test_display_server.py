@@ -17,7 +17,7 @@ def test_health_readiness_auth_and_conditional_frame(tmp_path, monkeypatch):
 
     health = client.get("/healthz").get_json()
     assert health["sequence"] is None
-    assert health["version"] == "0.3.0"
+    assert health["version"] == "0.3.1"
     assert client.get("/readyz").status_code == 503
     assert client.get("/api/v1/frame.png").status_code == 401
 

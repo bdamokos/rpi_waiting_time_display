@@ -418,6 +418,15 @@ def bounded_env_seconds(
     return min(maximum, max(minimum, float(os.getenv(name, str(default)))))
 
 
+def clock_sync_marker_present(path: str) -> bool:
+    if not path:
+        return True
+    try:
+        return Path(path).exists()
+    except OSError:
+        return False
+
+
 def render_diagnostic_view(view: DiagnosticView) -> Image.Image:
     """Render with Pillow's tiny built-in font; no remote or heavy assets."""
     image = Image.new("1", (250, 120), 1)
@@ -454,8 +463,6 @@ class OutageDiagnosticController:
         self._outage_started: float | None = None
         self._last_success: float | None = None
         self._last_rendered: float | None = None
-        self._last_render_category: str | None = None
-        self._last_render_sync: bool | None = None
         self._last_monotonic: float | None = None
         self._stopped = False
 
@@ -469,8 +476,6 @@ class OutageDiagnosticController:
         self._last_success = now
         self._outage_started = None
         self._last_rendered = None
-        self._last_render_category = None
-        self._last_render_sync = None
 
     def record_failure(self, exc: BaseException) -> bool:
         if self._stopped:
@@ -493,8 +498,6 @@ class OutageDiagnosticController:
         due = (
             self._last_rendered is None
             or now - self._last_rendered >= self.cadence_seconds
-            or category != self._last_render_category
-            or synchronized != self._last_render_sync
         )
         if not due or self._stopped:
             return False
@@ -509,8 +512,6 @@ class OutageDiagnosticController:
             return False
         self.client.display_local_diagnostic(render_diagnostic_view(view))
         self._last_rendered = now
-        self._last_render_category = category
-        self._last_render_sync = synchronized
         return True
 
     def shutdown(self) -> None:
@@ -574,8 +575,7 @@ def main() -> int:
         client,
         threshold_seconds=diagnostic_threshold,
         cadence_seconds=diagnostic_cadence,
-        clock_synchronized=lambda: not clock_sync_path
-        or Path(clock_sync_path).exists(),
+        clock_synchronized=lambda: clock_sync_marker_present(clock_sync_path),
     )
     last_attempt_at = None
     last_success_at = None

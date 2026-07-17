@@ -37,9 +37,10 @@ When the network or server is briefly unavailable, the client keeps the last
 verified pixels. After a bounded local outage threshold it replaces those
 pixels with a tiny locally generated diagnostic containing only local time,
 time since the last success when known, and a stable error category. It never
-displays an HTTP error body or an unverified/stale image. The next verified
-server response restores the verified frame immediately, including a `304`
-for the in-memory last verified frame.
+displays an HTTP error body. Retained last-verified pixels may age in place, but
+the client never accepts or renders a newly arrived response unless it is
+verified and fresh. The next verified server response restores the verified
+frame immediately, including a `304` for the in-memory last verified frame.
 
 ## Security model
 
@@ -117,10 +118,10 @@ display_client_clock_sync_path=/run/systemd/timesync/synchronized
 30 seconds through 24 hours. Shorter failures retain the exact last-good
 pixels. `display_client_diagnostic_cadence` defaults to one minute and is
 bounded to 30 seconds through one hour; the local frame is not regenerated on
-each network poll. An error-category or clock-synchronization state change may
-trigger an immediate update. The diagnostic uses only Pillow's built-in bitmap
-font and local drawing primitives—no assets, browser, server, extra loop, or
-network probe.
+each network poll. Error-category and clock-synchronization changes are
+coalesced until that hard cadence allows the next update. The diagnostic uses
+only Pillow's built-in bitmap font and local drawing primitives—no assets,
+browser, server, extra loop, or network probe.
 
 Threshold and cadence decisions use the monotonic clock, so wall-clock steps
 cannot accelerate the transition. By default the client checks the local

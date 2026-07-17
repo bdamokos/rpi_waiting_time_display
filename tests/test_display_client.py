@@ -18,6 +18,7 @@ from display_client import (
     bounded_env_seconds,
     build_diagnostic_view,
     categorize_poll_error,
+    clock_sync_marker_present,
 )
 
 NOW = datetime(2026, 7, 15, 12, 0, tzinfo=timezone.utc)
@@ -323,7 +324,7 @@ def test_diagnostic_threshold_and_cadence_configuration_are_bounded(monkeypatch)
     assert bounded_env_seconds("missing", 60, minimum=30, maximum=3600) == 60
 
 
-def test_outage_diagnostic_updates_at_low_cadence_or_category_change():
+def test_outage_diagnostic_hard_limits_category_changes_to_low_cadence():
     display = FakeDisplay()
     client = FrameClient(display, url="http://server/frame.png")
     monotonic = MutableClock(0.0)
@@ -345,11 +346,13 @@ def test_outage_diagnostic_updates_at_low_cadence_or_category_change():
     assert diagnostic.record_failure(requests.Timeout())
     assert len(display.base) + len(display.partial) == 2
     monotonic.value = 361.0
+    assert not diagnostic.record_failure(ValueError("frame is stale (301.0s old)"))
+    monotonic.value = 420.0
     assert diagnostic.record_failure(ValueError("frame is stale (301.0s old)"))
     assert len(display.base) + len(display.partial) == 3
 
 
-def test_clock_sync_change_updates_diagnostic_without_waiting_for_cadence():
+def test_clock_sync_change_is_coalesced_until_diagnostic_cadence():
     display = FakeDisplay()
     client = FrameClient(display, url="http://server/frame.png")
     monotonic = MutableClock(0.0)
@@ -368,9 +371,21 @@ def test_clock_sync_change_updates_diagnostic_without_waiting_for_cadence():
     assert diagnostic.record_failure(requests.Timeout())
     synchronized.value = True
     monotonic.value = 301.0
+    assert not diagnostic.record_failure(requests.Timeout())
+    monotonic.value = 360.0
     assert diagnostic.record_failure(requests.Timeout())
 
     assert len(display.base) + len(display.partial) == 2
+
+
+def test_clock_sync_marker_errors_are_safe_and_unsynchronized(monkeypatch):
+    def fail_exists(_path):
+        raise PermissionError("private path details")
+
+    monkeypatch.setattr("display_client.Path.exists", fail_exists)
+
+    assert not clock_sync_marker_present("/run/systemd/timesync/synchronized")
+    assert clock_sync_marker_present("")
 
 
 @pytest.mark.parametrize(

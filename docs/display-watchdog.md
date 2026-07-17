@@ -25,11 +25,16 @@ detector:
   `StartLimitBurst=3`, and `StartLimitAction=none`; service recovery uses
   `Restart=on-failure`, `RestartSec=10`, `TimeoutStartSec=60`, and
   `TimeoutStopSec=30`.
-- Its main loop sends `READY=1` only after hardware initialization and the first
-  successful fresh `200` or `304` frame response.
-- That same main loop sends `WATCHDOG=1` only after each subsequent successful
-  fresh `200` or `304`. A `200` succeeds only after the display update; a `304`
-  preserves the already-verified frame.
+- Its main loop sends `READY=1` after hardware initialization. Fresh-frame
+  readiness remains independently visible in the client health file and
+  secondary auditor rather than blocking service startup through a server
+  outage.
+- That same main loop sends `WATCHDOG=1` after each completed bounded poll,
+  including a safely classified rejection. A `200` succeeds only after the
+  validated display update; a fresh `304` preserves or restores the in-memory
+  verified frame. Rejected data never updates protocol state or reaches the
+  panel; after the configured threshold the client may instead draw its tiny
+  local-only outage diagnostic.
 - No helper or timer sends keepalives. A client thread wedged in rendering,
   lock acquisition, SPI, or I/O therefore cannot be hidden by a healthy helper.
 - Clean shutdown does not clear the e-paper. Whole-host `RuntimeWatchdogSec`,

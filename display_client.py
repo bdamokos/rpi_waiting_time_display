@@ -13,11 +13,12 @@ import tempfile
 import threading
 import time
 from dataclasses import asdict, dataclass
+from datetime import datetime
 from pathlib import Path
 
 import dotenv
 import requests
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 from display_adapter import initialize_display, return_display_lock
 from display_protocol import MAX_FRAME_BYTES, parse_utc, utc_now, validate_frame_bytes
@@ -30,6 +31,15 @@ class PollResult:
     status: str
     sequence: int | None = None
     frame_source_created_at: str | None = None
+
+
+@dataclass(frozen=True)
+class DiagnosticView:
+    """Sanitized local-only content for a prolonged render-server outage."""
+
+    category: str
+    clock_synchronized: bool
+    lines: tuple[str, ...]
 
 
 class SystemdNotifier:
@@ -139,6 +149,9 @@ class FrameClient:
             1, int(os.getenv("display_client_full_refresh_every", "40"))
         )
         self.displayed_updates = 0
+        self._has_displayed_anything = False
+        self.last_verified_frame: Image.Image | None = None
+        self.diagnostic_displayed = False
         self.display_lock = return_display_lock()
 
     def _headers(self) -> dict[str, str]:
@@ -165,9 +178,16 @@ class FrameClient:
                     raise ValueError("not-modified response omitted frame timestamp")
                 self._validate_freshness(created_at)
                 self.last_frame_created_at = created_at
-                return PollResult(
-                    "not-modified", self.last_sequence or None, created_at
-                )
+                status = "not-modified"
+                if self.diagnostic_displayed:
+                    if self.last_verified_frame is None:
+                        raise ValueError(
+                            "not-modified response cannot restore a verified frame"
+                        )
+                    self._display(self.last_verified_frame)
+                    self.diagnostic_displayed = False
+                    status = "restored"
+                return PollResult(status, self.last_sequence or None, created_at)
             response.raise_for_status()
             content_type = response.headers.get("Content-Type", "").split(";", 1)[0]
             if content_type != "image/png":
@@ -200,6 +220,8 @@ class FrameClient:
                 raise ValueError("frame digest does not match response")
             frame = validate_frame_bytes(content)
             self._display(frame)
+            self.last_verified_frame = frame.copy()
+            self.diagnostic_displayed = False
             self.last_sequence = sequence
             self.etag = response.headers.get("ETag")
             self.last_frame_created_at = created_at
@@ -228,13 +250,23 @@ class FrameClient:
         if age > self.max_frame_age_seconds:
             raise ValueError(f"frame is stale ({age:.1f}s old)")
 
-    def _display(self, frame: Image.Image) -> None:
+    def display_local_diagnostic(self, frame: Image.Image) -> None:
+        """Display a locally generated frame without changing protocol state."""
+        self._display(frame, count_server_update=False)
+        self.diagnostic_displayed = True
+
+    def _display(self, frame: Image.Image, *, count_server_update: bool = True) -> None:
         image = frame.rotate(self.rotation, expand=True)
         target_width = getattr(self.epd, "width", None)
         target_height = getattr(self.epd, "height", None)
-        if target_width and target_height and image.size != (
-            target_width,
-            target_height,
+        if (
+            target_width
+            and target_height
+            and image.size
+            != (
+                target_width,
+                target_height,
+            )
         ):
             if image.width > target_width or image.height > target_height:
                 raise ValueError(
@@ -243,8 +275,10 @@ class FrameClient:
                     f"{target_width}x{target_height})"
                 )
             bands = image.getbands()
-            white = 1 if image.mode == "1" else (
-                255 if len(bands) == 1 else tuple(255 for _ in bands)
+            white = (
+                1
+                if image.mode == "1"
+                else (255 if len(bands) == 1 else tuple(255 for _ in bands))
             )
             padded = Image.new(
                 image.mode,
@@ -260,8 +294,11 @@ class FrameClient:
             )
             image = padded
         with self.display_lock:
-            use_base = self.displayed_updates % self.full_refresh_every == 0
-            if use_base and self.displayed_updates > 0:
+            use_base = not self._has_displayed_anything or (
+                count_server_update
+                and self.displayed_updates % self.full_refresh_every == 0
+            )
+            if use_base and self._has_displayed_anything:
                 self.epd.init()
                 self.epd.Clear()
                 self.epd.init_Fast()
@@ -273,7 +310,211 @@ class FrameClient:
                     self.epd.displayPartial(buffer)
             else:
                 self.epd.display(buffer)
-            self.displayed_updates += 1
+            self._has_displayed_anything = True
+            if count_server_update:
+                self.displayed_updates += 1
+
+
+def categorize_poll_error(exc: BaseException) -> str:
+    """Return a short stable category without leaking request details."""
+    if isinstance(exc, requests.Timeout):
+        return "timeout"
+    if isinstance(exc, requests.HTTPError):
+        status = getattr(getattr(exc, "response", None), "status_code", None)
+        if status in (401, 403):
+            return "auth"
+        if status in (408, 504):
+            return "timeout"
+        return "server"
+    if isinstance(exc, requests.ConnectionError):
+        if _exception_contains(exc, socket.gaierror):
+            return "dns"
+        return "connection"
+
+    message = str(exc).lower()
+    if "too far in the future" in message or "future timestamp" in message:
+        return "future-timestamp"
+    if "stale" in message:
+        return "stale"
+    if "401" in message or "403" in message:
+        return "auth"
+    return "protocol"
+
+
+def _exception_contains(exc: BaseException, target: type[BaseException]) -> bool:
+    pending = [exc]
+    seen = set()
+    while pending:
+        current = pending.pop()
+        if id(current) in seen:
+            continue
+        seen.add(id(current))
+        if isinstance(current, target):
+            return True
+        for linked in (current.__cause__, current.__context__, *current.args):
+            if isinstance(linked, BaseException):
+                pending.append(linked)
+    return False
+
+
+def build_diagnostic_view(
+    category: str,
+    *,
+    local_now: datetime,
+    seconds_since_success: float | None,
+    clock_synchronized: bool,
+) -> DiagnosticView:
+    safe_category = (
+        category
+        if category
+        in {
+            "auth",
+            "connection",
+            "dns",
+            "future-timestamp",
+            "protocol",
+            "server",
+            "stale",
+            "timeout",
+        }
+        else "protocol"
+    )
+    if clock_synchronized:
+        time_line = f"Local: {local_now.strftime('%Y-%m-%d %H:%M %Z')}"
+    else:
+        time_line = "Local time: not synchronized"
+    if seconds_since_success is None:
+        last_frame_line = "Last frame: not seen this boot"
+    else:
+        last_frame_line = f"Last frame: {_format_elapsed(seconds_since_success)} ago"
+    return DiagnosticView(
+        category=safe_category,
+        clock_synchronized=clock_synchronized,
+        lines=(
+            "RENDER SERVER UNAVAILABLE",
+            time_line,
+            last_frame_line,
+            f"Error: {safe_category}",
+        ),
+    )
+
+
+def _format_elapsed(seconds: float) -> str:
+    total_minutes = max(0, int(seconds)) // 60
+    if total_minutes < 1:
+        return "less than 1m"
+    if total_minutes < 60:
+        return f"{total_minutes}m"
+    hours, minutes = divmod(total_minutes, 60)
+    if hours < 24:
+        return f"{hours}h {minutes}m" if minutes else f"{hours}h"
+    days, hours = divmod(hours, 24)
+    return f"{days}d {hours}h" if hours else f"{days}d"
+
+
+def bounded_env_seconds(
+    name: str, default: float, *, minimum: float, maximum: float
+) -> float:
+    return min(maximum, max(minimum, float(os.getenv(name, str(default)))))
+
+
+def render_diagnostic_view(view: DiagnosticView) -> Image.Image:
+    """Render with Pillow's tiny built-in font; no remote or heavy assets."""
+    image = Image.new("1", (250, 120), 1)
+    draw = ImageDraw.Draw(image)
+    font = ImageFont.load_default()
+    draw.rectangle((0, 0, 249, 22), fill=0)
+    draw.text((6, 6), view.lines[0], font=font, fill=1)
+    for y, line in zip((34, 55, 76), view.lines[1:]):
+        draw.text((6, y), line, font=font, fill=0)
+    draw.line((6, 99, 243, 99), fill=0)
+    draw.text((6, 104), "Retrying verified frames", font=font, fill=0)
+    return image
+
+
+class OutageDiagnosticController:
+    """Monotonic, low-cadence policy for prolonged local fallback."""
+
+    def __init__(
+        self,
+        client: FrameClient,
+        *,
+        threshold_seconds: float = 300,
+        cadence_seconds: float = 60,
+        monotonic_clock=time.monotonic,
+        local_clock=lambda: datetime.now().astimezone(),
+        clock_synchronized=lambda: True,
+    ) -> None:
+        self.client = client
+        self.threshold_seconds = max(0.0, threshold_seconds)
+        self.cadence_seconds = max(0.0, cadence_seconds)
+        self.monotonic_clock = monotonic_clock
+        self.local_clock = local_clock
+        self.clock_synchronized = clock_synchronized
+        self._outage_started: float | None = None
+        self._last_success: float | None = None
+        self._last_rendered: float | None = None
+        self._last_render_category: str | None = None
+        self._last_render_sync: bool | None = None
+        self._last_monotonic: float | None = None
+        self._stopped = False
+
+    @property
+    def diagnostic_active(self) -> bool:
+        return self.client.diagnostic_displayed
+
+    def record_success(self) -> None:
+        now = self.monotonic_clock()
+        self._last_monotonic = now
+        self._last_success = now
+        self._outage_started = None
+        self._last_rendered = None
+        self._last_render_category = None
+        self._last_render_sync = None
+
+    def record_failure(self, exc: BaseException) -> bool:
+        if self._stopped:
+            return False
+        now = self.monotonic_clock()
+        if self._last_monotonic is not None and now < self._last_monotonic:
+            # Treat a monotonic rollback like a new boot. Never accelerate the
+            # fallback because either wall or monotonic time moved abruptly.
+            self._outage_started = now
+            self._last_success = None
+            self._last_rendered = None
+        self._last_monotonic = now
+        if self._outage_started is None:
+            self._outage_started = now
+        if now - self._outage_started < self.threshold_seconds:
+            return False
+
+        category = categorize_poll_error(exc)
+        synchronized = bool(self.clock_synchronized())
+        due = (
+            self._last_rendered is None
+            or now - self._last_rendered >= self.cadence_seconds
+            or category != self._last_render_category
+            or synchronized != self._last_render_sync
+        )
+        if not due or self._stopped:
+            return False
+        elapsed = None if self._last_success is None else now - self._last_success
+        view = build_diagnostic_view(
+            category,
+            local_now=self.local_clock(),
+            seconds_since_success=elapsed,
+            clock_synchronized=synchronized,
+        )
+        if self._stopped:
+            return False
+        self.client.display_local_diagnostic(render_diagnostic_view(view))
+        self._last_rendered = now
+        self._last_render_category = category
+        self._last_render_sync = synchronized
+        return True
+
+    def shutdown(self) -> None:
+        self._stopped = True
 
 
 def client_display_cleanup(epd) -> None:
@@ -313,6 +554,29 @@ def main() -> int:
             "/run/rpi-waiting-time-display/client-health.json",
         )
     )
+    diagnostic_threshold = bounded_env_seconds(
+        "display_client_diagnostic_after",
+        300,
+        minimum=30,
+        maximum=86400,
+    )
+    diagnostic_cadence = bounded_env_seconds(
+        "display_client_diagnostic_cadence",
+        60,
+        minimum=30,
+        maximum=3600,
+    )
+    clock_sync_path = os.getenv(
+        "display_client_clock_sync_path",
+        "/run/systemd/timesync/synchronized",
+    )
+    outage_diagnostic = OutageDiagnosticController(
+        client,
+        threshold_seconds=diagnostic_threshold,
+        cadence_seconds=diagnostic_cadence,
+        clock_synchronized=lambda: not clock_sync_path
+        or Path(clock_sync_path).exists(),
+    )
     last_attempt_at = None
     last_success_at = None
     last_error_at = None
@@ -320,12 +584,15 @@ def main() -> int:
     shutdown_event = threading.Event()
 
     def stop(_signum=None, _frame=None):
+        outage_diagnostic.shutdown()
         shutdown_event.set()
 
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
-    notifier.notify("STATUS=Display initialized; waiting for a fresh frame")
-    ready_sent = False
+    notifier.notify(
+        "READY=1",
+        "STATUS=Display initialized; waiting for a fresh frame",
+    )
     try:
         while not shutdown_event.is_set():
             started = time.monotonic()
@@ -333,26 +600,36 @@ def main() -> int:
             try:
                 result = client.poll_once()
                 logger.debug("Frame poll result: %s", result.status)
+                outage_diagnostic.record_success()
                 last_success_at = utc_now().isoformat()
                 last_error = None
-                notifications = [
+                notifier.notify(
                     "WATCHDOG=1",
                     f"STATUS=Fresh frame sequence {result.sequence} ({result.status})",
-                ]
-                if not ready_sent:
-                    notifications.insert(0, "READY=1")
-                    ready_sent = True
-                notifier.notify(*notifications)
+                )
                 state = "healthy"
             except (requests.RequestException, ValueError, KeyError) as exc:
-                # Offline/stale policy: keep the last verified pixels. Never
-                # replace them with an error page, partial response, or old PNG.
+                if shutdown_event.is_set():
+                    break
+                category = categorize_poll_error(exc)
+                diagnostic_updated = outage_diagnostic.record_failure(exc)
                 logger.warning(
-                    "Frame poll rejected; retaining last good display: %s", exc
+                    "Frame poll rejected; retaining safe display (category=%s)",
+                    category,
                 )
                 last_error_at = utc_now().isoformat()
-                last_error = str(exc)
-                notifier.notify(f"STATUS=Frame poll failed: {exc}")
+                last_error = category
+                fallback = (
+                    "local diagnostic active"
+                    if outage_diagnostic.diagnostic_active
+                    else "retaining last verified pixels"
+                )
+                notifier.notify(
+                    "WATCHDOG=1",
+                    f"STATUS=Frame poll failed ({category}); {fallback}",
+                )
+                if diagnostic_updated:
+                    logger.info("Updated local outage diagnostic (%s)", category)
                 state = "degraded"
             health_reporter.write(
                 ClientHealth(

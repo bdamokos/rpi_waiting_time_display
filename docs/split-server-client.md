@@ -33,8 +33,14 @@ replacements succeed. The client rejects wrong content types, invalid or
 oversized PNGs, non-`250x120` dimensions, digest/length mismatches, stale or
 future timestamps, and backward sequences without a newer server epoch.
 
-When the network or server is unavailable, the client keeps the last verified
-pixels. It never displays an HTTP error body or an unverified/stale image.
+When the network or server is briefly unavailable, the client keeps the last
+verified pixels. After a bounded local outage threshold it replaces those
+pixels with a tiny locally generated diagnostic containing only local time,
+time since the last success when known, and a stable error category. It never
+displays an HTTP error body. Retained last-verified pixels may age in place, but
+the client never accepts or renders a newly arrived response unless it is
+verified and fresh. The next verified server response restores the verified
+frame immediately, including a `304` for the in-memory last verified frame.
 
 ## Security model
 
@@ -103,7 +109,30 @@ display_client_poll_interval=1
 display_client_timeout=5
 display_client_max_frame_age=300
 display_client_full_refresh_every=40
+display_client_diagnostic_after=300
+display_client_diagnostic_cadence=60
+display_client_clock_sync_path=/run/systemd/timesync/synchronized
 ```
+
+`display_client_diagnostic_after` defaults to five minutes and is bounded to
+30 seconds through 24 hours. Shorter failures retain the exact last-good
+pixels. `display_client_diagnostic_cadence` defaults to one minute and is
+bounded to 30 seconds through one hour; the local frame is not regenerated on
+each network poll. Error-category and clock-synchronization changes are
+coalesced until that hard cadence allows the next update. The diagnostic uses
+only Pillow's built-in bitmap font and local drawing primitives—no assets,
+browser, server, extra loop, or network probe.
+
+Threshold and cadence decisions use the monotonic clock, so wall-clock steps
+cannot accelerate the transition. By default the client checks the local
+systemd-timesyncd marker at
+`/run/systemd/timesync/synchronized`. While that marker is absent, the screen
+says `Local time: not synchronized` instead of presenting a potentially false
+time. Set `display_client_clock_sync_path` to the marker used by the host's
+time-sync startup gate, or leave it blank only when that external gate
+guarantees synchronization before client startup. Future/stale timestamp
+validation remains active either way; the marker does not bypass any frame
+check.
 
 Then stage and activate during an approved deployment window:
 
@@ -120,11 +149,14 @@ systemctl status display-client.service
 client from being restarted indefinitely: after three failed starts or
 watchdog terminations in six hours, systemd leaves the client stopped without
 escalating to a host action. The main poll loop sends `READY=1` after hardware
-initialization and its first successful fresh frame result, then sends
-`WATCHDOG=1` only after each successful, fresh `200` or `304` result. A
-separate helper cannot mask a wedged loop. Systemd may restart this client
-service after a watchdog failure; this project does not configure a whole-host
-hardware watchdog, reboot, or power cycle.
+initialization and services `WATCHDOG=1` after every completed bounded poll,
+including a safely classified rejection. This distinguishes client-loop health
+from render-server health: rejected data still cannot alter protocol state or
+be displayed, while a server outage no longer creates a client restart loop.
+A wedged request or display write still misses the watchdog because there is no
+separate helper thread to mask it. Systemd may restart this client service
+after a watchdog failure; this project does not configure a whole-host hardware
+watchdog, reboot, or power cycle.
 
 The client uses partial updates and establishes a base image on its first
 frame. It performs a hardware full/base refresh every
@@ -137,6 +169,8 @@ changes to `/run/rpi-waiting-time-display/client-health.json` (tmpfs). Schema
 version 1 fields are: `role`, `boot_id`, `pid`, `state`, `sequence`, `etag`,
 `last_attempt_at`, `last_success_at`, `last_error_at`, `error`,
 `frame_source_created_at`, `server_generated_at`, and `server_received_at`.
+On failures, `error` is the same sanitized stable category used by the local
+diagnostic rather than a URL-bearing exception string.
 Set `display_client_health_path=` to disable this secondary file.
 An external auditor may read this file and systemd state for diagnostics, but
 for a notify-guarded client it must remain observation-only. The service's

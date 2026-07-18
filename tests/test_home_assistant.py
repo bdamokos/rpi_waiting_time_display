@@ -8,7 +8,7 @@ from home_assistant_display import (
     light_page,
     resolve_entity_state,
 )
-from home_assistant_models import parse_config
+from home_assistant_models import TriggerConfig, parse_config
 from home_assistant_plugin import HomeAssistantPlugin
 from home_assistant_service import EntityState, HomeAssistantService
 from plugins import PluginContext
@@ -175,6 +175,162 @@ def test_plugin_rotates_and_motion_transition_takes_over(monkeypatch):
     assert plugin.tick(0)
     assert context.arbiter.active_owner() == "ha-event:pair"
     assert renders == ["pair", "pair"]
+
+
+def test_motion_can_require_continuous_activity_before_takeover():
+    service = FakeService()
+    service.states = {
+        "sensor.left": state("sensor.left", "10"),
+        "sensor.right": state("sensor.right", "20"),
+        "binary_sensor.motion": state("binary_sensor.motion", "off"),
+    }
+    config_data = {
+        "screens": [
+            {
+                "id": "pair",
+                "entities": [{"entity_id": "sensor.left"}],
+            }
+        ],
+        "triggers": [
+            {
+                "entity_id": "binary_sensor.motion",
+                "screen_id": "pair",
+                "active_for_seconds": 30,
+                "duration_seconds": 8,
+                "priority": 12,
+            }
+        ],
+    }
+    config = parse_config(config_data)
+    context = PluginContext(MockDisplay(), ScreenArbiter(lambda: 0), threading.Lock())
+    plugin = HomeAssistantPlugin(
+        context, config=config, service=service, clock=lambda: 0
+    )
+
+    service.states["binary_sensor.motion"] = state("binary_sensor.motion", "on")
+    service.listener(
+        "binary_sensor.motion",
+        state("binary_sensor.motion", "off"),
+        state("binary_sensor.motion", "on"),
+    )
+
+    plugin.tick(29.9)
+    assert context.arbiter.active_owner() != "ha-event:pair"
+    plugin.tick(30)
+    assert context.arbiter.claim_for("ha-event:pair").priority == 12
+
+
+def test_continuous_activity_takeover_is_cancelled_when_sensor_clears():
+    service = FakeService()
+    service.states = {
+        "sensor.left": state("sensor.left", "10"),
+        "binary_sensor.motion": state("binary_sensor.motion", "off"),
+    }
+    config = parse_config(
+        {
+            "screens": [{"id": "pair", "entities": [{"entity_id": "sensor.left"}]}],
+            "triggers": [
+                {
+                    "entity_id": "binary_sensor.motion",
+                    "screen_id": "pair",
+                    "active_for_seconds": 30,
+                }
+            ],
+        }
+    )
+    context = PluginContext(MockDisplay(), ScreenArbiter(lambda: 0), threading.Lock())
+    plugin = HomeAssistantPlugin(
+        context, config=config, service=service, clock=lambda: 0
+    )
+
+    service.states["binary_sensor.motion"] = state("binary_sensor.motion", "on")
+    service.listener(
+        "binary_sensor.motion",
+        state("binary_sensor.motion", "off"),
+        state("binary_sensor.motion", "on"),
+    )
+    service.states["binary_sensor.motion"] = state("binary_sensor.motion", "off")
+    service.listener(
+        "binary_sensor.motion",
+        state("binary_sensor.motion", "on"),
+        state("binary_sensor.motion", "off"),
+    )
+
+    plugin.tick(30)
+    assert context.arbiter.claim_for("ha-event:pair") is None
+
+
+def test_stopping_plugin_cancels_pending_continuous_activity_takeover():
+    service = FakeService()
+    service.states = {
+        "sensor.left": state("sensor.left", "10"),
+        "binary_sensor.motion": state("binary_sensor.motion", "on"),
+    }
+    config = parse_config(
+        {
+            "screens": [{"id": "pair", "entities": [{"entity_id": "sensor.left"}]}],
+            "triggers": [
+                {
+                    "entity_id": "binary_sensor.motion",
+                    "screen_id": "pair",
+                    "active_for_seconds": 30,
+                }
+            ],
+        }
+    )
+    context = PluginContext(MockDisplay(), ScreenArbiter(lambda: 0), threading.Lock())
+    plugin = HomeAssistantPlugin(
+        context, config=config, service=service, clock=lambda: 0
+    )
+
+    service.listener(
+        "binary_sensor.motion",
+        state("binary_sensor.motion", "off"),
+        state("binary_sensor.motion", "on"),
+    )
+    plugin.stop()
+    service.listener(
+        "binary_sensor.motion",
+        state("binary_sensor.motion", "off"),
+        state("binary_sensor.motion", "on"),
+    )
+    plugin.tick(30)
+
+    assert context.arbiter.claim_for("ha-event:pair") is None
+
+
+def test_trigger_active_for_seconds_defaults_to_immediate_and_is_non_negative():
+    assert sample_config().triggers[0].active_for_seconds == 0
+
+    config = parse_config(
+        {
+            "screens": [{"id": "pair", "entities": [{"entity_id": "sensor.left"}]}],
+            "triggers": [
+                {
+                    "entity_id": "binary_sensor.motion",
+                    "screen_id": "pair",
+                    "active_for_seconds": -5,
+                }
+            ],
+        }
+    )
+    assert config.triggers[0].active_for_seconds == 0
+
+
+def test_trigger_config_preserves_existing_positional_argument_order():
+    trigger = TriggerConfig(
+        "binary_sensor.motion",
+        "pair",
+        ("on",),
+        12,
+        45,
+        70,
+    )
+
+    assert trigger.debounce_seconds == 12
+    assert trigger.duration_seconds == 45
+    assert trigger.priority == 70
+    assert trigger.active_for_seconds == 0
 
 
 def test_grouped_binary_entity_is_active_when_either_or_both_members_are_active():

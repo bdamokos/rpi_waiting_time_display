@@ -63,6 +63,7 @@ class HomeAssistantPlugin:
         self._last_key = None
         self._takeover = None
         self._last_trigger = {}
+        self._pending_triggers = {}
         self._state_lock = threading.RLock()
         service.add_listener(self._state_changed)
 
@@ -118,6 +119,8 @@ class HomeAssistantPlugin:
             self._thread.join(timeout=max(2, self.poll_seconds * 2))
             if not self._thread.is_alive():
                 self._thread = None
+        with self._state_lock:
+            self._pending_triggers.clear()
         for capability in self.override_capabilities:
             self.context.arbiter.release(capability.owner)
 
@@ -140,6 +143,7 @@ class HomeAssistantPlugin:
     def tick(self, now=None):
         now = self.clock() if now is None else now
         states = self.service.snapshot()
+        self._activate_ready_triggers(states, now)
         with self._state_lock:
             takeover = self._takeover
         if takeover and now < takeover[1]:
@@ -224,6 +228,37 @@ class HomeAssistantPlugin:
             self.context.on_render(owner)
         return True
 
+    def _activate_ready_triggers(self, states, now):
+        with self._state_lock:
+            pending = tuple(self._pending_triggers.items())
+        for trigger, active_since in pending:
+            current = states.get(trigger.entity_id)
+            current_state = str(current.state).lower() if current else ""
+            if current_state not in trigger.active_states:
+                with self._state_lock:
+                    self._pending_triggers.pop(trigger, None)
+                continue
+            if now - active_since < trigger.active_for_seconds:
+                continue
+            with self._state_lock:
+                if self._pending_triggers.pop(trigger, None) is None:
+                    continue
+                self._activate_trigger(trigger, now)
+
+    def _activate_trigger(self, trigger, now):
+        screen = next(
+            screen
+            for screen in self.config.screens
+            if screen.screen_id == trigger.screen_id
+        )
+        self._last_trigger[trigger.entity_id] = now
+        self._takeover = (
+            screen,
+            now + trigger.duration_seconds,
+            trigger.priority,
+        )
+        self._last_key = None
+
     def _state_changed(self, entity_id, previous, current):
         now = self.clock()
         for trigger in self.config.triggers:
@@ -231,24 +266,19 @@ class HomeAssistantPlugin:
                 continue
             before = str(previous.state).lower() if previous else ""
             after = str(current.state).lower() if current else ""
-            active = set(trigger.active_states)
-            if before in active or after not in active:
+            if after not in trigger.active_states:
+                with self._state_lock:
+                    self._pending_triggers.pop(trigger, None)
                 continue
-            if (
-                now - self._last_trigger.get(entity_id, float("-inf"))
-                < trigger.debounce_seconds
-            ):
+            if before in trigger.active_states:
                 continue
-            screen = next(
-                screen
-                for screen in self.config.screens
-                if screen.screen_id == trigger.screen_id
-            )
             with self._state_lock:
-                self._last_trigger[entity_id] = now
-                self._takeover = (
-                    screen,
-                    now + trigger.duration_seconds,
-                    trigger.priority,
-                )
-                self._last_key = None
+                if self._stop.is_set():
+                    return
+                last_trigger_time = self._last_trigger.get(entity_id, float("-inf"))
+                if now - last_trigger_time < trigger.debounce_seconds:
+                    continue
+                if trigger.active_for_seconds > 0:
+                    self._pending_triggers[trigger] = now
+                else:
+                    self._activate_trigger(trigger, now)

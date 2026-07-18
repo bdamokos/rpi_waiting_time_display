@@ -35,6 +35,7 @@ class TriggerConfig:
     debounce_seconds: float = 10.0
     duration_seconds: float = 30.0
     priority: int = 65
+    active_for_seconds: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -92,17 +93,18 @@ def parse_config(data) -> HomeAssistantConfig:
         raise ValueError("duplicate Home Assistant screen id")
     triggers = tuple(
         TriggerConfig(
-            str(item["entity_id"]),
-            str(item["screen_id"]),
-            tuple(
+            entity_id=str(item["entity_id"]),
+            screen_id=str(item["screen_id"]),
+            active_states=tuple(
                 str(value).lower()
                 for value in item.get(
                     "active_states", ("on", "active", "detected", "true")
                 )
             ),
-            float(item.get("debounce_seconds", 10)),
-            float(item.get("duration_seconds", 30)),
-            int(item.get("priority", 65)),
+            debounce_seconds=float(item.get("debounce_seconds", 10)),
+            duration_seconds=float(item.get("duration_seconds", 30)),
+            priority=int(item.get("priority", 65)),
+            active_for_seconds=max(0.0, float(item.get("active_for_seconds", 0))),
         )
         for item in data.get("triggers", [])
     )

@@ -273,10 +273,11 @@ class HomeAssistantPlugin:
             if before in trigger.active_states:
                 continue
             with self._state_lock:
+                if self._stop.is_set():
+                    return
                 last_trigger_time = self._last_trigger.get(entity_id, float("-inf"))
-            if now - last_trigger_time < trigger.debounce_seconds:
-                continue
-            with self._state_lock:
+                if now - last_trigger_time < trigger.debounce_seconds:
+                    continue
                 if trigger.active_for_seconds > 0:
                     self._pending_triggers[trigger] = now
                 else:

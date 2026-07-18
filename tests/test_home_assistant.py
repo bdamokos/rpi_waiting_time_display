@@ -8,7 +8,7 @@ from home_assistant_display import (
     light_page,
     resolve_entity_state,
 )
-from home_assistant_models import parse_config
+from home_assistant_models import TriggerConfig, parse_config
 from home_assistant_plugin import HomeAssistantPlugin
 from home_assistant_service import EntityState, HomeAssistantService
 from plugins import PluginContext
@@ -289,6 +289,11 @@ def test_stopping_plugin_cancels_pending_continuous_activity_takeover():
         state("binary_sensor.motion", "on"),
     )
     plugin.stop()
+    service.listener(
+        "binary_sensor.motion",
+        state("binary_sensor.motion", "off"),
+        state("binary_sensor.motion", "on"),
+    )
     plugin.tick(30)
 
     assert context.arbiter.claim_for("ha-event:pair") is None
@@ -310,6 +315,22 @@ def test_trigger_active_for_seconds_defaults_to_immediate_and_is_non_negative():
         }
     )
     assert config.triggers[0].active_for_seconds == 0
+
+
+def test_trigger_config_preserves_existing_positional_argument_order():
+    trigger = TriggerConfig(
+        "binary_sensor.motion",
+        "pair",
+        ("on",),
+        12,
+        45,
+        70,
+    )
+
+    assert trigger.debounce_seconds == 12
+    assert trigger.duration_seconds == 45
+    assert trigger.priority == 70
+    assert trigger.active_for_seconds == 0
 
 
 def test_grouped_binary_entity_is_active_when_either_or_both_members_are_active():

@@ -17,7 +17,7 @@ Set `active_for_seconds` on an individual trigger to require continuous motion
 or presence before it claims the screen. The default is `0`, preserving the
 immediate behavior. For example, `"active_for_seconds": 30` ignores brief
 walk-bys but still shows the configured card after 30 seconds of continuous
-activity. `debounce_seconds` remains the cooldown between completed claims.
+activity. `debounce_seconds` remains the cooldown between trigger activations.
 
 An entity row may use `entity_ids` instead of `entity_id` to group binary
 sensors. The row is active when any available member is active and clear only

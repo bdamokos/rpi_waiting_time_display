@@ -4,6 +4,11 @@
 
 [Full Changelog](https://github.com/bdamokos/rpi_waiting_time_display/compare/v0.3.1...HEAD)
 
+**Implemented enhancements:**
+
+- Allow individual Home Assistant triggers to require continuous activity
+  before claiming the display.
+
 ## [v0.3.1](https://github.com/bdamokos/rpi_waiting_time_display/tree/v0.3.1) (2026-07-16)
 
 [Full Changelog](https://github.com/bdamokos/rpi_waiting_time_display/compare/v0.3.0...v0.3.1)

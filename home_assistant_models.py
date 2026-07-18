@@ -33,6 +33,7 @@ class TriggerConfig:
     screen_id: str
     active_states: Tuple[str, ...] = ("on", "active", "detected", "true")
     debounce_seconds: float = 10.0
+    active_for_seconds: float = 0.0
     duration_seconds: float = 30.0
     priority: int = 65
 
@@ -101,6 +102,7 @@ def parse_config(data) -> HomeAssistantConfig:
                 )
             ),
             float(item.get("debounce_seconds", 10)),
+            max(0.0, float(item.get("active_for_seconds", 0))),
             float(item.get("duration_seconds", 30)),
             int(item.get("priority", 65)),
         )

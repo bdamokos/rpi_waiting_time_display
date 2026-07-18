@@ -234,7 +234,7 @@ class HomeAssistantPlugin:
         for trigger, active_since in pending:
             current = states.get(trigger.entity_id)
             current_state = str(current.state).lower() if current else ""
-            if current_state not in set(trigger.active_states):
+            if current_state not in trigger.active_states:
                 with self._state_lock:
                     self._pending_triggers.pop(trigger, None)
                 continue
@@ -266,17 +266,15 @@ class HomeAssistantPlugin:
                 continue
             before = str(previous.state).lower() if previous else ""
             after = str(current.state).lower() if current else ""
-            active = set(trigger.active_states)
-            if after not in active:
+            if after not in trigger.active_states:
                 with self._state_lock:
                     self._pending_triggers.pop(trigger, None)
                 continue
-            if before in active:
+            if before in trigger.active_states:
                 continue
-            if (
-                now - self._last_trigger.get(entity_id, float("-inf"))
-                < trigger.debounce_seconds
-            ):
+            with self._state_lock:
+                last_trigger_time = self._last_trigger.get(entity_id, float("-inf"))
+            if now - last_trigger_time < trigger.debounce_seconds:
                 continue
             with self._state_lock:
                 if trigger.active_for_seconds > 0:

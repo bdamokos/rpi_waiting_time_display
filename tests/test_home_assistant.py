@@ -177,7 +177,7 @@ def test_plugin_rotates_and_motion_transition_takes_over(monkeypatch):
     assert renders == ["pair", "pair"]
 
 
-def test_motion_can_require_continuous_activity_before_takeover(monkeypatch):
+def test_motion_can_require_continuous_activity_before_takeover():
     service = FakeService()
     service.states = {
         "sensor.left": state("sensor.left", "10"),

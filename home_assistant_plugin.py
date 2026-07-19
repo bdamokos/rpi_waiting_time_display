@@ -70,7 +70,7 @@ class HomeAssistantPlugin:
         self._screen_started = None
         self._next_cycle = 0.0
         self._last_key = None
-        self._takeover = None
+        self._takeovers = {}
         self._last_trigger = {}
         self._pending_triggers = {}
         self._delayed_triggers = {}
@@ -132,7 +132,7 @@ class HomeAssistantPlugin:
         with self._state_lock:
             self._pending_triggers.clear()
             self._delayed_triggers.clear()
-            self._takeover = None
+            self._takeovers.clear()
         for capability in self.override_capabilities:
             self.context.arbiter.release(capability.owner)
 
@@ -158,29 +158,36 @@ class HomeAssistantPlugin:
         self._activate_ready_triggers(states, now)
         self._activate_delayed_triggers(now)
         with self._state_lock:
-            takeover = self._takeover
-        if takeover:
+            takeovers = tuple(self._takeovers.values())
+        for takeover in takeovers:
             if (
                 takeover.started_at is not None
                 and now >= takeover.started_at + takeover.duration_seconds
             ):
                 self.context.arbiter.release(f"ha-event:{takeover.screen.screen_id}")
                 with self._state_lock:
-                    if self._takeover is takeover:
-                        self._takeover = None
-            else:
+                    if self._takeovers.get(takeover.screen.screen_id) is takeover:
+                        self._takeovers.pop(takeover.screen.screen_id, None)
+        with self._state_lock:
+            takeovers = tuple(self._takeovers.values())
+        if takeovers:
+            rendered_any = False
+            for takeover in takeovers:
                 ttl = (
                     takeover.duration_seconds
                     if takeover.started_at is None
                     else takeover.started_at + takeover.duration_seconds - now
                 )
-                rendered = self._render(
-                    takeover.screen,
-                    states,
-                    now,
-                    takeover.priority,
-                    ttl,
-                    event=True,
+                rendered_any = (
+                    self._render(
+                        takeover.screen,
+                        states,
+                        now,
+                        takeover.priority,
+                        ttl,
+                        event=True,
+                    )
+                    or rendered_any
                 )
                 owner = f"ha-event:{takeover.screen.screen_id}"
                 if (
@@ -188,9 +195,11 @@ class HomeAssistantPlugin:
                     and self.context.arbiter.active_owner() == owner
                 ):
                     with self._state_lock:
-                        if self._takeover is takeover:
-                            self._takeover = replace(takeover, started_at=now)
-                return rendered
+                        if self._takeovers.get(takeover.screen.screen_id) is takeover:
+                            self._takeovers[takeover.screen.screen_id] = replace(
+                                takeover, started_at=now
+                            )
+            return rendered_any
         screens = self._visible()
         if not screens or now < self._next_cycle:
             return False
@@ -309,7 +318,10 @@ class HomeAssistantPlugin:
             for screen in self.config.screens
             if screen.screen_id == trigger.screen_id
         )
-        self._takeover = _Takeover(
+        existing = self._takeovers.get(screen.screen_id)
+        if existing and existing.priority > trigger.priority:
+            return
+        self._takeovers[screen.screen_id] = _Takeover(
             screen=screen,
             priority=trigger.priority,
             duration_seconds=trigger.duration_seconds,

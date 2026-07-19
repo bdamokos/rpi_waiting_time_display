@@ -424,6 +424,110 @@ def test_delayed_low_priority_takeover_gets_full_duration_after_claim_wins():
     assert arbiter.active_owner() != "ha-event:cat-bowls"
 
 
+def test_multiple_target_takeovers_wait_in_priority_order():
+    now = [0.0]
+    service = FakeService()
+    service.states = {
+        "sensor.first": state("sensor.first", "1"),
+        "sensor.second": state("sensor.second", "2"),
+    }
+    config = parse_config(
+        {
+            "screens": [
+                {"id": "first", "entities": [{"entity_id": "sensor.first"}]},
+                {"id": "second", "entities": [{"entity_id": "sensor.second"}]},
+            ],
+            "triggers": [
+                {
+                    "entity_id": "binary_sensor.urgent",
+                    "screen_id": "first",
+                    "duration_seconds": 10,
+                    "priority": 80,
+                },
+                {
+                    "entity_id": "binary_sensor.informational",
+                    "screen_id": "second",
+                    "duration_seconds": 30,
+                    "priority": 25,
+                },
+            ],
+        }
+    )
+    arbiter = ScreenArbiter(lambda: now[0])
+    context = PluginContext(MockDisplay(), arbiter, threading.Lock())
+    plugin = HomeAssistantPlugin(
+        context, config=config, service=service, clock=lambda: now[0]
+    )
+
+    service.listener(
+        "binary_sensor.urgent",
+        state("binary_sensor.urgent", "off"),
+        state("binary_sensor.urgent", "on"),
+    )
+    plugin.tick()
+    now[0] = 1
+    service.listener(
+        "binary_sensor.informational",
+        state("binary_sensor.informational", "off"),
+        state("binary_sensor.informational", "on"),
+    )
+    plugin.tick()
+    assert arbiter.active_owner() == "ha-event:first"
+    assert arbiter.claim_for("ha-event:second") is not None
+
+    now[0] = 10
+    plugin.tick()
+    assert arbiter.active_owner() == "ha-event:second"
+    assert arbiter.claim_for("ha-event:second").expires_at == 40
+
+
+def test_lower_priority_retrigger_cannot_downgrade_same_target_takeover():
+    now = [0.0]
+    service = FakeService()
+    service.states = {"sensor.bowls": state("sensor.bowls", "10")}
+    config = parse_config(
+        {
+            "screens": [
+                {"id": "cat-bowls", "entities": [{"entity_id": "sensor.bowls"}]}
+            ],
+            "triggers": [
+                {
+                    "entity_id": "binary_sensor.cat_present",
+                    "screen_id": "cat-bowls",
+                    "priority": 70,
+                },
+                {
+                    "entity_id": "binary_sensor.kitchen_motion",
+                    "screen_id": "cat-bowls",
+                    "priority": 25,
+                },
+            ],
+        }
+    )
+    arbiter = ScreenArbiter(lambda: now[0])
+    context = PluginContext(MockDisplay(), arbiter, threading.Lock())
+    plugin = HomeAssistantPlugin(
+        context, config=config, service=service, clock=lambda: now[0]
+    )
+    service.listener(
+        "binary_sensor.cat_present",
+        state("binary_sensor.cat_present", "off"),
+        state("binary_sensor.cat_present", "on"),
+    )
+    plugin.tick()
+
+    now[0] = 1
+    service.listener(
+        "binary_sensor.kitchen_motion",
+        state("binary_sensor.kitchen_motion", "off"),
+        state("binary_sensor.kitchen_motion", "on"),
+    )
+    plugin.tick()
+
+    assert arbiter.active_owner() == "ha-event:cat-bowls"
+    assert arbiter.claim_for("ha-event:cat-bowls").priority == 70
+
+
 def test_stopping_plugin_cancels_delayed_takeover():
     service = FakeService()
     service.states = {"sensor.left": state("sensor.left", "10")}

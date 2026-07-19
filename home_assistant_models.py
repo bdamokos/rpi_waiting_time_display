@@ -36,6 +36,7 @@ class TriggerConfig:
     duration_seconds: float = 30.0
     priority: int = 65
     active_for_seconds: float = 0.0
+    delay_seconds: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -105,6 +106,7 @@ def parse_config(data) -> HomeAssistantConfig:
             duration_seconds=float(item.get("duration_seconds", 30)),
             priority=int(item.get("priority", 65)),
             active_for_seconds=max(0.0, float(item.get("active_for_seconds", 0))),
+            delay_seconds=max(0.0, float(item.get("delay_seconds", 0))),
         )
         for item in data.get("triggers", [])
     )

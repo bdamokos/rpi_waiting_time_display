@@ -6,6 +6,9 @@
 
 **Implemented enhancements:**
 
+- Allow Home Assistant events to queue a different target screen after a
+  configurable delay, with the full display duration starting when a
+  lower-priority claim actually becomes visible.
 - Allow individual Home Assistant triggers to require continuous activity
   before claiming the display.
 

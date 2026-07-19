@@ -301,6 +301,7 @@ def test_stopping_plugin_cancels_pending_continuous_activity_takeover():
 
 def test_trigger_active_for_seconds_defaults_to_immediate_and_is_non_negative():
     assert sample_config().triggers[0].active_for_seconds == 0
+    assert sample_config().triggers[0].delay_seconds == 0
 
     config = parse_config(
         {
@@ -310,11 +311,148 @@ def test_trigger_active_for_seconds_defaults_to_immediate_and_is_non_negative():
                     "entity_id": "binary_sensor.motion",
                     "screen_id": "pair",
                     "active_for_seconds": -5,
+                    "delay_seconds": -10,
                 }
             ],
         }
     )
     assert config.triggers[0].active_for_seconds == 0
+    assert config.triggers[0].delay_seconds == 0
+
+
+def test_motion_can_queue_a_different_screen_after_delay_even_if_it_clears():
+    now = [0.0]
+    service = FakeService()
+    service.states = {
+        "sensor.left": state("sensor.left", "10"),
+        "binary_sensor.motion": state("binary_sensor.motion", "off"),
+    }
+    config = parse_config(
+        {
+            "screens": [
+                {
+                    "id": "cat-bowls",
+                    "entities": [{"entity_id": "sensor.left"}],
+                }
+            ],
+            "triggers": [
+                {
+                    "entity_id": "binary_sensor.motion",
+                    "screen_id": "cat-bowls",
+                    "delay_seconds": 20,
+                    "duration_seconds": 30,
+                    "priority": 25,
+                }
+            ],
+        }
+    )
+    arbiter = ScreenArbiter(lambda: now[0])
+    context = PluginContext(MockDisplay(), arbiter, threading.Lock())
+    plugin = HomeAssistantPlugin(
+        context, config=config, service=service, clock=lambda: now[0]
+    )
+
+    service.listener(
+        "binary_sensor.motion",
+        state("binary_sensor.motion", "off"),
+        state("binary_sensor.motion", "on"),
+    )
+    service.listener(
+        "binary_sensor.motion",
+        state("binary_sensor.motion", "on"),
+        state("binary_sensor.motion", "off"),
+    )
+
+    now[0] = 19.9
+    plugin.tick()
+    assert arbiter.claim_for("ha-event:cat-bowls") is None
+    now[0] = 20
+    plugin.tick()
+    claim = arbiter.claim_for("ha-event:cat-bowls")
+    assert claim is not None
+    assert claim.priority == 25
+    assert claim.expires_at == 50
+
+
+def test_delayed_low_priority_takeover_gets_full_duration_after_claim_wins():
+    now = [0.0]
+    service = FakeService()
+    service.states = {"sensor.left": state("sensor.left", "10")}
+    config = parse_config(
+        {
+            "screens": [
+                {
+                    "id": "cat-bowls",
+                    "entities": [{"entity_id": "sensor.left"}],
+                }
+            ],
+            "triggers": [
+                {
+                    "entity_id": "binary_sensor.motion",
+                    "screen_id": "cat-bowls",
+                    "delay_seconds": 20,
+                    "duration_seconds": 30,
+                    "priority": 25,
+                }
+            ],
+        }
+    )
+    arbiter = ScreenArbiter(lambda: now[0])
+    context = PluginContext(MockDisplay(), arbiter, threading.Lock())
+    plugin = HomeAssistantPlugin(
+        context, config=config, service=service, clock=lambda: now[0]
+    )
+    assert arbiter.claim("current-screen", 80, 25)
+    service.listener(
+        "binary_sensor.motion",
+        state("binary_sensor.motion", "off"),
+        state("binary_sensor.motion", "on"),
+    )
+
+    now[0] = 20
+    assert not plugin.tick()
+    assert arbiter.active_owner() == "current-screen"
+    now[0] = 25
+    plugin.tick()
+    assert arbiter.active_owner() == "ha-event:cat-bowls"
+    assert arbiter.claim_for("ha-event:cat-bowls").expires_at == 55
+    now[0] = 54.9
+    plugin.tick()
+    assert arbiter.active_owner() == "ha-event:cat-bowls"
+    now[0] = 55
+    plugin.tick()
+    assert arbiter.active_owner() != "ha-event:cat-bowls"
+
+
+def test_stopping_plugin_cancels_delayed_takeover():
+    service = FakeService()
+    service.states = {"sensor.left": state("sensor.left", "10")}
+    config = parse_config(
+        {
+            "screens": [{"id": "pair", "entities": [{"entity_id": "sensor.left"}]}],
+            "triggers": [
+                {
+                    "entity_id": "binary_sensor.motion",
+                    "screen_id": "pair",
+                    "delay_seconds": 20,
+                }
+            ],
+        }
+    )
+    context = PluginContext(MockDisplay(), ScreenArbiter(lambda: 0), threading.Lock())
+    plugin = HomeAssistantPlugin(
+        context, config=config, service=service, clock=lambda: 0
+    )
+    service.listener(
+        "binary_sensor.motion",
+        state("binary_sensor.motion", "off"),
+        state("binary_sensor.motion", "on"),
+    )
+
+    plugin.stop()
+    plugin.tick(20)
+
+    assert context.arbiter.claim_for("ha-event:pair") is None
 
 
 def test_trigger_config_preserves_existing_positional_argument_order():
@@ -331,6 +469,7 @@ def test_trigger_config_preserves_existing_positional_argument_order():
     assert trigger.duration_seconds == 45
     assert trigger.priority == 70
     assert trigger.active_for_seconds == 0
+    assert trigger.delay_seconds == 0
 
 
 def test_grouped_binary_entity_is_active_when_either_or_both_members_are_active():

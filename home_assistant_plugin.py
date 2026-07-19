@@ -7,6 +7,7 @@ import logging
 import os
 import threading
 import time
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from home_assistant_display import (
@@ -19,6 +20,14 @@ from home_assistant_service import HomeAssistantService
 from plugins import OverrideCapability
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class _Takeover:
+    screen: object
+    priority: int
+    duration_seconds: float
+    started_at: float | None = None
 
 
 def load_home_assistant_config(value):
@@ -64,6 +73,7 @@ class HomeAssistantPlugin:
         self._takeover = None
         self._last_trigger = {}
         self._pending_triggers = {}
+        self._delayed_triggers = {}
         self._state_lock = threading.RLock()
         service.add_listener(self._state_changed)
 
@@ -121,6 +131,8 @@ class HomeAssistantPlugin:
                 self._thread = None
         with self._state_lock:
             self._pending_triggers.clear()
+            self._delayed_triggers.clear()
+            self._takeover = None
         for capability in self.override_capabilities:
             self.context.arbiter.release(capability.owner)
 
@@ -144,13 +156,41 @@ class HomeAssistantPlugin:
         now = self.clock() if now is None else now
         states = self.service.snapshot()
         self._activate_ready_triggers(states, now)
+        self._activate_delayed_triggers(now)
         with self._state_lock:
             takeover = self._takeover
-        if takeover and now < takeover[1]:
-            screen, until, priority = takeover
-            return self._render(screen, states, now, priority, until - now, event=True)
-        with self._state_lock:
-            self._takeover = None
+        if takeover:
+            if (
+                takeover.started_at is not None
+                and now >= takeover.started_at + takeover.duration_seconds
+            ):
+                self.context.arbiter.release(f"ha-event:{takeover.screen.screen_id}")
+                with self._state_lock:
+                    if self._takeover is takeover:
+                        self._takeover = None
+            else:
+                ttl = (
+                    takeover.duration_seconds
+                    if takeover.started_at is None
+                    else takeover.started_at + takeover.duration_seconds - now
+                )
+                rendered = self._render(
+                    takeover.screen,
+                    states,
+                    now,
+                    takeover.priority,
+                    ttl,
+                    event=True,
+                )
+                owner = f"ha-event:{takeover.screen.screen_id}"
+                if (
+                    takeover.started_at is None
+                    and self.context.arbiter.active_owner() == owner
+                ):
+                    with self._state_lock:
+                        if self._takeover is takeover:
+                            self._takeover = replace(takeover, started_at=now)
+                return rendered
         screens = self._visible()
         if not screens or now < self._next_cycle:
             return False
@@ -243,19 +283,36 @@ class HomeAssistantPlugin:
             with self._state_lock:
                 if self._pending_triggers.pop(trigger, None) is None:
                     continue
-                self._activate_trigger(trigger, now)
+                self._queue_trigger(trigger, now)
 
-    def _activate_trigger(self, trigger, now):
+    def _activate_delayed_triggers(self, now):
+        with self._state_lock:
+            delayed = tuple(self._delayed_triggers.items())
+        for trigger, ready_at in delayed:
+            if now < ready_at:
+                continue
+            with self._state_lock:
+                if self._delayed_triggers.pop(trigger, None) is None:
+                    continue
+                self._activate_trigger(trigger)
+
+    def _queue_trigger(self, trigger, now):
+        self._last_trigger[trigger.entity_id] = now
+        if trigger.delay_seconds > 0:
+            self._delayed_triggers[trigger] = now + trigger.delay_seconds
+            return
+        self._activate_trigger(trigger)
+
+    def _activate_trigger(self, trigger):
         screen = next(
             screen
             for screen in self.config.screens
             if screen.screen_id == trigger.screen_id
         )
-        self._last_trigger[trigger.entity_id] = now
-        self._takeover = (
-            screen,
-            now + trigger.duration_seconds,
-            trigger.priority,
+        self._takeover = _Takeover(
+            screen=screen,
+            priority=trigger.priority,
+            duration_seconds=trigger.duration_seconds,
         )
         self._last_key = None
 
@@ -281,4 +338,4 @@ class HomeAssistantPlugin:
                 if trigger.active_for_seconds > 0:
                     self._pending_triggers[trigger] = now
                 else:
-                    self._activate_trigger(trigger, now)
+                    self._queue_trigger(trigger, now)

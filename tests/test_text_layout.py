@@ -22,6 +22,7 @@ def test_short_text_grows_to_maximum_size():
 
     assert fitted.size == 24
     assert fitted.lines == ("Short update",)
+    assert fitted.height > 0
     assert not fitted.truncated
 
 

@@ -202,9 +202,7 @@ def draw_calendar_agenda(
         y = 29 + index * row_height
         label = _event_time_label(event, now)
         draw.text((7, y + (row_height - 12) // 2), label, font=tiny, fill=black)
-        block_height = (len(fitted.lines) - 1) * fitted.line_advance
-        block_height += draw.textbbox((0, 0), "Ag", font=fitted.font)[3]
-        title_y = y + max(0, (row_height - block_height) // 2)
+        title_y = y + max(0, (row_height - fitted.height) // 2)
         for line_index, line in enumerate(fitted.lines):
             draw.text(
                 (82, title_y + line_index * fitted.line_advance),

@@ -107,7 +107,10 @@ def get_font_paths():
         user_fonts = os.path.expanduser('~/Library/Fonts')
 
         def first_existing(*candidates):
-            return next(path for path in candidates if os.path.isfile(path))
+            return next(
+                (path for path in candidates if os.path.isfile(path)),
+                candidates[0],
+            )
 
         return {
             'dejavu': first_existing(

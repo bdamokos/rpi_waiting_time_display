@@ -16,6 +16,7 @@ class FittedText:
     lines: tuple[str, ...]
     line_advance: int
     size: int
+    height: int
     truncated: bool = False
 
 
@@ -111,10 +112,11 @@ def fit_wrapped_text(
         )
         visible = lines[:line_limit]
         if truncated:
-            remainder = " ".join(lines[line_limit - 1:])
-            visible[-1] = _ellipsize(draw, remainder, font, max_width)
-        return FittedText(font, tuple(visible), advance, min_size, truncated)
+            visible[-1] = _ellipsize(draw, visible[-1] + "…", font, max_width)
+        height = (len(visible) - 1) * advance + bottom
+        return FittedText(font, tuple(visible), advance, min_size, height, truncated)
 
+    first_font = None
     best = None
     for size in range(min_size, max_size + 1):
         try:
@@ -123,6 +125,8 @@ def fit_wrapped_text(
             # A bitmap fallback cannot be progressively resized. Return it as
             # the minimum-size layout instead of pretending it reached max_size.
             return minimum_result(ImageFont.load_default())
+        if first_font is None:
+            first_font = font
         lines = _wrap_all(draw, text, font, max_width)
         fits, advance = _fits(
             draw, lines, font, max_width, max_height, max_lines, spacing
@@ -130,15 +134,13 @@ def fit_wrapped_text(
         if not fits:
             # Larger fonts cannot recover width, height, or line-count space.
             break
-        best = FittedText(font, tuple(lines), advance, size)
+        _, bottom = _line_metrics(draw, font, spacing)
+        height = (len(lines) - 1) * advance + bottom if lines else 0
+        best = FittedText(font, tuple(lines), advance, size, height)
         if not hasattr(font, "size"):
             break
 
     if best is not None:
         return best
 
-    try:
-        font = _truetype(font_path, min_size)
-    except OSError:
-        font = ImageFont.load_default()
-    return minimum_result(font)
+    return minimum_result(first_font)

@@ -60,3 +60,20 @@ def test_overflow_at_minimum_size_is_ellipsized():
     assert fitted.size == 11
     assert fitted.truncated
     assert fitted.lines[-1].endswith("…")
+
+
+def test_unbreakable_overflow_keeps_visible_ellipsized_text():
+    fitted = fit_wrapped_text(
+        _draw(),
+        "averylongunbreakableidentifier",
+        get_font_paths()["dejavu"],
+        min_size=11,
+        max_size=18,
+        max_width=50,
+        max_height=60,
+        max_lines=4,
+    )
+
+    assert fitted.truncated
+    assert fitted.lines[0]
+    assert fitted.lines[0].endswith("…")

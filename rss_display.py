@@ -10,6 +10,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from display_adapter import return_display_lock
 from font_utils import get_font_paths
+from text_layout import fit_wrapped_text
 
 display_lock = return_display_lock()
 DISPLAY_SCREEN_ROTATION = int(os.getenv("screen_rotation", "90"))
@@ -113,13 +114,41 @@ def draw_feed_entry(epd, entry, *, avatar_bytes=None, set_base_image=False):
         )
         y, max_lines = 48, 4
         width = 243 - left if left > 7 else 236
-        for index, line in enumerate(
-            _wrap(draw, entry.title, body_font, width, max_lines)
-        ):
-            draw.text((left, y + index * 14), line, font=body_font, fill=black)
+        fitted = fit_wrapped_text(
+            draw,
+            entry.title,
+            get_font_paths()["dejavu"],
+            min_size=11,
+            max_size=20,
+            max_width=width,
+            max_height=68,
+            max_lines=max_lines,
+        )
+        for index, line in enumerate(fitted.lines):
+            draw.text(
+                (left, y + index * fitted.line_advance),
+                line,
+                font=fitted.font,
+                fill=black,
+            )
     else:
-        for index, line in enumerate(_wrap(draw, entry.title, title_font, 236, 4)):
-            draw.text((7, 31 + index * 18), line, font=title_font, fill=black)
+        fitted = fit_wrapped_text(
+            draw,
+            entry.title,
+            get_font_paths()["dejavu_bold"],
+            min_size=14,
+            max_size=24,
+            max_width=236,
+            max_height=69 if entry.author else 85,
+            max_lines=4,
+        )
+        for index, line in enumerate(fitted.lines):
+            draw.text(
+                (7, 31 + index * fitted.line_advance),
+                line,
+                font=fitted.font,
+                fill=black,
+            )
         if entry.author:
             draw.text(
                 (7, 104),

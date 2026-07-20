@@ -104,9 +104,25 @@ def get_font_paths():
     system = platform.system()
 
     if system == "Darwin":  # macOS
+        user_fonts = os.path.expanduser('~/Library/Fonts')
+
+        def first_existing(*candidates):
+            return next(
+                (path for path in candidates if os.path.isfile(path)),
+                candidates[0],
+            )
+
         return {
-            'dejavu': '/System/Library/Fonts/Supplemental/DejaVuSans.ttf',
-            'dejavu_bold': '/System/Library/Fonts/Supplemental/DejaVuSans-Bold.ttf',
+            'dejavu': first_existing(
+                os.path.join(user_fonts, 'DejaVuSans.ttf'),
+                '/System/Library/Fonts/Supplemental/DejaVuSans.ttf',
+                '/System/Library/Fonts/Supplemental/Arial.ttf',
+            ),
+            'dejavu_bold': first_existing(
+                os.path.join(user_fonts, 'DejaVuSans-Bold.ttf'),
+                '/System/Library/Fonts/Supplemental/DejaVuSans-Bold.ttf',
+                '/System/Library/Fonts/Supplemental/Arial Bold.ttf',
+            ),
             'emoji': os.path.expanduser('~/Library/Fonts/NotoEmoji[wght].ttf')  # Use user's Noto Emoji font
         }
     else:  # Assume Raspberry Pi/Linux

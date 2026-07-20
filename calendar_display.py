@@ -13,6 +13,7 @@ from PIL import Image, ImageDraw, ImageFont
 from calendar_service import CalendarEvent
 from display_adapter import return_display_lock
 from font_utils import get_font_paths
+from text_layout import fit_wrapped_text
 
 display_lock = return_display_lock()
 DISPLAY_SCREEN_ROTATION = int(os.getenv("screen_rotation", 90))
@@ -109,8 +110,23 @@ def draw_upcoming_event(
     draw.text((243 - status_width, 7), status, font=tiny, fill=black)
     draw.line((7, 24, 243, 24), fill=black, width=1)
 
-    for index, line in enumerate(_wrap_two_lines(draw, event.summary, title_font, 236)):
-        draw.text((7, 29 + index * 17), line, font=title_font, fill=black)
+    summary = fit_wrapped_text(
+        draw,
+        event.summary,
+        get_font_paths()["dejavu_bold"],
+        min_size=15,
+        max_size=24,
+        max_width=236,
+        max_height=34 if event.location else 48,
+        max_lines=2,
+    )
+    for index, line in enumerate(summary.lines):
+        draw.text(
+            (7, 29 + index * summary.line_advance),
+            line,
+            font=summary.font,
+            fill=black,
+        )
     if event.location:
         location = _ellipsize(draw, event.location, tiny, 236)
         draw.text((7, 65), location, font=tiny, fill=black)
@@ -149,12 +165,53 @@ def draw_calendar_agenda(
     draw.text((243 - status_width, 7), status, font=tiny, fill=black)
     draw.line((7, 24, 243, 24), fill=black, width=1)
 
-    for index, event in enumerate(events[:4]):
-        y = 29 + index * 23
+    visible_events = events[:4]
+    fitted_titles = []
+    if visible_events:
+        row_height = 88 // len(visible_events)
+        max_title_size = {1: 28, 2: 22, 3: 18, 4: 15}[len(visible_events)]
+        fitted_titles = [
+            fit_wrapped_text(
+                draw,
+                event.summary,
+                get_font_paths()["dejavu_bold"],
+                min_size=15,
+                max_size=max_title_size,
+                max_width=160,
+                max_height=row_height - 4,
+                max_lines=3 if len(visible_events) == 1 else 2,
+            )
+            for event in visible_events
+        ]
+        common_size = min(item.size for item in fitted_titles)
+        fitted_titles = [
+            fit_wrapped_text(
+                draw,
+                event.summary,
+                get_font_paths()["dejavu_bold"],
+                min_size=common_size,
+                max_size=common_size,
+                max_width=160,
+                max_height=row_height - 4,
+                max_lines=3 if len(visible_events) == 1 else 2,
+            )
+            for event in visible_events
+        ]
+
+    for index, (event, fitted) in enumerate(zip(visible_events, fitted_titles)):
+        y = 29 + index * row_height
         label = _event_time_label(event, now)
-        draw.text((7, y + 2), label, font=tiny, fill=black)
-        title = _ellipsize(draw, event.summary, title_font, 160)
-        draw.text((82, y), title, font=title_font, fill=black)
-        if index < min(len(events), 4) - 1:
-            draw.line((7, y + 20, 243, y + 20), fill=black, width=1)
+        draw.text((7, y + (row_height - 12) // 2), label, font=tiny, fill=black)
+        title_y = y + max(0, (row_height - fitted.height) // 2)
+        for line_index, line in enumerate(fitted.lines):
+            draw.text(
+                (82, title_y + line_index * fitted.line_advance),
+                line,
+                font=fitted.font,
+                fill=black,
+            )
+        if index < len(visible_events) - 1:
+            draw.line(
+                (7, y + row_height - 1, 243, y + row_height - 1), fill=black, width=1
+            )
     _finish(epd, image, set_base_image)

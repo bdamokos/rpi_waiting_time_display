@@ -2,7 +2,9 @@
 
 from PIL import Image, ImageDraw
 
-from rss_display import _ellipsize, _finish, _fonts, _wrap
+from font_utils import get_font_paths
+from rss_display import _ellipsize, _finish, _fonts
+from text_layout import fit_wrapped_text
 
 
 def draw_breaking_news(epd, entry, *, set_base_image=False):
@@ -24,6 +26,21 @@ def draw_breaking_news(epd, entry, *, set_base_image=False):
     source = _ellipsize(draw, entry.publication.upper(), tiny, 236)
     draw.text((7, 31), source, font=tiny, fill=black)
     draw.line((7, 44, 243, 44), fill=black, width=1)
-    for index, line in enumerate(_wrap(draw, entry.title, title_font, 236, 4)):
-        draw.text((7, 50 + index * 17), line, font=title_font, fill=black)
+    fitted = fit_wrapped_text(
+        draw,
+        entry.title,
+        get_font_paths()["dejavu_bold"],
+        min_size=14,
+        max_size=24,
+        max_width=236,
+        max_height=66,
+        max_lines=4,
+    )
+    for index, line in enumerate(fitted.lines):
+        draw.text(
+            (7, 50 + index * fitted.line_advance),
+            line,
+            font=fitted.font,
+            fill=black,
+        )
     _finish(epd, image, set_base_image)

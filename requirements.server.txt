@@ -1,7 +1,7 @@
 # Hardware-free render server dependencies. Keep GPIO/Waveshare packages on the client.
 Pillow>=12.3.0,<13
 python-dotenv>=1.0.1,<2
-requests>=2.32.4,<3
+requests>=2.34.2,<3
 niquests>=3.17.0,<4
 requests-cache>=1.2.1,<2
 Flask>=3.1.3,<4

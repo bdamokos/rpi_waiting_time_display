@@ -1,5 +1,5 @@
 #As certain packages don't seem to work, these ones should be available in a dev environment on a Mac
-certifi>=2024.12.14
+certifi>=2026.7.22
 defusedxml>=0.7.1
 charset-normalizer>=3.4.7
 colorzero>=2.0

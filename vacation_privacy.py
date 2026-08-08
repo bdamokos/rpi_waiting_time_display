@@ -6,7 +6,7 @@ import fnmatch
 import logging
 import os
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Iterable, Optional, Tuple
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -106,12 +106,10 @@ class VacationPrivacyMode:
             return False
         if self.fail_closed or not self.windows:
             return True
-        if now is None:
-            local_date = datetime.now(self.timezone).date()
-        elif now.tzinfo is None:
-            local_date = now.date()
-        else:
-            local_date = now.astimezone(self.timezone).date()
+        moment = now if now is not None else datetime.now(timezone.utc)
+        if moment.tzinfo is None:
+            raise ValueError("vacation privacy timestamps must be timezone-aware")
+        local_date = moment.astimezone(self.timezone).date()
         return any(window.contains(local_date) for window in self.windows)
 
     def blocks(self, display_name: str, now: Optional[datetime] = None) -> bool:
@@ -130,7 +128,7 @@ class VacationPrivacyMode:
             (f"{pattern}-", f"{pattern}_", f"{pattern}:")
         )
 
-    def safe_fallback(self, now: Optional[datetime] = None) -> str:
+    def safe_fallback(self, now: Optional[datetime] = None) -> Optional[str]:
         configured = self.fallback_mode
         candidates = [configured, "transit", "weather", "auto"]
         for candidate in candidates:
@@ -138,4 +136,4 @@ class VacationPrivacyMode:
                 candidate, now
             ):
                 return candidate
-        return "auto"
+        return None

@@ -466,20 +466,21 @@ class DisplayManager:
     def _scheduled_mode(self, current_time):
         scheduled_mode = self.display_schedule.mode_at(current_time)
         privacy = self._vacation_privacy()
-        if privacy.blocks(scheduled_mode, current_time):
-            return privacy.safe_fallback(current_time)
+        if privacy.blocks(scheduled_mode):
+            return privacy.safe_fallback()
         if scheduled_mode in {"ynab", "ynab-always"}:
             if not self.ynab_client.enabled:
-                return self._ynab_fallback_mode()
-            return (
+                return self._privacy_safe_mode(self._ynab_fallback_mode())
+            result = (
                 scheduled_mode
                 if self.ynab_client.get_snapshot()
                 else self._ynab_fallback_mode()
             )
+            return self._privacy_safe_mode(result)
         if scheduled_mode not in {"token", "token-always"}:
             return scheduled_mode
         if not self.token_usage_client.enabled:
-            return self._token_fallback_mode()
+            return self._privacy_safe_mode(self._token_fallback_mode())
         snapshot = self.token_usage_client.get_snapshot()
         if snapshot and not snapshot.stale and (
             scheduled_mode == "token-always"
@@ -487,17 +488,19 @@ class DisplayManager:
             or getattr(snapshot, "reset_notice", None)
         ):
             return scheduled_mode
-        return self._token_fallback_mode()
+        return self._privacy_safe_mode(self._token_fallback_mode())
 
-    def _enforce_vacation_privacy(self, current_time):
+    def _privacy_safe_mode(self, mode):
         privacy = self._vacation_privacy()
-        if not privacy.is_active(current_time):
+        return privacy.safe_fallback() if privacy.blocks(mode) else mode
+
+    def _enforce_vacation_privacy(self):
+        privacy = self._vacation_privacy()
+        if not privacy.is_active():
             return False
         override_blocked = False
         with self._override_lock:
-            if self._override_module and privacy.blocks(
-                self._override_module, current_time
-            ):
+            if self._override_module and privacy.blocks(self._override_module):
                 self._override_generation += 1
                 self._override_module = None
                 override_blocked = self.screen_arbiter.release(
@@ -506,9 +509,7 @@ class DisplayManager:
         # active_owner() also prunes plugin claims that became sensitive when
         # a blackout date started.
         self.screen_arbiter.active_owner()
-        current_blocked = privacy.blocks(
-            self.current_display_mode or "", current_time
-        )
+        current_blocked = privacy.blocks(self.current_display_mode or "")
         if override_blocked or current_blocked:
             self._last_screen_owner = None
             return True
@@ -1082,16 +1083,27 @@ class DisplayManager:
                     self.last_display_update = current_time
                     return True
                 if self._is_ynab_mode(scheduled_mode):
-                    scheduled_mode = self._ynab_fallback_mode()
+                    scheduled_mode = self._privacy_safe_mode(
+                        self._ynab_fallback_mode()
+                    )
                 if self._is_token_mode(scheduled_mode) and self._draw_token_usage(
                     current_time, require_active=scheduled_mode == "token"
                 ):
                     self.last_display_update = current_time
                     return True
                 if self._is_token_mode(scheduled_mode):
-                    scheduled_mode = self._token_fallback_mode()
+                    scheduled_mode = self._privacy_safe_mode(
+                        self._token_fallback_mode()
+                    )
+                if scheduled_mode is None:
+                    logger.info(
+                        "Vacation privacy retained the last frame because no safe "
+                        "built-in fallback is available"
+                    )
+                    return False
                 bus_data, error_message, stop_name = self.bus_manager.get_bus_data()
                 weather_data = self.weather_manager.get_weather_data() if weather_enabled else None
+                privacy = self._vacation_privacy()
                 
                 valid_bus_data = [
                     bus for bus in bus_data 
@@ -1099,7 +1111,12 @@ class DisplayManager:
                 ]
                 
                 # Check if we have any bus data at all
-                if scheduled_mode == "weather" and weather_enabled and weather_data:
+                if (
+                    scheduled_mode == "weather"
+                    and weather_enabled
+                    and weather_data
+                    and not privacy.blocks("weather")
+                ):
                     logger.info("Initial display: scheduled weather mode")
                     draw_weather_display(
                         self.epd,
@@ -1108,7 +1125,13 @@ class DisplayManager:
                     )
                     self.in_weather_mode = True
                     self.current_display_mode = "weather"
-                elif not bus_data and not error_message and weather_enabled and weather_data:
+                elif (
+                    not bus_data
+                    and not error_message
+                    and weather_enabled
+                    and weather_data
+                    and not privacy.blocks("weather")
+                ):
                     logger.info("Initial display: no bus data available, showing weather data")
                     if not self.in_weather_mode:
                         # We're switching to weather mode, set base image for partial updates
@@ -1117,7 +1140,11 @@ class DisplayManager:
                         self.current_display_mode = "weather"
                     else:
                         draw_weather_display(self.epd, weather_data)
-                elif valid_bus_data and not error_message:
+                elif (
+                    valid_bus_data
+                    and not error_message
+                    and not privacy.blocks("transit")
+                ):
                     logger.info(f"Initial display: showing bus data ({len(valid_bus_data)} entries)")
                     if self.in_weather_mode:
                         # We're switching from weather mode, set base image for partial updates
@@ -1127,7 +1154,11 @@ class DisplayManager:
                     else:
                         update_display(self.epd, weather_data, valid_bus_data, error_message, stop_name)
                         self.current_display_mode = "transit"
-                elif weather_enabled and weather_data:
+                elif (
+                    weather_enabled
+                    and weather_data
+                    and not privacy.blocks("weather")
+                ):
                     logger.info("Initial display: showing weather data")
                     if not self.in_weather_mode:
                         # We're switching to weather mode, set base image for partial updates
@@ -1200,7 +1231,7 @@ class DisplayManager:
                             self.screen_arbiter.release(self.FLIGHT_SCREEN_OWNER)
                             logger.info(f"Starting flight cooldown period of {self.flight_mode_cooldown} seconds")
 
-                if self._enforce_vacation_privacy(current_time):
+                if self._enforce_vacation_privacy():
                     self._force_display_update()
                     self._schedule_next_update()
 
@@ -1263,7 +1294,9 @@ class DisplayManager:
                                 logger.info("YNAB display updated successfully")
                                 scheduled_mode = "rendered"
                             else:
-                                scheduled_mode = self._ynab_fallback_mode()
+                                scheduled_mode = self._privacy_safe_mode(
+                                    self._ynab_fallback_mode()
+                                )
                         if self._is_token_mode(scheduled_mode):
                             if self._draw_token_usage(
                                 current_time,
@@ -1273,11 +1306,19 @@ class DisplayManager:
                                 logger.info("Token usage display updated successfully")
                                 scheduled_mode = "rendered"
                             else:
-                                scheduled_mode = self._token_fallback_mode()
+                                scheduled_mode = self._privacy_safe_mode(
+                                    self._token_fallback_mode()
+                                )
+                        privacy = self._vacation_privacy()
                         # Check if we have any bus data at all
                         if scheduled_mode == "rendered":
                             pass
-                        elif scheduled_mode == "weather" and weather_enabled and weather_data:
+                        elif (
+                            scheduled_mode == "weather"
+                            and weather_enabled
+                            and weather_data
+                            and not privacy.blocks("weather")
+                        ):
                             logger.info("Updating scheduled weather display...")
                             draw_weather_display(
                                 self.epd,
@@ -1289,7 +1330,13 @@ class DisplayManager:
                             self.last_weather_data = weather_data
                             self.last_weather_update = current_time
                             self.last_display_update = datetime.now()
-                        elif not valid_bus_data and not error_message and weather_enabled and weather_data:
+                        elif (
+                            not valid_bus_data
+                            and not error_message
+                            and weather_enabled
+                            and weather_data
+                            and not privacy.blocks("weather")
+                        ):
                             logger.info("No bus data available, switching to weather mode...")
                             if not self.in_weather_mode:
                                 # We're switching to weather mode, set base image for partial updates
@@ -1302,7 +1349,11 @@ class DisplayManager:
                             self.last_weather_update = current_time
                             self.last_display_update = datetime.now()
                             logger.info("Weather display updated successfully")
-                        elif valid_bus_data and not error_message:
+                        elif (
+                            valid_bus_data
+                            and not error_message
+                            and not privacy.blocks("transit")
+                        ):
                             logger.info("Updating bus display...")
                             # Pass the full weather data object to update_display
                             if self.in_weather_mode:
@@ -1323,7 +1374,11 @@ class DisplayManager:
                             self.last_display_update = datetime.now()
                             self.update_count += 1
                             logger.info("Bus display updated successfully")
-                        elif weather_enabled and weather_data:
+                        elif (
+                            weather_enabled
+                            and weather_data
+                            and not privacy.blocks("weather")
+                        ):
                             logger.info("Updating weather display...")
                             if not self.in_weather_mode:
                                 # We're switching to weather mode, set base image for partial updates

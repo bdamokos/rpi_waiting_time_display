@@ -35,3 +35,5 @@ When privacy mode is active:
 Invalid blackout dates or timezone names fail closed: selected sensitive
 displays remain hidden until the configuration is corrected. Invalid or
 sensitive fallback selections automatically move to a safe built-in display.
+If `auto`, `transit`, and `weather` are all sensitive, the renderer retains the
+last safe frame instead of drawing a blocked fallback.

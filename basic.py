@@ -49,6 +49,7 @@ from token_usage import (
     configured_token_views,
     token_view_at,
 )
+from vacation_privacy import VacationPrivacyMode
 from screen_arbiter import ScreenArbiter
 from rss_plugin import RSSPlugin
 from breaking_news_plugin import BreakingNewsPlugin
@@ -369,7 +370,8 @@ class DisplayManager:
         self.iss_screen_priority = int(
             os.getenv("screen_priority_iss", default_iss_priority)
         )
-        self.screen_arbiter = ScreenArbiter()
+        self.vacation_privacy = VacationPrivacyMode.from_env()
+        self.screen_arbiter = ScreenArbiter(blocked=self.vacation_privacy.blocks)
         self.override_priority = int(os.getenv("display_override_priority", "30"))
         self.override_duration_seconds = max(
             1, int(os.getenv("display_override_duration_seconds", "300"))
@@ -458,8 +460,14 @@ class DisplayManager:
             self._last_screen_owner = None
             self._force_display_update()
 
+    def _vacation_privacy(self):
+        return getattr(self, "vacation_privacy", VacationPrivacyMode())
+
     def _scheduled_mode(self, current_time):
         scheduled_mode = self.display_schedule.mode_at(current_time)
+        privacy = self._vacation_privacy()
+        if privacy.blocks(scheduled_mode, current_time):
+            return privacy.safe_fallback(current_time)
         if scheduled_mode in {"ynab", "ynab-always"}:
             if not self.ynab_client.enabled:
                 return self._ynab_fallback_mode()
@@ -480,6 +488,31 @@ class DisplayManager:
         ):
             return scheduled_mode
         return self._token_fallback_mode()
+
+    def _enforce_vacation_privacy(self, current_time):
+        privacy = self._vacation_privacy()
+        if not privacy.is_active(current_time):
+            return False
+        override_blocked = False
+        with self._override_lock:
+            if self._override_module and privacy.blocks(
+                self._override_module, current_time
+            ):
+                self._override_generation += 1
+                self._override_module = None
+                override_blocked = self.screen_arbiter.release(
+                    self.OVERRIDE_SCREEN_OWNER
+                )
+        # active_owner() also prunes plugin claims that became sensitive when
+        # a blackout date started.
+        self.screen_arbiter.active_owner()
+        current_blocked = privacy.blocks(
+            self.current_display_mode or "", current_time
+        )
+        if override_blocked or current_blocked:
+            self._last_screen_owner = None
+            return True
+        return False
 
     @staticmethod
     def _is_token_mode(mode):
@@ -607,6 +640,12 @@ class DisplayManager:
                 "error": "unknown module",
                 "modules": sorted(aliases),
             }
+        if self._vacation_privacy().blocks(normalized):
+            return {
+                "accepted": False,
+                "error": "module hidden by vacation privacy mode",
+                "module": normalized,
+            }
         with self._override_lock:
             self._override_generation += 1
             generation = self._override_generation
@@ -674,6 +713,7 @@ class DisplayManager:
             "active_owner": self.screen_arbiter.active_owner(),
             "duration_seconds": self.override_duration_seconds,
             "modules": sorted(set(self._override_aliases().values())),
+            "vacation_privacy_active": self._vacation_privacy().is_active(),
         }
 
     def _render_display_override(self, module=None, generation=None):
@@ -699,7 +739,11 @@ class DisplayManager:
             )
 
     def _render_display_override_locked(self, module, generation):
-        if not module or not self.screen_arbiter.can_render(self.OVERRIDE_SCREEN_OWNER):
+        if (
+            not module
+            or self._vacation_privacy().blocks(module)
+            or not self.screen_arbiter.can_render(self.OVERRIDE_SCREEN_OWNER)
+        ):
             return False
         handlers = getattr(self, "_display_override_handlers", None)
         if handlers is None:
@@ -1155,6 +1199,10 @@ class DisplayManager:
                             last_flight_log = 0
                             self.screen_arbiter.release(self.FLIGHT_SCREEN_OWNER)
                             logger.info(f"Starting flight cooldown period of {self.flight_mode_cooldown} seconds")
+
+                if self._enforce_vacation_privacy(current_time):
+                    self._force_display_update()
+                    self._schedule_next_update()
 
                 active_owner = self.screen_arbiter.active_owner()
                 if (

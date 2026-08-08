@@ -15,6 +15,7 @@ A Raspberry Pi project that displays bus waiting times using an e-Paper display 
 - 📰 Optional RSS/Nitter plugin with compact new-entry notifications
 - 🏠 Optional generic Home Assistant cards and event takeovers
 - 🎛️ Screen arbitration, weekday-aware schedules, and a private-network display override API
+- 🔒 Vacation privacy mode for hiding configurable sensitive displays on selected dates
 
 [View detailed features and screenshots →](https://bdamokos.github.io/rpi_waiting_time_display/features/)
 
@@ -23,6 +24,10 @@ A Raspberry Pi project that displays bus waiting times using an e-Paper display 
 The calendar, YNAB glance, and RSS plugins share the screen safely with
 transit, weather, flight, ISS, and Codex views through the screen arbiter. Each
 plugin is disabled by default and configured in the untracked `.env` file.
+
+Vacation privacy mode can suppress selected display families across schedules,
+plugins, and display overrides while you are away. Configure it in Advanced
+Settings or see the [vacation privacy guide](docs/vacation-privacy-mode.md).
 
 See the [Home Assistant setup](docs/home-assistant-display.md) and
 [plugin authoring guide](docs/plugin-authoring.md).

@@ -30,8 +30,13 @@ class ScreenClaim:
 class ScreenArbiter:
     """Choose which optional display plugin currently owns the screen."""
 
-    def __init__(self, clock: Callable[[], float] = time.monotonic):
+    def __init__(
+        self,
+        clock: Callable[[], float] = time.monotonic,
+        blocked: Optional[Callable[[str], bool]] = None,
+    ):
         self._clock = clock
+        self._blocked = blocked
         self._claims: Dict[str, ScreenClaim] = {}
         self._current_owner: Optional[str] = None
         self._sequence = 0
@@ -54,7 +59,16 @@ class ScreenArbiter:
             raise ValueError("screen claim ttl_seconds must be positive")
 
         with self._lock:
+            previous = self._current_owner
             self._prune_expired()
+            self._prune_blocked()
+            if self._is_blocked(owner):
+                self._claims.pop(owner, None)
+                if self._current_owner == owner:
+                    self._current_owner = None
+                self._select_owner()
+                self._log_transition(previous)
+                return False
             existing = self._claims.get(owner)
             if existing:
                 sequence = existing.sequence
@@ -68,7 +82,6 @@ class ScreenArbiter:
                 exclusive=exclusive,
                 sequence=sequence,
             )
-            previous = self._current_owner
             self._select_owner()
             self._log_transition(previous)
             return self._current_owner == owner
@@ -78,6 +91,7 @@ class ScreenArbiter:
 
         with self._lock:
             self._prune_expired()
+            self._prune_blocked()
             was_active = self._current_owner == owner
             previous = self._current_owner
             self._claims.pop(owner, None)
@@ -93,6 +107,7 @@ class ScreenArbiter:
         with self._lock:
             previous = self._current_owner
             self._prune_expired()
+            self._prune_blocked()
             self._select_owner()
             self._log_transition(previous)
             return self._current_owner
@@ -105,12 +120,24 @@ class ScreenArbiter:
     def has_claim(self, owner: str) -> bool:
         with self._lock:
             self._prune_expired()
+            self._prune_blocked()
             return owner in self._claims
 
     def claim_for(self, owner: str) -> Optional[ScreenClaim]:
         with self._lock:
             self._prune_expired()
+            self._prune_blocked()
             return self._claims.get(owner)
+
+    def _is_blocked(self, owner: str) -> bool:
+        return bool(self._blocked and self._blocked(owner))
+
+    def _prune_blocked(self) -> None:
+        blocked = [owner for owner in self._claims if self._is_blocked(owner)]
+        for owner in blocked:
+            self._claims.pop(owner, None)
+            if self._current_owner == owner:
+                self._current_owner = None
 
     def _prune_expired(self) -> None:
         now = self._clock()

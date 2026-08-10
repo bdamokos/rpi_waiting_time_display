@@ -9,6 +9,7 @@ exec((Path(__file__).with_name("version.py")).read_text(), version_namespace)
 setup(
     name="weather",
     version=version_namespace["__version__"],
+    python_requires=">=3.9",
     packages=find_packages(),
     py_modules=[
         "dithering",

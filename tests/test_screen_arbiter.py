@@ -102,3 +102,15 @@ def test_claim_rejects_empty_owner(owner):
 def test_claim_rejects_non_positive_ttl():
     with pytest.raises(ValueError):
         ScreenArbiter().claim("flight", 1, 0)
+
+
+def test_blocked_owner_cannot_claim_and_existing_claim_is_pruned():
+    blocked = set()
+    arbiter = ScreenArbiter(blocked=lambda owner: owner in blocked)
+    assert arbiter.claim("calendar-agenda", 20, 60)
+
+    blocked.add("calendar-agenda")
+
+    assert arbiter.active_owner() is None
+    assert not arbiter.has_claim("calendar-agenda")
+    assert not arbiter.claim("calendar-agenda", 20, 60)

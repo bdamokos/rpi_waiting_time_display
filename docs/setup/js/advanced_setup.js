@@ -3,6 +3,43 @@
 let currentSettings = {};
 
 const SETTING_GROUPS = {
+    vacationPrivacy: {
+        title: "Vacation Privacy",
+        description: "Hide selected display modules while you are away",
+        settings: {
+            vacation_mode_enabled: {
+                type: "boolean",
+                label: "Enable Vacation Privacy",
+                description: "Apply privacy mode during the configured blackout dates. With no dates, enabling this acts as a manual always-on privacy switch.",
+                default: false
+            },
+            vacation_mode_sensitive_displays: {
+                type: "text",
+                label: "Sensitive Displays",
+                description: "Comma-separated display families or patterns to hide, for example: calendar,token,ynab or calendar*,ha:*.",
+                default: "calendar,token,ynab"
+            },
+            vacation_mode_blackout_dates: {
+                type: "text",
+                label: "Blackout Dates",
+                description: "Inclusive date ranges separated by commas, for example: 2026-08-11..2026-08-14,2026-09-11..2026-09-26.",
+                default: ""
+            },
+            vacation_mode_timezone: {
+                type: "text",
+                label: "Privacy Timezone",
+                description: "IANA timezone used to decide when blackout dates begin and end.",
+                default: "UTC"
+            },
+            vacation_mode_fallback_mode: {
+                type: "select",
+                label: "Safe Fallback Display",
+                description: "Display mode used when a scheduled sensitive display is hidden.",
+                options: ["transit", "weather", "auto"],
+                default: "transit"
+            }
+        }
+    },
     flight: {
         title: "Flight Tracking Settings",
         description: "Configure how the device monitors nearby aircraft",
@@ -444,4 +481,4 @@ window.saveAdvancedSettings = async function (event) {
         console.error('Failed to save settings:', error);
         window.showError('Failed to save settings: ' + error.message);
     }
-} 
+}

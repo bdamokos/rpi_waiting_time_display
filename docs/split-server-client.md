@@ -91,8 +91,12 @@ docker compose -f compose.server.yml exec display-render-server \
 
 The image runs as UID/GID 10001, read-only, with all Linux capabilities dropped
 and tmpfs state at `/run/rpi-waiting-time-display` and `/tmp`. A named
-`/app/cache` volume retains bounded plugin state, flight statistics, and
-Skyfield ephemeris data across restarts. It logs to stdout/stderr for the
+`/app/cache` volume retains bounded plugin state, flight statistics, airline
+and aircraft-type metadata, and Skyfield ephemeris data across restarts.
+`flight_metadata_cache_dir` defaults to `cache`; existing `operators.json` and
+`types.json` beside the application remain readable, while new metadata is
+written atomically into the cache directory. An unavailable cache does not
+interrupt flight enrichment. It logs to stdout/stderr for the
 container runtime rather than writing a persistent app log. Supply `.env` at
 runtime; it is excluded from the build context.
 

@@ -71,7 +71,7 @@ class OpenWeatherProvider(WeatherProvider):
     def _get_air_quality(self, params: dict) -> Optional[AirQuality]:
         """Get air quality data if coordinates are available."""
         try:
-            response = requests.get(f"{self.base_url}/air_pollution", params=params)
+            response = requests.get(f"{self.base_url}/air_pollution", params=params, timeout=10)
             response.raise_for_status()
             data = response.json()
             
@@ -104,7 +104,7 @@ class OpenWeatherProvider(WeatherProvider):
         if units:
             params['units'] = units
             
-        response = requests.get(f"{self.base_url}/weather", params=params)
+        response = requests.get(f"{self.base_url}/weather", params=params, timeout=10)
         response.raise_for_status()
         current_data = response.json()
         
@@ -130,7 +130,7 @@ class OpenWeatherProvider(WeatherProvider):
         logger.debug(f"OpenWeather: Created CurrentWeather with unit={current.unit}, temp={current.temperature}")
         
         # Get forecast data with same parameters
-        response = requests.get(f"{self.base_url}/forecast", params=params)
+        response = requests.get(f"{self.base_url}/forecast", params=params, timeout=10)
         response.raise_for_status()
         forecast_data = response.json()
         

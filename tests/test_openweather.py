@@ -2,6 +2,8 @@ import pytest
 from datetime import datetime
 import responses
 import os
+import requests
+from unittest.mock import Mock
 from weather.providers.openweather import OpenWeatherProvider, WEATHER_CODES
 from weather.models import TemperatureUnit
 
@@ -175,6 +177,41 @@ def test_icon_mapping(mock_env):
     
     # Test unknown condition
     assert provider._get_icon("Unknown", True).icon == "cloud" 
+
+
+@pytest.mark.parametrize("stalled_endpoint", ["weather", "forecast", "air_pollution"])
+def test_stalled_api_request_is_bounded(
+    provider, sample_weather_response, sample_forecast_response,
+    sample_air_quality_response, monkeypatch, stalled_endpoint
+):
+    payloads = {
+        "weather": sample_weather_response,
+        "forecast": sample_forecast_response,
+        "air_pollution": sample_air_quality_response,
+    }
+    attempts = []
+
+    def get(url, **kwargs):
+        assert kwargs["timeout"] == 10
+        endpoint = url.rsplit("/", 1)[-1]
+        attempts.append(endpoint)
+        if endpoint == stalled_endpoint:
+            raise requests.Timeout("weather service stalled")
+        response = Mock()
+        response.json.return_value = payloads[endpoint]
+        return response
+
+    monkeypatch.setattr("weather.providers.openweather.requests.get", get)
+
+    if stalled_endpoint == "air_pollution":
+        weather = provider.get_weather()
+        assert weather.current.temperature == 15.3
+        assert weather.air_quality is None
+    else:
+        with pytest.raises(requests.Timeout):
+            provider.get_weather()
+        assert provider._cache is None
+    assert attempts.count(stalled_endpoint) == 1
 
 @responses.activate
 def test_temperature_units(provider, sample_weather_response, sample_forecast_response, sample_air_quality_response):

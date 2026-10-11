@@ -16,6 +16,7 @@ import dotenv
 import requests
 import tempfile
 from io import BytesIO
+from math import isfinite
 from pathlib import Path
 from skyfield.iokit import parse_tle_file
 from display_adapter import DisplayAdapter, return_display_lock, initialize_display
@@ -277,9 +278,25 @@ def _parse_iss_tle(payload):
     satellites = list(parse_tle_file(BytesIO(payload), ts=load.timescale()))
     if len(satellites) != 1 or satellites[0].model.satnum != 25544:
         raise ValueError("TLE response must contain only ISS catalog number 25544")
-    if satellites[0].model.error:
+    satellite = satellites[0]
+    if satellite.model.error:
         raise ValueError("ISS elements could not initialize an orbit")
-    return satellites[0]
+    orbital_fields = (
+        'ecco', 'argpo', 'inclo', 'mo', 'nodeo', 'no_kozai',
+        'ndot', 'nddot', 'bstar', 'jdsatepoch', 'jdsatepochF',
+    )
+    if not all(isfinite(getattr(satellite.model, field)) for field in orbital_fields):
+        raise ValueError("ISS elements must contain finite orbital values")
+    if not isfinite(satellite.epoch.tt):
+        raise ValueError("ISS elements must contain a finite epoch")
+    position = satellite.at(satellite.epoch)
+    if satellite.model.error or position.message:
+        raise ValueError("ISS elements could not propagate an orbit")
+    if not all(isfinite(value) for value in position.position.km) or not all(
+        isfinite(value) for value in position.velocity.km_per_s
+    ):
+        raise ValueError("ISS elements must propagate to a finite orbit")
+    return satellite
 
 def _cached_iss_tle():
     try:

@@ -15,6 +15,11 @@ ISS_TLE = b"""ISS (ZARYA)
 1 25544U 98067A   24165.53171296  .00016717  00000+0  30112-3 0  9994
 2 25544  51.6409 183.2873 0003402  92.7284  30.1764 15.50091203458018
 """
+ISS_NAN_TLE = b"\n".join([
+    *ISS_TLE.splitlines()[:2],
+    ISS_TLE.splitlines()[2][:52] + b"        nan" + ISS_TLE.splitlines()[2][63:],
+]) + b"\n"
+ISS_NAN_EPOCH_TLE = ISS_TLE.replace(b"24165.53171296", b"24         nan")
 
 
 class TleResponse:
@@ -156,13 +161,15 @@ def test_failed_refresh_reuses_last_good_cache_during_remote_backoff(
         b"<html>temporarily unavailable</html>",
         ISS_TLE.replace(b"25544", b"12345"),
         b"ISS\n" + b"1 25544".ljust(69) + b"\n" + b"2 25544".ljust(69) + b"\n",
+        ISS_NAN_TLE,
+        ISS_NAN_EPOCH_TLE,
         b"x" * (iss._ISS_TLE_MAX_BYTES + 1),
     ],
-    ids=["empty", "garbage", "html", "wrong-norad", "invalid-orbit", "oversized"],
+    ids=["empty", "garbage", "html", "wrong-norad", "invalid-orbit", "nan-orbit", "nan-epoch", "oversized"],
 )
 def test_invalid_refresh_preserves_last_good_cache(tle_loader, monkeypatch, payload):
     loader, _ = tle_loader
-    iss.get_tle_data()
+    original = iss.get_tle_data()
     age_cache(loader, 25)
     cache_file = Path(loader.path_to("iss.tle"))
     previous_mtime = cache_file.stat().st_mtime
@@ -174,12 +181,54 @@ def test_invalid_refresh_preserves_last_good_cache(tle_loader, monkeypatch, payl
     iss.get_tle_data()
 
     assert satellite.model.satnum == 25544
+    assert satellite.epoch.tt == original.epoch.tt
     assert cache_file.read_bytes() == ISS_TLE
     assert cache_file.stat().st_mtime == previous_mtime
     assert request.call_count == 1
     assert response.closed
     assert iss._tle_backoff.get_failure_count() == 1
     assert not list(cache_file.parent.glob(".iss-tle-*"))
+
+
+@pytest.mark.parametrize("payload", [ISS_NAN_TLE, ISS_NAN_EPOCH_TLE], ids=["orbit", "epoch"])
+def test_nan_local_cache_is_rejected_during_backoff(tle_loader, monkeypatch, payload):
+    loader, _ = tle_loader
+    cache_file = Path(loader.path_to("iss.tle"))
+    cache_file.write_bytes(payload)
+    iss._tle_backoff.update_backoff_state(False)
+    request = Mock(side_effect=AssertionError("backoff must not download"))
+    monkeypatch.setattr(iss.requests, "get", request)
+
+    assert iss._cached_iss_tle() is None
+    with pytest.raises(Exception, match="backed off"):
+        iss.get_tle_data()
+
+    request.assert_not_called()
+    assert cache_file.read_bytes() == payload
+
+
+@pytest.mark.parametrize(
+    "position, velocity, message",
+    [
+        ([float("nan"), 1, 1], [1, 1, 1], None),
+        ([1, 1, 1], [1, float("inf"), 1], None),
+        ([1, 1, 1], [1, 1, 1], "satellite has decayed"),
+    ],
+    ids=["non-finite-position", "non-finite-velocity", "sgp4-error"],
+)
+def test_unusable_epoch_propagation_is_rejected(
+    tle_loader, monkeypatch, position, velocity, message
+):
+    result = Mock(
+        message=message, position=Mock(km=position), velocity=Mock(km_per_s=velocity)
+    )
+    propagate = Mock(return_value=result)
+    monkeypatch.setattr("skyfield.sgp4lib.EarthSatellite.at", propagate)
+
+    with pytest.raises(ValueError, match="propagate"):
+        iss._parse_iss_tle(ISS_TLE)
+
+    propagate.assert_called_once()
 
 
 def test_invalid_download_without_good_cache_is_rejected(tle_loader, monkeypatch):

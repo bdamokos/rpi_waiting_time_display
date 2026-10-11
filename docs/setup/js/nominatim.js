@@ -3,6 +3,24 @@
 // Base URL for Nominatim API
 const NOMINATIM_BASE_URL = 'https://nominatim.openstreetmap.org';
 
+// Share one queue across forward/reverse lookups and cross-verification.
+let nominatimPendingRequest = Promise.resolve();
+let nominatimNextRequestAt = 0;
+
+function fetchNominatim(url, options) {
+    const request = nominatimPendingRequest.then(async () => {
+        const wait = Math.max(0, nominatimNextRequestAt - Date.now());
+        if (wait > 0) {
+            await delay(wait);
+        }
+        nominatimNextRequestAt = Date.now() + 1000;
+        return fetch(url, options);
+    });
+    // A failed lookup must not prevent the next queued request from running.
+    nominatimPendingRequest = request.then(() => undefined, () => undefined);
+    return request;
+}
+
 /**
  * Forward geocoding - get coordinates from city and country
  * @param {string} city - City name
@@ -18,7 +36,7 @@ window.geocodeLocation = async function(city, country) {
     });
 
     try {
-        const response = await fetch(`${NOMINATIM_BASE_URL}/search?${params}`, {
+        const response = await fetchNominatim(`${NOMINATIM_BASE_URL}/search?${params}`, {
             headers: {
                 'Accept': 'application/json',
                 'User-Agent': 'RPi-Display-Setup'
@@ -60,7 +78,7 @@ window.reverseGeocodeLocation = async function(lat, lon) {
     });
 
     try {
-        const response = await fetch(`${NOMINATIM_BASE_URL}/reverse?${params}`, {
+        const response = await fetchNominatim(`${NOMINATIM_BASE_URL}/reverse?${params}`, {
             headers: {
                 'Accept': 'application/json',
                 'User-Agent': 'RPi-Display-Setup'

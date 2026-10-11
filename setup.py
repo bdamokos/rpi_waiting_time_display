@@ -9,7 +9,7 @@ exec((Path(__file__).with_name("version.py")).read_text(), version_namespace)
 setup(
     name="weather",
     version=version_namespace["__version__"],
-    python_requires=">=3.9",
+    python_requires=">=3.10",
     packages=find_packages(),
     py_modules=[
         "dithering",
@@ -24,11 +24,12 @@ setup(
         "version",
     ],
     install_requires=[
-        "requests>=2.32.3",
+        "requests>=2.34.2",
+        "urllib3>=2.8.0",
         "pydantic>=2.5.0",
-        "python-dotenv>=1.0.1",
-        "cairosvg>=2.9.0",
+        "python-dotenv>=1.2.4",
+        "cairosvg>=2.9.1",
         "defusedxml>=0.7.1",
-        "Pillow>=11.0.0",
+        "Pillow>=12.3.0",
     ],
 )

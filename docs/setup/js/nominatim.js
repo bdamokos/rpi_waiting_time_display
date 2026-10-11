@@ -2,6 +2,7 @@
 
 // Base URL for Nominatim API
 const NOMINATIM_BASE_URL = 'https://nominatim.openstreetmap.org';
+const NOMINATIM_REQUEST_TIMEOUT_MS = 10000;
 
 // Share one queue across forward/reverse lookups and cross-verification.
 let nominatimPendingRequest = Promise.resolve();
@@ -14,7 +15,22 @@ function fetchNominatim(url, options) {
             await delay(wait);
         }
         nominatimNextRequestAt = Date.now() + 1000;
-        return fetch(url, options);
+        const controller = new AbortController();
+        let timeout;
+        const deadline = new Promise((resolve, reject) => {
+            timeout = setTimeout(() => {
+                reject(new Error('Geocoding request timed out'));
+                controller.abort();
+            }, NOMINATIM_REQUEST_TIMEOUT_MS);
+        });
+        try {
+            return await Promise.race([
+                fetch(url, {...options, signal: controller.signal}),
+                deadline
+            ]);
+        } finally {
+            clearTimeout(timeout);
+        }
     });
     // A failed lookup must not prevent the next queued request from running.
     nominatimPendingRequest = request.then(() => undefined, () => undefined);

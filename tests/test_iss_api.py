@@ -1,6 +1,7 @@
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 import requests
@@ -16,6 +17,29 @@ ISS_TLE = b"""ISS (ZARYA)
 """
 
 
+class TleResponse:
+    def __init__(self, payload=ISS_TLE, status_code=200):
+        self.payload = payload
+        self.status_code = status_code
+        self.closed = False
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise requests.HTTPError(f"HTTP {self.status_code}")
+
+    def iter_content(self, chunk_size):
+        for offset in range(0, len(self.payload), chunk_size):
+            yield self.payload[offset:offset + chunk_size]
+
+    def close(self):
+        self.closed = True
+
+
+def age_cache(loader, hours):
+    old = (datetime.now() - timedelta(hours=hours)).timestamp()
+    os.utime(loader.path_to("iss.tle"), (old, old))
+
+
 @pytest.fixture
 def tle_loader(monkeypatch, tmp_path):
     loader = Loader(str(tmp_path), verbose=False)
@@ -25,11 +49,17 @@ def tle_loader(monkeypatch, tmp_path):
     )
     downloads = []
 
-    def download(url, path, *args, **kwargs):
+    def download(url, **kwargs):
         downloads.append(url)
-        Path(path).write_bytes(ISS_TLE)
+        assert kwargs["timeout"] == 10
+        assert kwargs["stream"] is True
+        return TleResponse()
 
-    monkeypatch.setattr("skyfield.iokit.download", download)
+    monkeypatch.setattr(iss.requests, "get", download)
+    monkeypatch.setattr(
+        "skyfield.iokit.download",
+        Mock(side_effect=AssertionError("Skyfield must only parse local data")),
+    )
     return loader, downloads
 
 
@@ -58,8 +88,7 @@ def test_fresh_iss_cache_avoids_repeated_downloads(tle_loader):
 def test_old_iss_cache_refreshes_instead_of_reusing_orbit_forever(tle_loader):
     loader, downloads = tle_loader
     iss.get_tle_data()
-    old = (datetime.now() - timedelta(days=2)).timestamp()
-    os.utime(loader.path_to("iss.tle"), (old, old))
+    age_cache(loader, 48)
 
     satellite = iss.get_tle_data()
     iss.get_tle_data()
@@ -74,20 +103,166 @@ def test_failed_tle_download_is_not_retried_within_provider_update_window(
 ):
     attempts = []
 
-    def fail(url, path, *args, **kwargs):
+    def fail(url, **kwargs):
         attempts.append(url)
-        raise IOError("HTTP 403")
+        raise requests.HTTPError("HTTP 403")
 
-    monkeypatch.setattr("skyfield.iokit.download", fail)
+    monkeypatch.setattr(iss.requests, "get", fail)
     before = datetime.now()
 
-    with pytest.raises(IOError):
+    with pytest.raises(requests.HTTPError):
         iss.get_tle_data()
     with pytest.raises(Exception, match="backed off"):
         iss.get_tle_data()
 
     assert len(attempts) == 1
     assert iss._tle_backoff._next_retry_time >= before + timedelta(hours=2)
+
+
+def test_failed_refresh_reuses_last_good_cache_during_remote_backoff(
+    tle_loader, monkeypatch
+):
+    loader, _ = tle_loader
+    original = iss.get_tle_data()
+    age_cache(loader, 25)
+    cache_file = Path(loader.path_to("iss.tle"))
+    previous_mtime = cache_file.stat().st_mtime
+    response = TleResponse(status_code=503)
+    request = Mock(return_value=response)
+    monkeypatch.setattr(iss.requests, "get", request)
+
+    refreshed = iss.get_tle_data()
+    next_retry = iss._tle_backoff._next_retry_time
+    reused = iss.get_tle_data()
+
+    assert refreshed.model.satnum == reused.model.satnum == 25544
+    assert refreshed.epoch.tt == reused.epoch.tt == original.epoch.tt
+    assert request.call_count == 1
+    assert request.call_args.kwargs["timeout"] == 10
+    assert request.call_args.kwargs["stream"] is True
+    assert request.call_args.kwargs["headers"]["Accept"] == "text/plain"
+    assert response.closed
+    assert cache_file.read_bytes() == ISS_TLE
+    assert cache_file.stat().st_mtime == previous_mtime
+    assert iss._tle_backoff.get_failure_count() == 1
+    assert iss._tle_backoff._next_retry_time == next_retry
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        b"",
+        b"garbage",
+        b"<html>temporarily unavailable</html>",
+        ISS_TLE.replace(b"25544", b"12345"),
+        b"ISS\n" + b"1 25544".ljust(69) + b"\n" + b"2 25544".ljust(69) + b"\n",
+        b"x" * (iss._ISS_TLE_MAX_BYTES + 1),
+    ],
+    ids=["empty", "garbage", "html", "wrong-norad", "invalid-orbit", "oversized"],
+)
+def test_invalid_refresh_preserves_last_good_cache(tle_loader, monkeypatch, payload):
+    loader, _ = tle_loader
+    iss.get_tle_data()
+    age_cache(loader, 25)
+    cache_file = Path(loader.path_to("iss.tle"))
+    previous_mtime = cache_file.stat().st_mtime
+    response = TleResponse(payload)
+    request = Mock(return_value=response)
+    monkeypatch.setattr(iss.requests, "get", request)
+
+    satellite = iss.get_tle_data()
+    iss.get_tle_data()
+
+    assert satellite.model.satnum == 25544
+    assert cache_file.read_bytes() == ISS_TLE
+    assert cache_file.stat().st_mtime == previous_mtime
+    assert request.call_count == 1
+    assert response.closed
+    assert iss._tle_backoff.get_failure_count() == 1
+    assert not list(cache_file.parent.glob(".iss-tle-*"))
+
+
+def test_invalid_download_without_good_cache_is_rejected(tle_loader, monkeypatch):
+    loader, _ = tle_loader
+    response = TleResponse(ISS_TLE.replace(b"25544", b"12345"))
+    monkeypatch.setattr(iss.requests, "get", Mock(return_value=response))
+
+    with pytest.raises(ValueError, match="25544"):
+        iss.get_tle_data()
+
+    assert response.closed
+    assert not loader.exists("iss.tle")
+
+
+def test_validated_refresh_atomically_promotes_new_orbit(tle_loader, monkeypatch):
+    loader, _ = tle_loader
+    original = iss.get_tle_data()
+    age_cache(loader, 25)
+    updated = ISS_TLE.replace(b"24165.53171296", b"24166.53171296")
+    response = TleResponse(updated)
+    request = Mock(return_value=response)
+    monkeypatch.setattr(iss.requests, "get", request)
+
+    refreshed = iss.get_tle_data()
+    cached = iss.get_tle_data()
+
+    assert refreshed.model.satnum == cached.model.satnum == 25544
+    assert refreshed.epoch.tt == cached.epoch.tt == original.epoch.tt + 1
+    cache_file = Path(loader.path_to("iss.tle"))
+    assert cache_file.read_bytes() == updated
+    assert loader.days_old("iss.tle") < 1
+    assert not list(cache_file.parent.glob(".iss-tle-*"))
+    assert request.call_count == 1
+    assert response.closed
+    assert iss._tle_backoff.get_failure_count() == 0
+
+
+def test_failed_atomic_promotion_keeps_previous_cache(tle_loader, monkeypatch):
+    loader, _ = tle_loader
+    original = iss.get_tle_data()
+    age_cache(loader, 25)
+    updated = ISS_TLE.replace(b"24165.53171296", b"24166.53171296")
+    monkeypatch.setattr(iss.requests, "get", Mock(return_value=TleResponse(updated)))
+    monkeypatch.setattr(iss.os, "replace", Mock(side_effect=PermissionError("read only")))
+
+    fallback = iss.get_tle_data()
+
+    assert fallback.epoch.tt == original.epoch.tt
+    cache_file = Path(loader.path_to("iss.tle"))
+    assert cache_file.read_bytes() == ISS_TLE
+    assert not list(cache_file.parent.glob(".iss-tle-*"))
+    assert iss._tle_backoff.get_failure_count() == 1
+
+
+def test_overage_cache_is_rejected_during_backoff_without_network(
+    tle_loader, monkeypatch
+):
+    loader, _ = tle_loader
+    iss.get_tle_data()
+    age_cache(loader, 49)
+    iss._tle_backoff.update_backoff_state(False)
+    request = Mock(side_effect=AssertionError("backoff must not download"))
+    monkeypatch.setattr(iss.requests, "get", request)
+
+    with pytest.raises(Exception, match="backed off"):
+        iss.get_tle_data()
+
+    request.assert_not_called()
+    assert iss._tle_backoff.get_failure_count() == 1
+
+
+def test_overage_cache_is_not_a_fallback_after_failed_refresh(tle_loader, monkeypatch):
+    loader, _ = tle_loader
+    iss.get_tle_data()
+    age_cache(loader, 49)
+    monkeypatch.setattr(
+        iss.requests, "get", Mock(return_value=TleResponse(status_code=503))
+    )
+
+    with pytest.raises(requests.HTTPError, match="503"):
+        iss.get_tle_data()
+
+    assert Path(loader.path_to("iss.tle")).read_bytes() == ISS_TLE
 
 
 def test_position_timeout_returns_control_and_activates_backoff(monkeypatch):

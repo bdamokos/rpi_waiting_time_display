@@ -14,7 +14,10 @@ import json
 import os
 import dotenv
 import requests
+import tempfile
+from io import BytesIO
 from pathlib import Path
+from skyfield.iokit import parse_tle_file
 from display_adapter import DisplayAdapter, return_display_lock, initialize_display
 from font_utils import get_font_paths
 import log_config
@@ -267,29 +270,88 @@ _tle_backoff = ExponentialBackoff(initial_backoff=7200, max_backoff=28800)  # 2 
 _ISS_TLE_URL = 'https://celestrak.org/NORAD/elements/gp.php?CATNR=25544&FORMAT=TLE'
 _ISS_TLE_FILENAME = 'iss.tle'
 _ISS_TLE_REFRESH_DAYS = 1
+_ISS_TLE_MAX_STALE_DAYS = 2
+_ISS_TLE_MAX_BYTES = 4096
+
+def _parse_iss_tle(payload):
+    satellites = list(parse_tle_file(BytesIO(payload), ts=load.timescale()))
+    if len(satellites) != 1 or satellites[0].model.satnum != 25544:
+        raise ValueError("TLE response must contain only ISS catalog number 25544")
+    if satellites[0].model.error:
+        raise ValueError("ISS elements could not initialize an orbit")
+    return satellites[0]
+
+def _cached_iss_tle():
+    try:
+        if load.days_old(_ISS_TLE_FILENAME) > _ISS_TLE_MAX_STALE_DAYS:
+            return None
+        with open(load.path_to(_ISS_TLE_FILENAME), 'rb') as handle:
+            payload = handle.read(_ISS_TLE_MAX_BYTES + 1)
+        if len(payload) > _ISS_TLE_MAX_BYTES:
+            return None
+        return _parse_iss_tle(payload)
+    except (OSError, ValueError):
+        return None
+
+def _download_iss_tle():
+    response = requests.get(
+        _ISS_TLE_URL, timeout=10, stream=True,
+        headers={
+            'Accept': 'text/plain',
+            'User-Agent': 'rpi-waiting-time-display/1.0 (+https://github.com/bdamokos/rpi_waiting_time_display)',
+        },
+    )
+    try:
+        response.raise_for_status()
+        payload = bytearray()
+        for chunk in response.iter_content(chunk_size=1024):
+            payload.extend(chunk)
+            if len(payload) > _ISS_TLE_MAX_BYTES:
+                raise ValueError("TLE response exceeds size limit")
+        payload = bytes(payload)
+        satellite = _parse_iss_tle(payload)
+
+        # Validate before replacing the last-good cache, and promote within
+        # its directory so a failed/partial download never poisons that file.
+        cache_file = Path(load.path_to(_ISS_TLE_FILENAME))
+        cache_file.parent.mkdir(parents=True, exist_ok=True)
+        descriptor, temporary = tempfile.mkstemp(
+            dir=cache_file.parent, prefix='.iss-tle-'
+        )
+        try:
+            with os.fdopen(descriptor, 'wb') as handle:
+                handle.write(payload)
+            os.replace(temporary, cache_file)
+        finally:
+            if os.path.exists(temporary):
+                os.unlink(temporary)
+        return satellite
+    finally:
+        response.close()
 
 def get_tle_data():
-    """Get TLE data using skyfield's built-in caching with backoff handling"""
+    """Refresh validated ISS elements with a bounded last-good cache fallback."""
+    cached = _cached_iss_tle()
+    if cached is not None and load.days_old(_ISS_TLE_FILENAME) < _ISS_TLE_REFRESH_DAYS:
+        return cached
     if not _tle_backoff.should_retry():
         logger.warning(f"Skipping TLE data request, backing off until {_tle_backoff.get_retry_time_str()}")
+        if cached is not None:
+            return cached
         raise Exception("TLE data request is backed off")
 
     try:
         # Skyfield otherwise keeps a downloaded TLE forever. Use a dedicated
         # filename for the query endpoint and refresh at most once per day.
-        reload = (
-            load.exists(_ISS_TLE_FILENAME)
-            and load.days_old(_ISS_TLE_FILENAME) >= _ISS_TLE_REFRESH_DAYS
-        )
-        satellites = load.tle_file(
-            _ISS_TLE_URL, filename=_ISS_TLE_FILENAME, reload=reload
-        )
-        iss = next(sat for sat in satellites if sat.model.satnum == 25544)
+        iss = _download_iss_tle()
         _tle_backoff.update_backoff_state(True)
         return iss
     except Exception as e:
         _tle_backoff.update_backoff_state(False)
         logger.error(f"Error loading TLE data: {e}")
+        if cached is not None:
+            logger.warning("Using last-good ISS elements less than two days old")
+            return cached
         raise
 
 def predict_passes(lat, lon, alt=0, n=5):

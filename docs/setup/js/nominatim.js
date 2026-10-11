@@ -25,7 +25,11 @@ function fetchNominatim(url, options) {
         });
         try {
             return await Promise.race([
-                fetch(url, {...options, signal: controller.signal}),
+                fetch(url, {...options, signal: controller.signal}).then(async response => ({
+                    ok: response.ok,
+                    // Keep the same deadline active through body consumption.
+                    data: response.ok ? await response.json() : null
+                })),
                 deadline
             ]);
         } finally {
@@ -63,7 +67,7 @@ window.geocodeLocation = async function(city, country) {
             throw new Error('Geocoding failed');
         }
 
-        const data = await response.json();
+        const data = response.data;
         if (!data || data.length === 0) {
             throw new Error('Location not found');
         }
@@ -105,7 +109,7 @@ window.reverseGeocodeLocation = async function(lat, lon) {
             throw new Error('Reverse geocoding failed');
         }
 
-        const data = await response.json();
+        const data = response.data;
         if (!data) {
             throw new Error('Location not found');
         }

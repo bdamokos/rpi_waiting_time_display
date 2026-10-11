@@ -9,12 +9,21 @@ const source = fs.readFileSync(
 );
 
 function setup({failFirst = false, firstRequestDuration = 0, stallFirst = false,
-    ignoreAbort = false} = {}) {
+    stallBodyFirst = false, ignoreAbort = false, firstStatusOk = true,
+    invalidJsonFirst = false} = {}) {
     let now = 0;
     let nextTimer = 1;
     let aborts = 0;
     const starts = [];
     const timers = new Map();
+    function stall(signal) {
+        return new Promise((resolve, reject) => {
+            signal.addEventListener('abort', () => {
+                aborts++;
+                if (!ignoreAbort) reject(new Error('request aborted'));
+            }, {once: true});
+        });
+    }
     const context = {
         URLSearchParams,
         AbortController,
@@ -30,21 +39,19 @@ function setup({failFirst = false, firstRequestDuration = 0, stallFirst = false,
         },
         async fetch(url, options) {
             starts.push(now);
-            if (starts.length === 1) {
+            const isFirst = starts.length === 1;
+            if (isFirst) {
                 if (stallFirst) {
-                    return new Promise((resolve, reject) => {
-                        options.signal.addEventListener('abort', () => {
-                            aborts++;
-                            if (!ignoreAbort) reject(new Error('request aborted'));
-                        }, {once: true});
-                    });
+                    return stall(options.signal);
                 }
                 now += firstRequestDuration;
                 if (failFirst) throw new Error('network unavailable');
             }
             return {
-                ok: true,
+                ok: isFirst ? firstStatusOk : true,
                 async json() {
+                    if (isFirst && stallBodyFirst) return stall(options.signal);
+                    if (isFirst && invalidJsonFirst) throw new SyntaxError('invalid JSON');
                     return url.includes('/reverse?')
                         ? {address: {city: 'Brussels', country_code: 'be'}, display_name: 'Brussels'}
                         : [{lat: '50.8505', lon: '4.3488', display_name: 'Brussels'}];
@@ -129,30 +136,61 @@ test('a slow response already satisfies the interval without another delay', asy
     assert.equal(timers.size, 0);
 });
 
-for (const ignoreAbort of [false, true]) {
-    test(`a stalled request releases the queue when its deadline expires (ignore abort: ${ignoreAbort})`, async () => {
-        const {context, starts, timers, advance, getAborts} = setup({stallFirst: true, ignoreAbort});
-        const lookups = Promise.allSettled([
-            context.geocodeLocation('Brussels', 'BE'),
-            context.reverseGeocodeLocation(50.8505, 4.3488),
-            context.geocodeLocation('Budapest', 'HU')
-        ]);
+for (const stage of ['headers', 'body']) {
+    for (const ignoreAbort of [false, true]) {
+        test(`stalled ${stage} releases the queue at the deadline (ignore abort: ${ignoreAbort})`, async () => {
+            const {context, starts, timers, advance, getAborts} = setup({
+                stallFirst: stage === 'headers', stallBodyFirst: stage === 'body', ignoreAbort
+            });
+            const lookups = Promise.allSettled([
+                context.geocodeLocation('Brussels', 'BE'),
+                context.reverseGeocodeLocation(50.8505, 4.3488),
+                context.geocodeLocation('Budapest', 'HU')
+            ]);
 
-        await advance(9999);
-        assert.deepEqual(starts, [0]);
-        assert.equal(getAborts(), 0);
-        await advance(1);
-        assert.deepEqual(starts, [0, 10000]);
-        assert.equal(getAborts(), 1);
-        await advance(1000);
-        const results = await lookups;
+            await advance(9999);
+            assert.deepEqual(starts, [0]);
+            assert.equal(getAborts(), 0);
+            await advance(1);
+            assert.deepEqual(starts, [0, 10000]);
+            assert.equal(getAborts(), 1);
+            await advance(1000);
+            const results = await lookups;
 
-        assert.equal(results[0].status, 'rejected');
-        assert.match(results[0].reason.message, /timed out/);
-        assert.equal(results[1].status, 'fulfilled');
-        assert.equal(results[1].value.country_code, 'BE');
-        assert.equal(results[2].status, 'fulfilled');
-        assert.deepEqual(starts, [0, 10000, 11000]);
-        assert.equal(timers.size, 0);
-    });
+            assert.equal(results[0].status, 'rejected');
+            assert.match(results[0].reason.message, /timed out/);
+            assert.equal(results[1].status, 'fulfilled');
+            assert.equal(results[1].value.country_code, 'BE');
+            assert.equal(results[2].status, 'fulfilled');
+            assert.deepEqual(starts, [0, 10000, 11000]);
+            assert.equal(timers.size, 0);
+        });
+    }
 }
+
+test('unsuccessful responses preserve lookup errors without waiting for their body', async () => {
+    for (const reverse of [false, true]) {
+        const {context, timers, settle} = setup({firstStatusOk: false, stallBodyFirst: true});
+        const lookup = reverse
+            ? context.reverseGeocodeLocation(50.8505, 4.3488)
+            : context.geocodeLocation('Brussels', 'BE');
+        await assert.rejects(settle(lookup), {
+            message: reverse ? 'Reverse geocoding failed' : 'Geocoding failed'
+        });
+        assert.equal(timers.size, 0);
+    }
+});
+
+test('invalid JSON preserves the parsing error and releases the queue', async () => {
+    const {context, starts, timers, settle} = setup({invalidJsonFirst: true});
+    const results = await settle(Promise.allSettled([
+        context.geocodeLocation('Brussels', 'BE'),
+        context.reverseGeocodeLocation(50.8505, 4.3488)
+    ]));
+
+    assert.equal(results[0].status, 'rejected');
+    assert.equal(results[0].reason.name, 'SyntaxError');
+    assert.equal(results[1].status, 'fulfilled');
+    assert.deepEqual(starts, [0, 1000]);
+    assert.equal(timers.size, 0);
+});

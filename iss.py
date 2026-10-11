@@ -197,7 +197,7 @@ def get_iss_position():
         return None
 
     try:
-        response = requests.get('https://api.wheretheiss.at/v1/satellites/25544')
+        response = requests.get('https://api.wheretheiss.at/v1/satellites/25544', timeout=10)
         response.raise_for_status()
         data = response.json()
         _api_backoff.update_backoff_state(True)
@@ -263,7 +263,10 @@ def is_iss_near(lat = Coordinates_LAT, lon = Coordinates_LNG, debug=False):
         return False, None
 
 # Create a global backoff instance for TLE data
-_tle_backoff = ExponentialBackoff(initial_backoff=300, max_backoff=3600)  # 5min to 1hour
+_tle_backoff = ExponentialBackoff(initial_backoff=7200, max_backoff=28800)  # 2 to 8 hours
+_ISS_TLE_URL = 'https://celestrak.org/NORAD/elements/gp.php?CATNR=25544&FORMAT=TLE'
+_ISS_TLE_FILENAME = 'iss.tle'
+_ISS_TLE_REFRESH_DAYS = 1
 
 def get_tle_data():
     """Get TLE data using skyfield's built-in caching with backoff handling"""
@@ -272,8 +275,16 @@ def get_tle_data():
         raise Exception("TLE data request is backed off")
 
     try:
-        satellites = load.tle_file('https://celestrak.org/NORAD/elements/stations.txt')
-        iss = next(sat for sat in satellites if 'ISS' in sat.name)
+        # Skyfield otherwise keeps a downloaded TLE forever. Use a dedicated
+        # filename for the query endpoint and refresh at most once per day.
+        reload = (
+            load.exists(_ISS_TLE_FILENAME)
+            and load.days_old(_ISS_TLE_FILENAME) >= _ISS_TLE_REFRESH_DAYS
+        )
+        satellites = load.tle_file(
+            _ISS_TLE_URL, filename=_ISS_TLE_FILENAME, reload=reload
+        )
+        iss = next(sat for sat in satellites if sat.model.satnum == 25544)
         _tle_backoff.update_backoff_state(True)
         return iss
     except Exception as e:

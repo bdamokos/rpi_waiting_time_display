@@ -475,7 +475,7 @@ def _aeroapi_get_data(endpoint, url_params=None, call_params=None):
             request_url += f"?{call_params}"
         
         logger.debug(f"Making AeroAPI request to: {request_url}")
-        response = flight_session.get(request_url, headers=headers)
+        response = flight_session.get(request_url, headers=headers, timeout=10)
         
         # Log response details
         logger.debug(f"AeroAPI response status: {response.status_code}")

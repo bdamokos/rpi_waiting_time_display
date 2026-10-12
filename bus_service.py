@@ -774,7 +774,7 @@ class BusService:
                 logger.warning("EPD not set, falling back to black and white")
                 return [('black', 0.7), ('white', 0.3)]
 
-            response = requests.get(f"{self.colors_url}/{line}")
+            response = requests.get(f"{self.colors_url}/{line}", timeout=10)
             response.raise_for_status()
             line_colors = response.json()
 
@@ -800,7 +800,7 @@ class BusService:
     def get_api_health(self) -> bool:
         """Check if the API is healthy"""
         try:
-            response = requests.get(f"{self.base_url}/health")
+            response = requests.get(f"{self.base_url}/health", timeout=10)
             logger.info(f"Health check response: {response.status_code}")
             return response.status_code == 200
         except Exception as e:

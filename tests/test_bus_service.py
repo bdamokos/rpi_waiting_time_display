@@ -4,6 +4,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from bus_service import BusService, _parse_lines
+import bus_service as bus_module
+from display_adapter import MockDisplay
 
 
 def make_response(*, status=200, data=None, error=None):
@@ -124,3 +126,31 @@ def test_get_api_health(bus_service):
         return_value=make_response(status=500, data={"status": "error"}),
     ):
         assert bus_service.get_api_health() is False
+
+
+def test_stalled_health_request_returns_false(bus_service, monkeypatch):
+    attempts = []
+
+    def stalled(url, **kwargs):
+        attempts.append((url, kwargs))
+        raise bus_module.requests.exceptions.Timeout("health service stalled")
+
+    monkeypatch.setattr(bus_module.requests, "get", stalled)
+
+    assert bus_service.get_api_health() is False
+    assert attempts == [(f"{bus_service.base_url}/health", {"timeout": 10})]
+
+
+def test_stalled_line_color_request_uses_default_palette(bus_service, monkeypatch):
+    bus_service.epd = MockDisplay()
+    bus_service.get_line_color.cache_clear()
+    attempts = []
+
+    def stalled(url, **kwargs):
+        attempts.append((url, kwargs))
+        raise bus_module.requests.exceptions.Timeout("line metadata stalled")
+
+    monkeypatch.setattr(bus_module.requests, "get", stalled)
+
+    assert bus_service.get_line_color("64") == [("black", 0.7), ("white", 0.3)]
+    assert attempts == [(f"{bus_service.colors_url}/64", {"timeout": 10})]

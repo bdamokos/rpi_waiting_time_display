@@ -2,6 +2,44 @@
 
 // Base URL for Nominatim API
 const NOMINATIM_BASE_URL = 'https://nominatim.openstreetmap.org';
+const NOMINATIM_REQUEST_TIMEOUT_MS = 10000;
+
+// Share one queue across forward/reverse lookups and cross-verification.
+let nominatimPendingRequest = Promise.resolve();
+let nominatimNextRequestAt = 0;
+
+function fetchNominatim(url, options) {
+    const request = nominatimPendingRequest.then(async () => {
+        const wait = Math.max(0, nominatimNextRequestAt - Date.now());
+        if (wait > 0) {
+            await delay(wait);
+        }
+        nominatimNextRequestAt = Date.now() + 1000;
+        const controller = new AbortController();
+        let timeout;
+        const deadline = new Promise((resolve, reject) => {
+            timeout = setTimeout(() => {
+                reject(new Error('Geocoding request timed out'));
+                controller.abort();
+            }, NOMINATIM_REQUEST_TIMEOUT_MS);
+        });
+        try {
+            return await Promise.race([
+                fetch(url, {...options, signal: controller.signal}).then(async response => ({
+                    ok: response.ok,
+                    // Keep the same deadline active through body consumption.
+                    data: response.ok ? await response.json() : null
+                })),
+                deadline
+            ]);
+        } finally {
+            clearTimeout(timeout);
+        }
+    });
+    // A failed lookup must not prevent the next queued request from running.
+    nominatimPendingRequest = request.then(() => undefined, () => undefined);
+    return request;
+}
 
 /**
  * Forward geocoding - get coordinates from city and country
@@ -18,7 +56,7 @@ window.geocodeLocation = async function(city, country) {
     });
 
     try {
-        const response = await fetch(`${NOMINATIM_BASE_URL}/search?${params}`, {
+        const response = await fetchNominatim(`${NOMINATIM_BASE_URL}/search?${params}`, {
             headers: {
                 'Accept': 'application/json',
                 'User-Agent': 'RPi-Display-Setup'
@@ -29,7 +67,7 @@ window.geocodeLocation = async function(city, country) {
             throw new Error('Geocoding failed');
         }
 
-        const data = await response.json();
+        const data = response.data;
         if (!data || data.length === 0) {
             throw new Error('Location not found');
         }
@@ -60,7 +98,7 @@ window.reverseGeocodeLocation = async function(lat, lon) {
     });
 
     try {
-        const response = await fetch(`${NOMINATIM_BASE_URL}/reverse?${params}`, {
+        const response = await fetchNominatim(`${NOMINATIM_BASE_URL}/reverse?${params}`, {
             headers: {
                 'Accept': 'application/json',
                 'User-Agent': 'RPi-Display-Setup'
@@ -71,7 +109,7 @@ window.reverseGeocodeLocation = async function(lat, lon) {
             throw new Error('Reverse geocoding failed');
         }
 
-        const data = await response.json();
+        const data = response.data;
         if (!data) {
             throw new Error('Location not found');
         }

@@ -4,6 +4,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import requests
+import pytest
 
 from calendar_service import (CalendarClient, GoogleCalendarApiSource,
                               GoogleTasksApiSource, IcsCalendarSource,
@@ -109,9 +110,58 @@ def test_google_tasks_requests_bounded_due_window_and_normalizes(tmp_path):
     assert [event.summary for event in events] == ["☐ Task 1"]
     assert events[0].location == "My Tasks"
     params = session.calls[1][1]["params"]
-    assert params["dueMin"] == "2026-07-10T22:00:00Z"
-    assert params["dueMax"] == "2026-07-13T22:00:00Z"
+    assert params["dueMin"] == "2026-07-11T00:00:00Z"
+    assert params["dueMax"] == "2026-07-14T00:00:00Z"
     assert stat.S_IMODE(source.cache_file.stat().st_mode) == 0o600
+
+
+@pytest.mark.parametrize(
+    "timezone_name", ["America/Los_Angeles", "Pacific/Midway", "Europe/Brussels", "Asia/Tokyo"]
+)
+def test_google_tasks_due_window_preserves_first_and_last_local_dates(
+    tmp_path, timezone_name
+):
+    local_timezone = ZoneInfo(timezone_name)
+    start = datetime(2026, 7, 11, 8, tzinfo=local_timezone)
+    end = start + timedelta(days=3)
+
+    class FilteringSession(FakeSession):
+        def get(self, url, **kwargs):
+            if url.endswith("/@me/lists"):
+                return FakeResponse(200, json_data={"items": [{"id": "default"}]})
+            params = kwargs["params"]
+            self.calls.append((url, kwargs))
+            lower = datetime.fromisoformat(params["dueMin"].replace("Z", "+00:00"))
+            upper = datetime.fromisoformat(params["dueMax"].replace("Z", "+00:00"))
+            tasks = [_task(day, day=day) for day in (10, 11, 13, 14)]
+            return FakeResponse(
+                200,
+                json_data={
+                    "items": [
+                        task for task in tasks
+                        if lower <= datetime.fromisoformat(task["due"].replace("Z", "+00:00")) < upper
+                    ]
+                },
+            )
+
+    source = GoogleTasksApiSource(
+        credentials_file=tmp_path / "unused.json",
+        cache_dir=tmp_path,
+        timeout=5,
+        max_stale_seconds=3600,
+        session=FilteringSession([]),
+        credentials=FakeCredentials(),
+    )
+    events = source.events_between(
+        start.astimezone(ZoneInfo("UTC")),
+        end.astimezone(ZoneInfo("UTC")),
+        timezone=local_timezone,
+        include_all_day=True,
+        show_details=True,
+    )
+
+    assert [event.summary for event in events] == ["☐ Task 11", "☐ Task 13"]
+    assert [event.start.date().day for event in events] == [11, 13]
 
 
 def test_google_tasks_hides_details_and_skips_completed_or_undated(tmp_path):

@@ -12,6 +12,9 @@ from flights import (
     update_display_with_recent_flights,
 )
 from screen_arbiter import ScreenArbiter
+import flights
+import requests
+from backoff import ExponentialBackoff
 
 
 def test_recent_flight_cache_is_bounded_deduplicated_and_newest_first():
@@ -80,6 +83,19 @@ def test_adsb_point_fetch_rejects_invalid_payloads(monkeypatch):
     monkeypatch.setattr("flights.flight_session.get", lambda *args, **kwargs: response)
 
     assert fetch_adsb_point(50.0, 4.0, 6) is None
+
+
+def test_stalled_aeroapi_request_returns_control_and_activates_backoff(monkeypatch):
+    backoff = ExponentialBackoff(initial_backoff=30, max_backoff=3600)
+    monkeypatch.setattr(flights, "_aeroapi_backoff", backoff)
+    request = Mock(side_effect=requests.Timeout("AeroAPI stalled"))
+    monkeypatch.setattr(flight_session, "get", request)
+
+    assert flights._aeroapi_get_data("flights", "TEST123") is None
+    assert flights._aeroapi_get_data("flights", "TEST123") is None
+    assert request.call_count == 1
+    assert request.call_args.kwargs["timeout"] == 10
+    assert backoff.get_failure_count() == 1
 
 
 def test_recent_flights_renderer_handles_partial_and_missing_route_data(monkeypatch):

@@ -1,6 +1,7 @@
 import pytest
 from datetime import datetime, timedelta
 import responses
+import requests
 from weather.providers.openmeteo import OpenMeteoProvider, WEATHER_CODES
 from weather.models import TemperatureUnit
 
@@ -135,6 +136,18 @@ def test_icon_mapping():
     
     # Test unknown code
     assert provider._get_icon(999, True).icon == "cloud"  # Unknown code 
+
+
+def test_stalled_weather_request_has_a_timeout_and_does_not_cache(provider, monkeypatch):
+    def stalled(url, **kwargs):
+        assert kwargs["timeout"] == 10
+        raise requests.Timeout("weather service stalled")
+
+    monkeypatch.setattr("weather.providers.openmeteo.requests.get", stalled)
+
+    with pytest.raises(requests.Timeout):
+        provider.get_weather()
+    assert provider._cache is None
 
 @responses.activate
 def test_temperature_units(provider, sample_response):

@@ -333,8 +333,8 @@ class DisplayManager:
         self.flight_check_interval = int(os.getenv("flight_check_interval", 10))
         self.flights_enabled = os.getenv("flights_enabled", "false").lower() == "true"
         # Default to Brussels coordinates if not set
-        self.coordinates_lat = float(os.getenv('Coordinates_LAT', '50.8503'))
-        self.coordinates_lng = float(os.getenv('Coordinates_LNG', '4.3517'))
+        self.coordinates_lat = COORDINATES_LAT
+        self.coordinates_lng = COORDINATES_LNG
         self.flight_getter = None
         self.recent_flights = RecentFlightCache(max_entries=4)
         try:

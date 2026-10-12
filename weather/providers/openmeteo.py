@@ -116,7 +116,7 @@ class OpenMeteoProvider(WeatherProvider):
         
         logger.debug(f"OpenMeteo: API parameters: {params}")
         
-        response = requests.get(self.base_url, params=params)
+        response = requests.get(self.base_url, params=params, timeout=10)
         response.raise_for_status()
         data = response.json()
         

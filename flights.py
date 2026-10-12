@@ -10,10 +10,12 @@ import json
 import math
 import time
 import threading
+import tempfile
 import requests_cache
 from collections import OrderedDict
 from datetime import datetime
 from functools import lru_cache
+from pathlib import Path
 from threading import Event, Lock
 from requests_cache import CachedSession
 from backoff import ExponentialBackoff
@@ -73,6 +75,56 @@ aeroapi_enabled = os.getenv("aeroapi_enabled", "false").lower() == "true"
 aeroapi_key = os.getenv("aeroapi_key")
 aeroapi_enable_paid_usage = os.getenv("aeroapi_enable_paid_usage", "false").lower() == "true"
 aeroapi_active_hours = os.getenv("aeroapi_active_hours", "0-24")
+_metadata_cache_lock = Lock()
+
+
+def _flight_metadata_cache_path(filename):
+    return Path(os.getenv("flight_metadata_cache_dir", "cache")).expanduser() / filename
+
+
+def _read_flight_metadata_cache(filename):
+    cache_path = _flight_metadata_cache_path(filename)
+    # Older standalone installs stored metadata beside the application code.
+    merged = {}
+    for path in dict.fromkeys((Path(filename), cache_path)):
+        try:
+            with path.open("r", encoding="utf-8") as handle:
+                cached = json.load(handle)
+            if isinstance(cached, dict):
+                merged.update(cached)
+            else:
+                logger.warning("Ignoring invalid flight metadata cache %s", path)
+        except FileNotFoundError:
+            continue
+        except (OSError, ValueError) as exc:
+            logger.warning("Could not read flight metadata cache %s: %s", path, exc)
+    return merged
+
+
+def _cache_flight_metadata(filename, code, metadata):
+    path = _flight_metadata_cache_path(filename)
+    temporary = None
+    try:
+        with _metadata_cache_lock:
+            cached = _read_flight_metadata_cache(filename)
+            cached[code] = metadata
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(
+                mode="w", encoding="utf-8", dir=path.parent,
+                prefix=f".{path.name}.", suffix=".tmp", delete=False,
+            ) as handle:
+                temporary = Path(handle.name)
+                json.dump(cached, handle)
+            temporary.replace(path)
+    except (OSError, ValueError, TypeError) as exc:
+        # A missing writable volume must not discard otherwise valid API data.
+        logger.warning("Could not persist flight metadata cache %s: %s", path, exc)
+    finally:
+        if temporary is not None:
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError as exc:
+                logger.warning("Could not remove temporary metadata cache: %s", exc)
 
 
 class RecentFlightCache:
@@ -425,7 +477,7 @@ def _aeroapi_get_data(endpoint, url_params=None, call_params=None):
             request_url += f"?{call_params}"
         
         logger.debug(f"Making AeroAPI request to: {request_url}")
-        response = flight_session.get(request_url, headers=headers)
+        response = flight_session.get(request_url, headers=headers, timeout=10)
         
         # Log response details
         logger.debug(f"AeroAPI response status: {response.status_code}")
@@ -562,11 +614,7 @@ def aeroapi_get_operator(operator_code_iata):
     logger.debug(f"Getting operator data for {operator_code_iata}")
     
     # Check if operators.json exists and read its content
-    if os.path.exists('operators.json'):
-        with open('operators.json', 'r') as file:
-            cached_operators = json.load(file)
-    else:
-        cached_operators = {}
+    cached_operators = _read_flight_metadata_cache('operators.json')
 
     # Check if the operator is already cached
     if operator_code_iata in cached_operators:
@@ -605,9 +653,7 @@ def aeroapi_get_operator(operator_code_iata):
         }
         
         # Cache the new operator data
-        cached_operators[operator_code_iata] = operator_info
-        with open('operators.json', 'w') as file:
-            json.dump(cached_operators, file)
+        _cache_flight_metadata('operators.json', operator_code_iata, operator_info)
         logger.debug(f"Operator name set for {operator_code_iata}: {operator_name}")
         if len(operator_name) > 15 and operator_shortname:
             return operator_shortname
@@ -620,11 +666,7 @@ def aeroapi_get_plane_type(aircraft_type):
             return None, None
 
         # Check if types.json exists and read its content
-        if os.path.exists('types.json'):
-            with open('types.json', 'r') as file:
-                cached_types = json.load(file)
-        else:
-            cached_types = {}
+        cached_types = _read_flight_metadata_cache('types.json')
 
         # Check if the type is already cached
         if aircraft_type in cached_types:
@@ -643,9 +685,7 @@ def aeroapi_get_plane_type(aircraft_type):
             }
             
             # Cache the new type data
-            cached_types[aircraft_type] = type_info
-            with open('types.json', 'w') as file:
-                json.dump(cached_types, file)
+            _cache_flight_metadata('types.json', aircraft_type, type_info)
 
             return type_info['manufacturer'], type_info['type']
         

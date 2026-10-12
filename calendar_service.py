@@ -546,8 +546,14 @@ class GoogleTasksApiSource:
         tasklists = list_response.json().get("items", [])
         if not isinstance(tasklists, list):
             raise ValueError("Google Tasks returned invalid task lists")
-        due_min = range_start.replace(hour=0, minute=0, second=0, microsecond=0)
-        due_max = range_end.replace(hour=0, minute=0, second=0, microsecond=0)
+        # Tasks due values represent calendar dates at midnight UTC, rather
+        # than instants. Preserve the displayed local date in the API bounds.
+        due_min = datetime.combine(
+            range_start.astimezone(timezone).date(), datetime_time.min, ZoneInfo("UTC")
+        )
+        due_max = datetime.combine(
+            range_end.astimezone(timezone).date(), datetime_time.min, ZoneInfo("UTC")
+        )
         items = []
         for tasklist in tasklists[: self.max_tasklists]:
             if not isinstance(tasklist, dict) or not tasklist.get("id"):

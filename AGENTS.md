@@ -8,7 +8,7 @@ This is a Raspberry Pi project that displays bus waiting times on an e-Paper dis
 
 ## Development Environment
 
-**Python Version**: Python 3.9+
+**Python Version**: Python 3.11+
 **Main Dependencies**: Flask, Pillow, requests, RPi.GPIO, waveshare-epd, pytest
 
 For development on Mac (without hardware):

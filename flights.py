@@ -85,18 +85,20 @@ def _flight_metadata_cache_path(filename):
 def _read_flight_metadata_cache(filename):
     cache_path = _flight_metadata_cache_path(filename)
     # Older standalone installs stored metadata beside the application code.
-    for path in dict.fromkeys((cache_path, Path(filename))):
+    merged = {}
+    for path in dict.fromkeys((Path(filename), cache_path)):
         try:
             with path.open("r", encoding="utf-8") as handle:
                 cached = json.load(handle)
             if isinstance(cached, dict):
-                return cached
-            logger.warning("Ignoring invalid flight metadata cache %s", path)
+                merged.update(cached)
+            else:
+                logger.warning("Ignoring invalid flight metadata cache %s", path)
         except FileNotFoundError:
             continue
         except (OSError, ValueError) as exc:
             logger.warning("Could not read flight metadata cache %s: %s", path, exc)
-    return {}
+    return merged
 
 
 def _cache_flight_metadata(filename, code, metadata):

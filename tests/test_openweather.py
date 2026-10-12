@@ -192,9 +192,8 @@ def test_stalled_api_request_is_bounded(
     attempts = []
 
     def get(url, **kwargs):
-        assert kwargs["timeout"] == 10
         endpoint = url.rsplit("/", 1)[-1]
-        attempts.append(endpoint)
+        attempts.append((endpoint, kwargs))
         if endpoint == stalled_endpoint:
             raise requests.Timeout("weather service stalled")
         response = Mock()
@@ -211,7 +210,8 @@ def test_stalled_api_request_is_bounded(
         with pytest.raises(requests.Timeout):
             provider.get_weather()
         assert provider._cache is None
-    assert attempts.count(stalled_endpoint) == 1
+    assert sum(endpoint == stalled_endpoint for endpoint, _ in attempts) == 1
+    assert all(kwargs.get("timeout") == 10 for _, kwargs in attempts)
 
 @responses.activate
 def test_temperature_units(provider, sample_weather_response, sample_forecast_response, sample_air_quality_response):

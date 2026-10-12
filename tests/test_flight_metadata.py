@@ -64,13 +64,16 @@ def test_metadata_is_persisted_in_writable_cache_and_reused(
         ),
     ],
 )
+@pytest.mark.parametrize("empty_configured_cache", [False, True])
 def test_existing_legacy_metadata_remains_readable(
-    metadata_cache, monkeypatch, lookup, code, cached, filename, expected
+    metadata_cache, monkeypatch, lookup, code, cached, filename, expected,
+    empty_configured_cache
 ):
     Path(filename).write_text(json.dumps({code: cached}), encoding="utf-8")
-    fetch = Mock(
-        side_effect=AssertionError("cached metadata must not trigger API calls")
-    )
+    if empty_configured_cache:
+        metadata_cache.mkdir()
+        (metadata_cache / filename).write_text("{}", encoding="utf-8")
+    fetch = Mock(side_effect=RuntimeError("API unavailable"))
     monkeypatch.setattr(flights, "aeroapi_get_data", fetch)
 
     assert lookup(code) == expected
@@ -177,3 +180,62 @@ def test_configured_cache_directory_preserves_legacy_entries(
             "alternatives": [],
         },
     }
+
+
+@pytest.mark.parametrize(
+    "lookup,filename,legacy,configured,code,payload,expected_old,expected_shared",
+    [
+        (
+            flights.aeroapi_get_operator, "operators.json",
+            {"OLD": "Legacy Airline", "SHARED": "Legacy duplicate"},
+            {"SHARED": "Configured Airline", "RECENT": "Recent Airline"},
+            "EX", OPERATOR, "Legacy Airline", "Configured Airline",
+        ),
+        (
+            flights.aeroapi_get_plane_type, "types.json",
+            {
+                "OLD": {"manufacturer": "Legacy", "type": "Old aircraft"},
+                "SHARED": {"manufacturer": "Legacy", "type": "Duplicate"},
+            },
+            {
+                "SHARED": {"manufacturer": "Configured", "type": "Current"},
+                "RECENT": {"manufacturer": "Recent", "type": "Aircraft"},
+            },
+            "A320", AIRCRAFT, ("Legacy", "Old aircraft"),
+            ("Configured", "Current"),
+        ),
+    ],
+)
+@pytest.mark.parametrize("duplicate_keys", [False, True])
+def test_mixed_caches_reuse_and_preserve_all_metadata(
+    metadata_cache, monkeypatch, lookup, filename, legacy, configured,
+    code, payload, expected_old, expected_shared, duplicate_keys
+):
+    configured = dict(configured)
+    if not duplicate_keys:
+        configured.pop("SHARED")
+        expected_shared = legacy["SHARED"]
+        if isinstance(expected_shared, dict):
+            expected_shared = (expected_shared["manufacturer"], expected_shared["type"])
+    Path(filename).write_text(json.dumps(legacy), encoding="utf-8")
+    metadata_cache.mkdir()
+    cache_file = metadata_cache / filename
+    cache_file.write_text(json.dumps(configured), encoding="utf-8")
+    fetch = Mock(side_effect=RuntimeError("API unavailable"))
+    monkeypatch.setattr(flights, "aeroapi_get_data", fetch)
+
+    assert lookup("OLD") == expected_old
+    assert lookup("SHARED") == expected_shared
+    fetch.assert_not_called()
+
+    fetch.side_effect = None
+    fetch.return_value = payload
+    lookup(code)
+
+    persisted = json.loads(cache_file.read_text())
+    assert set(persisted) == {"OLD", "SHARED", "RECENT", code}
+    assert persisted["OLD"] == legacy["OLD"]
+    assert persisted["SHARED"] == configured.get("SHARED", legacy["SHARED"])
+    assert persisted["RECENT"] == configured["RECENT"]
+    fetch.assert_called_once()
+    assert json.loads(Path(filename).read_text()) == legacy

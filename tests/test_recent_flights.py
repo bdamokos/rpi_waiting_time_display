@@ -2,10 +2,13 @@ from datetime import datetime
 from threading import Lock, RLock
 from unittest.mock import Mock, patch
 
+import pytest
+
 from display_adapter import MockDisplay
 from flights import (
     ADSB_API_BASE_URLS,
     RecentFlightCache,
+    _adsb_cache_bypass_pattern,
     fetch_adsb_point,
     flight_session,
     get_adsb_request_interval,
@@ -15,6 +18,11 @@ from screen_arbiter import ScreenArbiter
 import flights
 import requests
 from backoff import ExponentialBackoff
+
+
+@pytest.fixture(autouse=True)
+def reset_adsb_provider_cooldowns(monkeypatch):
+    monkeypatch.setattr("flights._adsb_provider_cooldowns", {})
 
 
 def test_recent_flight_cache_is_bounded_deduplicated_and_newest_first():
@@ -66,7 +74,55 @@ def test_adsb_point_fetch_falls_back_to_next_compatible_provider(monkeypatch):
 
 def test_all_configured_adsb_providers_bypass_the_flight_cache():
     for base_url in ADSB_API_BASE_URLS:
-        assert flight_session.settings.urls_expire_after[f"{base_url}/v2/point"] == 0
+        pattern = _adsb_cache_bypass_pattern(base_url)
+        assert flight_session.settings.urls_expire_after[pattern] == 0
+
+
+def test_adsb_point_fetch_supports_url_templates(monkeypatch):
+    calls = []
+    response = Mock(status_code=200)
+    response.json.return_value = {"ac": []}
+
+    def get(url, **kwargs):
+        calls.append(url)
+        return response
+
+    monkeypatch.setattr(
+        "flights.ADSB_API_BASE_URLS",
+        ("https://opendata.adsb.fi/api/v3/lat/{lat}/lon/{lon}/dist/{radius}",),
+    )
+    monkeypatch.setattr("flights.flight_session.get", get)
+
+    assert fetch_adsb_point(50.0, 4.0, 6) == {"ac": []}
+    assert calls == ["https://opendata.adsb.fi/api/v3/lat/50.0/lon/4.0/dist/6"]
+    assert _adsb_cache_bypass_pattern(
+        "https://opendata.adsb.fi/api/v3/lat/{lat}/lon/{lon}/dist/{radius}"
+    ) == "https://opendata.adsb.fi/api/v3/lat/"
+
+
+def test_rate_limited_adsb_provider_is_skipped_until_retry_after(monkeypatch):
+    calls = []
+    limited = Mock(status_code=429, headers={"Retry-After": "120"})
+    ok = Mock(status_code=200, headers={})
+    ok.json.return_value = {"ac": []}
+
+    def get(url, **kwargs):
+        calls.append(url)
+        return limited if url.startswith("https://one") else ok
+
+    now = [1000.0]
+    monkeypatch.setattr("flights.time.time", lambda: now[0])
+    monkeypatch.setattr("flights.ADSB_API_BASE_URLS", ("https://one", "https://two"))
+    monkeypatch.setattr("flights.flight_session.get", get)
+
+    assert fetch_adsb_point(50.0, 4.0, 6) == {"ac": []}
+    now[0] += 60
+    assert fetch_adsb_point(50.0, 4.0, 6) == {"ac": []}
+    now[0] += 61
+    fetch_adsb_point(50.0, 4.0, 6)
+
+    hosts = [url.split("/v2")[0] for url in calls]
+    assert hosts == ["https://one", "https://two", "https://two", "https://one", "https://two"]
 
 
 def test_adsb_requests_are_throttled_independently_of_display_checks(monkeypatch):

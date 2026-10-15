@@ -353,11 +353,19 @@ OPENWEATHER_API_KEY=your_api_key</pre>
 
             <h3>Flight Tracking</h3>
             <ul>
-                <li><strong><a href="https://adsb.one/" target="_blank">ADSB.one API</a></strong>
+                <li><strong><a href="https://adsb.lol/" target="_blank">adsb.lol API</a></strong>
                     <ul>
                         <li>Purpose: Basic flight tracking without authentication</li>
                         <li>Usage: Receives real-time aircraft position data from a network of ADS-B receivers</li>
-                        <li>Free data source</li>
+                        <li>Free data source with dynamic rate limits</li>
+                        <li>No API key required</li>
+                    </ul>
+                </li>
+                <li><strong><a href="https://adsb.fi/" target="_blank">adsb.fi open data API</a></strong>
+                    <ul>
+                        <li>Purpose: Fallback flight position source</li>
+                        <li>Usage: Used when adsb.lol is rate limited or unavailable</li>
+                        <li>Personal, non-commercial use only; limited to 1 request per second</li>
                         <li>No API key required</li>
                     </ul>
                 </li>

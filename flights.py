@@ -35,11 +35,15 @@ if not AEROAPI_BASE_URL.endswith('/aeroapi'):
 # Ensure the base URL doesn't end with a slash to prevent double slashes in requests
 AEROAPI_BASE_URL = AEROAPI_BASE_URL.rstrip('/')
 
+ADSB_POINT_PATH = '/v2/point/{lat}/{lon}/{radius}'
+# Entries are either a base URL serving the ADSBexchange-compatible
+# /v2/point endpoint, or a full URL template with {lat}, {lon} and {radius}.
 ADSB_API_BASE_URLS = tuple(
     url.strip().rstrip('/')
     for url in os.getenv(
         'ADSB_API_BASE_URLS',
-        'https://api.adsb.lol,https://api.adsb.one',
+        'https://api.adsb.lol,'
+        'https://opendata.adsb.fi/api/v3/lat/{lat}/lon/{lon}/dist/{radius}',
     ).split(',')
     if url.strip()
 )
@@ -47,6 +51,23 @@ ADSB_REQUEST_HEADERS = {
     'Accept': 'application/json',
     'User-Agent': 'rpi-waiting-time-display/1.0',
 }
+# Providers answering 429/403 are skipped for a while so we do not keep
+# spending their rate limit (adsb.fi counts rejected requests too).
+ADSB_RATE_LIMIT_COOLDOWN = 60
+ADSB_FORBIDDEN_COOLDOWN = 900
+_adsb_provider_cooldowns = {}
+
+
+def _adsb_point_url(base_url, lat, lon, radius):
+    template = base_url if '{lat}' in base_url else f"{base_url}{ADSB_POINT_PATH}"
+    return template.format(lat=lat, lon=lon, radius=radius)
+
+
+def _adsb_cache_bypass_pattern(base_url):
+    if '{' in base_url:
+        return base_url.split('{', 1)[0]
+    return f'{base_url}/v2/point'
+
 
 # Create a cached session specifically for flight requests
 flight_session = CachedSession(
@@ -54,7 +75,7 @@ flight_session = CachedSession(
     backend='memory',
     expire_after=3600,  # Cache expires after 1 hour
     urls_expire_after={
-        **{f'{url}/v2/point': 0 for url in ADSB_API_BASE_URLS},
+        **{_adsb_cache_bypass_pattern(url): 0 for url in ADSB_API_BASE_URLS},
         f'{AEROAPI_BASE_URL}/account/usage': 0,  # Do not cache usage endpoint check
     }
 )
@@ -256,12 +277,23 @@ def is_aeroapi_active():
     return False
 
 
+def _retry_after_seconds(response, default):
+    try:
+        return max(1, int(response.headers.get('Retry-After', default)))
+    except (TypeError, ValueError):
+        return default
+
+
 def fetch_adsb_point(lat, lon, radius):
     """Fetch nearby aircraft from the first healthy compatible ADS-B API."""
+    now = time.time()
     for base_url in ADSB_API_BASE_URLS:
+        if _adsb_provider_cooldowns.get(base_url, 0) > now:
+            logger.debug("Skipping ADS-B provider %s during cooldown", base_url)
+            continue
         try:
             response = flight_session.get(
-                f"{base_url}/v2/point/{lat}/{lon}/{radius}",
+                _adsb_point_url(base_url, lat, lon, radius),
                 headers=ADSB_REQUEST_HEADERS,
                 timeout=10,
             )
@@ -271,6 +303,12 @@ def fetch_adsb_point(lat, lon, radius):
                     base_url,
                     response.status_code,
                 )
+                if response.status_code == 429:
+                    _adsb_provider_cooldowns[base_url] = now + _retry_after_seconds(
+                        response, ADSB_RATE_LIMIT_COOLDOWN
+                    )
+                elif response.status_code == 403:
+                    _adsb_provider_cooldowns[base_url] = now + ADSB_FORBIDDEN_COOLDOWN
                 continue
             payload = response.json()
             if not isinstance(payload, dict) or not isinstance(payload.get('ac'), list):
@@ -334,11 +372,16 @@ def gather_flights_within_radius(lat, lon, radius=radius*2, distance_threshold=r
                     
                     with lock:
                         # Clear old flights that haven't been updated recently
-                        current_hex_ids = {flight['hex'] for flight in data.get('ac', [])}
+                        # Aircraft without a current position cannot be ranked by distance
+                        positioned = [
+                            flight for flight in data.get('ac', [])
+                            if flight.get('hex') and flight.get('lat') is not None and flight.get('lon') is not None
+                        ]
+                        current_hex_ids = {flight['hex'] for flight in positioned}
                         monitored_flights[:] = [f for f in monitored_flights if f['hex'] in current_hex_ids]
                         
                         # Update or add new flights
-                        for flight in data.get('ac', []):
+                        for flight in positioned:
                             hex_id = flight.get('hex')
                             current_distance = haversine(lat, lon, flight.get('lat'), flight.get('lon'))
                             

@@ -39,6 +39,20 @@ jobs:
         run: python -m pip check
       - name: Run application tests
         run: python -m pytest -q
+      - name: Verify packaged icon assets
+        if: matrix.python == '3.12'
+        run: |
+          python -m pip wheel --no-deps --wheel-dir "$RUNNER_TEMP/display-wheel" .
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from zipfile import ZipFile
+
+          wheel, = (Path(os.environ["RUNNER_TEMP"]) / "display-wheel").glob("*.whl")
+          with ZipFile(wheel) as archive:
+              for name in ("weather/icons/satellite.svg", "weather/icons/LICENSE.txt"):
+                  assert archive.read(name) == Path(name).read_bytes(), name
+          PY
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         if: matrix.python == '3.12'
         with:

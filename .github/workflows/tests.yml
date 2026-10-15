@@ -57,6 +57,9 @@ jobs:
         if: matrix.python == '3.12'
         with:
           node-version: '24'
-      - name: Run setup geocoding tests
+      - name: Install browser test dependencies
         if: matrix.python == '3.12'
-        run: node --test tests/test_nominatim.js
+        run: npm ci && npx playwright install --with-deps chromium
+      - name: Run setup browser and geocoding tests
+        if: matrix.python == '3.12'
+        run: npm test

@@ -1,2 +1,3 @@
 cache/flight_statistics.sqlite3
 cache/flight_statistics.sqlite3-*
+node_modules/

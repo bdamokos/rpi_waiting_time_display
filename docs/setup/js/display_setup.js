@@ -1,3 +1,15 @@
+function bindDisplayActions(container) {
+    container.querySelectorAll('[data-display-action]').forEach(control => {
+        control.addEventListener('click', () => {
+            const {displayAction, driver, preset} = control.dataset;
+            if (displayAction === 'select') window.selectDisplay(driver);
+            if (displayAction === 'settings') window.showDisplaySettings(driver);
+            if (displayAction === 'advanced') window.showAdvancedSettings(driver, window.currentDisplaySettings);
+            if (displayAction === 'preset') window.applyPreset(preset);
+        });
+    });
+}
+
 // Initialize display setup module
 document.addEventListener('DOMContentLoaded', () => {
     // Initialize any event listeners or other setup
@@ -52,7 +64,7 @@ window.startDisplaySetup = async function() {
                     <div class="setup-steps">
                         <div class="setup-step">
                             <h4>Step A: Display Driver</h4>
-                            <p>Current driver: <strong>${currentDriver || 'Not set'}</strong></p>
+                            <p>Current driver: <strong>${escapeHtml(currentDriver || 'Not set')}</strong></p>
                             <button onclick="showDisplaySelection()" class="step-button">
                                 ${currentDriver ? 'Change Display Driver' : 'Select Display Driver'}
                             </button>
@@ -61,7 +73,7 @@ window.startDisplaySetup = async function() {
                         <div class="setup-step">
                             <h4>Step B: Display Settings</h4>
                             <p>Configure refresh rates and screen rotation</p>
-                            <button onclick="showDisplaySettings('${currentDriver}')" class="step-button" ${!currentDriver ? 'disabled' : ''}>
+                            <button data-display-action="settings" data-driver="${escapeHtml(currentDriver)}" class="step-button" ${!currentDriver ? 'disabled' : ''}>
                                 ${currentDriver ? 'Configure Display Settings' : 'Select a display driver first'}
                             </button>
                         </div>
@@ -70,6 +82,7 @@ window.startDisplaySetup = async function() {
                     <div id="step-content"></div>
                 </div>
             `;
+            bindDisplayActions(displaySetup);
 
         } else {
             throw new Error('Failed to get display information');
@@ -87,9 +100,9 @@ function renderDisplaySetup(container, currentConfig, database) {
     if (currentConfig) {
         html += `
             <h3>Current Display Configuration</h3>
-            <p><strong>Driver:</strong> ${currentConfig.driver}</p>
-            ${currentConfig.name ? `<p><strong>Display:</strong> ${currentConfig.name}</p>` : ''}
-            ${currentConfig.notes ? `<p><strong>Notes:</strong> ${currentConfig.notes}</p>` : ''}
+            <p><strong>Driver:</strong> ${escapeHtml(currentConfig.driver)}</p>
+            ${currentConfig.name ? `<p><strong>Display:</strong> ${escapeHtml(currentConfig.name)}</p>` : ''}
+            ${currentConfig.notes ? `<p><strong>Notes:</strong> ${escapeHtml(currentConfig.notes)}</p>` : ''}
         `;
     } else {
         html += '<h3>No display configured</h3>';
@@ -130,13 +143,13 @@ window.showDisplayList = function() {
             <h3>Tested Displays</h3>
             <div class="display-grid">
                 ${window.displayDatabase.displays.map(display => `
-                    <div class="display-card" onclick="selectDisplay('${display.driver}')">
+                    <div class="display-card" data-display-action="select" data-driver="${escapeHtml(display.driver)}">
                         ${display.images && display.images[0] ? 
-                            `<img src="${display.images[0]}" alt="${display.name}">` : ''}
-                        <h4>${display.name}</h4>
-                        <p>Size: ${display.size}"</p>
-                        <p>Colors: ${display.colors.join(', ')}</p>
-                        <p>Resolution: ${display.resolution.width}x${display.resolution.height}</p>
+                            `<img src="${escapeHtml(safeUrl(display.images[0]))}" alt="${escapeHtml(display.name)}">` : ''}
+                        <h4>${escapeHtml(display.name)}</h4>
+                        <p>Size: ${escapeHtml(display.size)}"</p>
+                        <p>Colors: ${escapeHtml(display.colors.join(', '))}</p>
+                        <p>Resolution: ${escapeHtml(display.resolution.width)}x${escapeHtml(display.resolution.height)}</p>
                         ${display.features.partial_refresh ? '<p>✓ Partial Refresh</p>' : ''}
                     </div>
                 `).join('')}
@@ -146,6 +159,7 @@ window.showDisplayList = function() {
             </div>
         </div>
     `;
+    bindDisplayActions(container);
 }
 
 window.showAdvancedMode = function() {
@@ -164,7 +178,7 @@ window.showAdvancedMode = function() {
                 <p>Common driver names:</p>
                 <ul>
                     ${window.displayDatabase.displays.map(display => `
-                        <li>${display.driver} - ${display.name}</li>
+                        <li>${escapeHtml(display.driver)} - ${escapeHtml(display.name)}</li>
                     `).join('')}
                 </ul>
             </div>
@@ -186,7 +200,7 @@ window.showGuidedMode = function() {
                     <select id="size-select">
                         <option value="">Select size...</option>
                         ${categories.sizes.map(size => `
-                            <option value="${size}">${size}"</option>
+                            <option value="${escapeHtml(size)}">${escapeHtml(size)}"</option>
                         `).join('')}
                     </select>
                 </div>
@@ -195,8 +209,8 @@ window.showGuidedMode = function() {
                     <div class="checkbox-group">
                         ${categories.colors.map(color => `
                             <label>
-                                <input type="checkbox" value="${color}">
-                                ${color}
+                                <input type="checkbox" value="${escapeHtml(color)}">
+                                ${escapeHtml(color)}
                             </label>
                         `).join('')}
                     </div>
@@ -244,28 +258,29 @@ window.findMatchingDisplays = function() {
             </div>
         `;
     }
+    bindDisplayActions(container);
 }
 
 function renderDisplayCard(display, isCurrent = false) {
     return `
         <div class="display-card ${isCurrent ? 'current-display' : ''}">
             ${display.images && display.images[0] ? 
-                `<img src="${display.images[0]}" alt="${display.name}">` : ''}
-            <h4>${display.name}</h4>
+                `<img src="${escapeHtml(safeUrl(display.images[0]))}" alt="${escapeHtml(display.name)}">` : ''}
+            <h4>${escapeHtml(display.name)}</h4>
             <div class="display-info">
-                <p><strong>Size:</strong> ${display.size}"</p>
-                <p><strong>Colors:</strong> ${display.colors.join(', ')}</p>
-                <p><strong>Resolution:</strong> ${display.resolution.width}x${display.resolution.height}</p>
-                <p><strong>Features:</strong> ${Object.entries(display.features)
+                <p><strong>Size:</strong> ${escapeHtml(display.size)}"</p>
+                <p><strong>Colors:</strong> ${escapeHtml(display.colors.join(', '))}</p>
+                <p><strong>Resolution:</strong> ${escapeHtml(display.resolution.width)}x${escapeHtml(display.resolution.height)}</p>
+                <p><strong>Features:</strong> ${escapeHtml(Object.entries(display.features)
                     .filter(([_, enabled]) => enabled)
                     .map(([feature]) => feature.replace('_', ' '))
-                    .join(', ') || 'None'}</p>
-                ${display.notes ? `<p class="notes"><strong>Notes:</strong> ${display.notes}</p>` : ''}
-                ${display.url ? `<p><a href="${display.url}" target="_blank">Product Page ↗</a></p>` : ''}
+                    .join(', ') || 'None')}</p>
+                ${display.notes ? `<p class="notes"><strong>Notes:</strong> ${escapeHtml(display.notes)}</p>` : ''}
+                ${display.url ? `<p><a href="${escapeHtml(safeUrl(display.url))}" target="_blank">Product Page ↗</a></p>` : ''}
             </div>
             ${!isCurrent ? `
-                <button class="set-driver-button" onclick="selectDisplay('${display.driver}')">
-                    Set Driver to ${display.driver}
+                <button class="set-driver-button" data-display-action="select" data-driver="${escapeHtml(display.driver)}">
+                    Set Driver to ${escapeHtml(display.driver)}
                 </button>
             ` : ''}
         </div>
@@ -307,7 +322,7 @@ window.showDisplaySelection = function() {
                     <select id="size-select" onchange="findMatchingDisplays()">
                         <option value="">Any size</option>
                         ${database.categories.sizes.map(size => 
-                            `<option value="${size}">${size}"</option>`
+                            `<option value="${escapeHtml(size)}">${escapeHtml(size)}"</option>`
                         ).join('')}
                     </select>
                 </div>
@@ -317,8 +332,8 @@ window.showDisplaySelection = function() {
                     <div class="checkbox-group">
                         ${database.categories.colors.map(color => `
                             <label>
-                                <input type="checkbox" value="${color}" onchange="findMatchingDisplays()">
-                                ${color}
+                                <input type="checkbox" value="${escapeHtml(color)}" onchange="findMatchingDisplays()">
+                                ${escapeHtml(color)}
                             </label>
                         `).join('')}
                     </div>
@@ -409,12 +424,12 @@ window.showDisplaySettings = async function(driver) {
                 <h4>Current Configuration</h4>
                 ${hasExistingSettings ? `
                     <div class="preset-settings">
-                        <p><strong>Refresh Interval:</strong> ${currentSettings.refresh_interval || 'Not set'} seconds</p>
-                        <p><strong>Minimal Refresh Time:</strong> ${currentSettings.refresh_minimal_time || 'Not set'} seconds</p>
-                        <p><strong>Weather Update Interval:</strong> ${currentSettings.refresh_weather_interval || 'Not set'} seconds</p>
-                        <p><strong>Full Refresh Interval:</strong> ${currentSettings.refresh_full_interval || 'Not set'} seconds</p>
-                        <p><strong>Flight Display Update Interval:</strong> ${currentSettings.flight_display_fast_mode_interval || 'Not set'} seconds</p>
-                        <p><strong>ISS Check Interval:</strong> ${currentSettings.iss_check_interval || 'Not set'} seconds</p>
+                        <p><strong>Refresh Interval:</strong> ${escapeHtml(currentSettings.refresh_interval || 'Not set')} seconds</p>
+                        <p><strong>Minimal Refresh Time:</strong> ${escapeHtml(currentSettings.refresh_minimal_time || 'Not set')} seconds</p>
+                        <p><strong>Weather Update Interval:</strong> ${escapeHtml(currentSettings.refresh_weather_interval || 'Not set')} seconds</p>
+                        <p><strong>Full Refresh Interval:</strong> ${escapeHtml(currentSettings.refresh_full_interval || 'Not set')} seconds</p>
+                        <p><strong>Flight Display Update Interval:</strong> ${escapeHtml(currentSettings.flight_display_fast_mode_interval || 'Not set')} seconds</p>
+                        <p><strong>ISS Check Interval:</strong> ${escapeHtml(currentSettings.iss_check_interval || 'Not set')} seconds</p>
                     </div>
                 ` : `
                     <p>No current settings found. Choose a preset below or customize settings.</p>
@@ -433,7 +448,7 @@ window.showDisplaySettings = async function(driver) {
                         Apply Partial Refresh Preset
                         <small>For displays with partial refresh support</small>
                     </button>
-                    <button class="advanced-settings-button" onclick="showAdvancedSettings('${driver}', window.currentDisplaySettings)">
+                    <button class="advanced-settings-button" data-display-action="advanced" data-driver="${escapeHtml(driver)}">
                         Customize Settings
                         <small>Manually configure all settings</small>
                     </button>
@@ -441,6 +456,7 @@ window.showDisplaySettings = async function(driver) {
             </div>
         </div>
     `;
+    bindDisplayActions(stepContent);
 }
 
 window.showAdvancedSettings = function(driver, currentSettings) {
@@ -469,53 +485,54 @@ window.showAdvancedSettings = function(driver, currentSettings) {
                 <div class="form-group">
                     <label for="refresh-interval">Refresh Interval (seconds)</label>
                     <input type="number" id="refresh-interval" name="refresh_interval"
-                           value="${currentSettings.refresh_interval || preset.settings.refresh_interval}">
-                    <small>How often to check for updates (Default: ${preset.settings.refresh_interval}s)</small>
+                           value="${escapeHtml(currentSettings.refresh_interval || preset.settings.refresh_interval)}">
+                    <small>How often to check for updates (Default: ${escapeHtml(preset.settings.refresh_interval)}s)</small>
                 </div>
 
                 <div class="form-group">
                     <label for="refresh-minimal-time">Minimal Refresh Time (seconds)</label>
                     <input type="number" id="refresh-minimal-time" name="refresh_minimal_time"
-                           value="${currentSettings.refresh_minimal_time || preset.settings.refresh_minimal_time}">
-                    <small>Minimum time between screen updates (Default: ${preset.settings.refresh_minimal_time}s)</small>
+                           value="${escapeHtml(currentSettings.refresh_minimal_time || preset.settings.refresh_minimal_time)}">
+                    <small>Minimum time between screen updates (Default: ${escapeHtml(preset.settings.refresh_minimal_time)}s)</small>
                 </div>
 
                 <div class="form-group">
                     <label for="refresh-weather-interval">Weather Update Interval (seconds)</label>
                     <input type="number" id="refresh-weather-interval" name="refresh_weather_interval"
-                           value="${currentSettings.refresh_weather_interval || preset.settings.refresh_weather_interval}">
-                    <small>How often to fetch new weather data (Default: ${preset.settings.refresh_weather_interval}s)</small>
+                           value="${escapeHtml(currentSettings.refresh_weather_interval || preset.settings.refresh_weather_interval)}">
+                    <small>How often to fetch new weather data (Default: ${escapeHtml(preset.settings.refresh_weather_interval)}s)</small>
                 </div>
 
                 <div class="form-group">
                     <label for="refresh-full-interval">Full Refresh Interval (seconds)</label>
                     <input type="number" id="refresh-full-interval" name="refresh_full_interval"
-                           value="${currentSettings.refresh_full_interval || preset.settings.refresh_full_interval}">
-                    <small>How often to do a full screen refresh (Default: ${preset.settings.refresh_full_interval}s)</small>
+                           value="${escapeHtml(currentSettings.refresh_full_interval || preset.settings.refresh_full_interval)}">
+                    <small>How often to do a full screen refresh (Default: ${escapeHtml(preset.settings.refresh_full_interval)}s)</small>
                 </div>
 
                 <div class="form-group">
                     <label for="flight-display-interval">Flight Display Update Interval (seconds)</label>
                     <input type="number" id="flight-display-interval" name="flight_display_fast_mode_interval"
-                           value="${currentSettings.flight_display_fast_mode_interval || preset.settings.flight_display_fast_mode_interval}">
-                    <small>How often to update flight tracking display (Default: ${preset.settings.flight_display_fast_mode_interval}s)</small>
+                           value="${escapeHtml(currentSettings.flight_display_fast_mode_interval || preset.settings.flight_display_fast_mode_interval)}">
+                    <small>How often to update flight tracking display (Default: ${escapeHtml(preset.settings.flight_display_fast_mode_interval)}s)</small>
                 </div>
 
                 <div class="form-group">
                     <label for="iss-check-interval">ISS Check Interval (seconds)</label>
                     <input type="number" id="iss-check-interval" name="iss_check_interval"
-                           value="${currentSettings.iss_check_interval || preset.settings.iss_check_interval}">
-                    <small>How often to check ISS position (Default: ${preset.settings.iss_check_interval}s)</small>
+                           value="${escapeHtml(currentSettings.iss_check_interval || preset.settings.iss_check_interval)}">
+                    <small>How often to check ISS position (Default: ${escapeHtml(preset.settings.iss_check_interval)}s)</small>
                 </div>
 
                 <div class="button-group">
-                    <button type="button" onclick="showDisplaySettings('${driver}')">← Back to Basic Settings</button>
-                    <button type="button" onclick="applyPreset('${display?.preset || 'standard'}')">Reset to Preset Defaults</button>
+                    <button type="button" data-display-action="settings" data-driver="${escapeHtml(driver)}">← Back to Basic Settings</button>
+                    <button type="button" data-display-action="preset" data-preset="${escapeHtml(display?.preset || 'standard')}">Reset to Preset Defaults</button>
                     <button type="submit" class="primary">Apply Settings</button>
                 </div>
             </form>
         </div>
     `;
+    bindDisplayActions(stepContent);
 }
 
 window.applyAdvancedSettings = async function(event) {

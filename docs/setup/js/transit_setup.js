@@ -52,12 +52,12 @@ async function initTransitSetup() {
             <div class="current-config">
                 <h3>Current Configuration</h3>
                 <div class="config-details">
-                    <p><strong>Provider:</strong> ${currentConfig.provider}</p>
-                    <p><strong>Stop ID:</strong> ${currentConfig.stops}</p>
-                    ${currentConfig.lines ? `<p><strong>Lines:</strong> ${currentConfig.lines}</p>` : ''}
-                    ${currentConfig.stopNameOverride ? `<p><strong>Stop Name Override:</strong> ${currentConfig.stopNameOverride}</p>` : ''}
+                    <p><strong>Provider:</strong> ${escapeHtml(currentConfig.provider)}</p>
+                    <p><strong>Stop ID:</strong> ${escapeHtml(currentConfig.stops)}</p>
+                    ${currentConfig.lines ? `<p><strong>Lines:</strong> ${escapeHtml(currentConfig.lines)}</p>` : ''}
+                    ${currentConfig.stopNameOverride ? `<p><strong>Stop Name Override:</strong> ${escapeHtml(currentConfig.stopNameOverride)}</p>` : ''}
                     ${currentConfig.scheduleUrl && currentConfig.scheduleUrl !== 'http://localhost:8000' ? 
-                        `<p><strong>Schedule Server:</strong> ${currentConfig.scheduleUrl}</p>` : ''}
+                        `<p><strong>Schedule Server:</strong> ${escapeHtml(currentConfig.scheduleUrl)}</p>` : ''}
                 </div>
             </div>
         `;
@@ -157,6 +157,12 @@ async function initTransitSetup() {
 
 function showProviderConfig(provider) {
     const configContainer = document.getElementById('provider-config');
+    if (!['stib', 'delijn', 'bkk', 'sncb', 'other'].includes(provider)) {
+        configContainer.replaceChildren();
+        configContainer.style.display = 'none';
+        window.showError('Unsupported transit provider');
+        return;
+    }
     configContainer.style.display = 'block';
 
     let configHTML = '';
@@ -238,11 +244,12 @@ function showProviderConfig(provider) {
     // Add save button
     configHTML += `
         <div class="button-group">
-            <button onclick="saveTransitConfig('${provider}')" class="button">Save Configuration</button>
+            <button type="button" class="button">Save Configuration</button>
         </div>
     `;
 
     configContainer.innerHTML = configHTML;
+    configContainer.querySelector('.button').addEventListener('click', () => window.saveTransitConfig(provider));
 }
 
 async function saveTransitConfig(provider) {

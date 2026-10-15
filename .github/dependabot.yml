@@ -4,9 +4,18 @@
 # https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 
 version: 2
+registries:
+  # requirements.txt declares piwheels as an extra index for Raspberry Pi
+  # wheels. Dependabot's proxy blocks hosts that are not declared here.
+  piwheels:
+    type: python-index
+    url: https://www.piwheels.org/simple
+    replaces-base: false
 updates:
   - package-ecosystem: "pip" # Using pip for Python dependencies
     directory: "/" # Location of package manifests
+    registries:
+      - piwheels
     schedule:
       interval: "monthly"
   - package-ecosystem: "docker"

@@ -29,6 +29,8 @@ from functools import lru_cache
 import humanize
 from astronomy_utils import get_moon_phase, get_appropriate_ephemeris, load
 from backoff import ExponentialBackoff
+from weather.display import load_svg_icon
+from weather.icons import ICONS_DIR
 
 logger = logging.getLogger(__name__)
 # Set urllib3 and urllib3.connectionpool log levels to warning
@@ -572,7 +574,7 @@ def display_next_iss_pass(epd, pass_info, now=None):
 
 def display_iss_info(epd, iss_info, satellite_name="ISS (ZARYA)"):
     # Display the ISS info on the screen:
-    # Big satellite emoji on the left, some info on the right
+    # Big satellite icon on the left, some info on the right
     #   ----------------------------------------
     #   |   🛰️🛰️🛰️      ISS (ZARYA)             |
     #   |   🛰️🛰️🛰️   current lat  lon           |
@@ -593,15 +595,13 @@ def display_iss_info(epd, iss_info, satellite_name="ISS (ZARYA)"):
     font_paths = get_font_paths()
     font_medium = ImageFont.truetype(font_paths['dejavu_bold'], 12)
     font_large = ImageFont.truetype(font_paths['dejavu_bold'], 16)
-    emoji_font = ImageFont.truetype(font_paths['emoji'], 50)
-
-    emoji_bbox = emoji_font.getbbox("🛰️")
-    emoji_height = emoji_bbox[3] - emoji_bbox[1]
-    # Draw satellite emoji on the left
-    draw.text((5, height//2 - emoji_height//2-10), "🛰️", font=emoji_font, fill= "black")
+    # Draw a bundled SVG so minimal render servers need no emoji font.
+    satellite_icon = load_svg_icon(ICONS_DIR / "satellite.svg", (56, 56), epd)
+    if satellite_icon is not None:
+        Himage.paste(satellite_icon, (5, height//2 - 28))
 
     # Draw ISS information on the right
-    text_start_x = 70  # Position text to right of emoji
+    text_start_x = 70  # Position text to right of icon
     line_height = 18    # Space between lines
     
     # Line 1: ISS Name

@@ -11,6 +11,7 @@ setup(
     version=version_namespace["__version__"],
     python_requires=">=3.11",
     packages=find_packages(),
+    package_data={"weather": ["icons/*.svg", "icons/LICENSE.txt"]},
     py_modules=[
         "dithering",
         "font_utils",

@@ -63,3 +63,13 @@ jobs:
       - name: Run setup browser and geocoding tests
         if: matrix.python == '3.12'
         run: npm test
+      - name: Keep browser test dependencies out of server builds
+        if: matrix.python == '3.12'
+        run: |
+          docker build --network=none --file - \
+            --output "type=local,dest=$RUNNER_TEMP/display-context" . <<'DOCKERFILE'
+          FROM scratch
+          COPY . /app/
+          DOCKERFILE
+          test -f "$RUNNER_TEMP/display-context/app/display_server.py"
+          test ! -e "$RUNNER_TEMP/display-context/app/node_modules"

@@ -110,6 +110,8 @@ Some features require API keys. [See what's available with and without API keys 
 - [OpenWeatherMap](https://openweathermap.org/appid) - for weather data
 - [AeroAPI](https://www.flightaware.com/commercial/aeroapi) - for enhanced flight data
 
+Flight positions come from the keyless [adsb.lol](https://adsb.lol/) API, with [adsb.fi](https://adsb.fi/) open data as a fallback (personal, non-commercial use).
+
 ## Hardware Cost
 Basic setup (Raspberry Pi Zero 2W + display): **~€60**
 [View detailed hardware guide →](https://bdamokos.github.io/rpi_waiting_time_display/hardware/)

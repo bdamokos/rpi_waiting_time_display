@@ -1,0 +1,10 @@
+{
+  "name": "rpi-waiting-time-display-browser-tests",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/test_nominatim.js tests/test_dom_security.js"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
+  }
+}

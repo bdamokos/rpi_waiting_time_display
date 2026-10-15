@@ -301,13 +301,13 @@ window.findCityCoordinates = async function() {
             document.getElementById('city-verification').innerHTML = `
                 <div class="status-success">
                     Found coordinates for:<br>
-                    ${location.display_name}
+                    ${escapeHtml(location.display_name)}
                 </div>
             `;
         } catch (error) {
             document.getElementById('city-verification').innerHTML = `
                 <div class="status-error">
-                    Could not find coordinates: ${error.message}
+                    Could not find coordinates: ${escapeHtml(error.message)}
                 </div>
             `;
         }
@@ -349,13 +349,13 @@ window.verifyCoordinates = async function() {
             document.getElementById('coords-verification').innerHTML = `
                 <div class="status-success">
                     These coordinates point to:<br>
-                    ${location.display_name}
+                    ${escapeHtml(location.display_name)}
                 </div>
             `;
         } catch (error) {
             document.getElementById('coords-verification').innerHTML = `
                 <div class="status-error">
-                    Could not verify these coordinates: ${error.message}
+                    Could not verify these coordinates: ${escapeHtml(error.message)}
                 </div>
             `;
         }
@@ -449,14 +449,14 @@ window.handleCoordinateChange = debounce(async function() {
             verificationDiv.innerHTML = `
                 <div class="status-success">
                     These coordinates correspond to:<br>
-                    ${location.display_name}
+                    ${escapeHtml(location.display_name)}
                 </div>
             `;
             await crossVerifyInputs();
         } catch (error) {
             verificationDiv.innerHTML = `
                 <div class="status-error">
-                    Could not verify these coordinates: ${error.message}
+                    Could not verify these coordinates: ${escapeHtml(error.message)}
                 </div>
             `;
         }
@@ -478,14 +478,14 @@ window.handleCityCountryChange = debounce(async function() {
             verificationDiv.innerHTML = `
                 <div class="status-success">
                     Found location at:<br>
-                    ${location.display_name}
+                    ${escapeHtml(location.display_name)}
                 </div>
             `;
             await crossVerifyInputs();
         } catch (error) {
             verificationDiv.innerHTML = `
                 <div class="status-error">
-                    Could not verify this location: ${error.message}
+                    Could not verify this location: ${escapeHtml(error.message)}
                 </div>
             `;
         }
@@ -521,18 +521,18 @@ async function crossVerifyInputs() {
                 crossVerificationDiv.innerHTML = `
                     <div class="status-warning">
                         ⚠️ Location Mismatch Details:<br>
-                        • Coordinates point to: ${result.details.fromCoords.display_name}<br>
-                        • City/Country resolves to coordinates: (${result.details.fromCity.lat}, ${result.details.fromCity.lon})<br>
+                        • Coordinates point to: ${escapeHtml(result.details.fromCoords.display_name)}<br>
+                        • City/Country resolves to coordinates: (${escapeHtml(result.details.fromCity.lat)}, ${escapeHtml(result.details.fromCity.lon)})<br>
                         • Distance between points: ${distance} km<br>
-                        • City match: ${cityMatch} ${result.details.fromCoords.city || 'Unknown'} vs ${city}<br>
-                        • Country match: ${countryMatch} ${result.details.fromCoords.country_code || 'Unknown'} vs ${country}
+                        • City match: ${cityMatch} ${escapeHtml(result.details.fromCoords.city || 'Unknown')} vs ${escapeHtml(city)}<br>
+                        • Country match: ${countryMatch} ${escapeHtml(result.details.fromCoords.country_code || 'Unknown')} vs ${escapeHtml(country)}
                     </div>
                 `;
             }
         } catch (error) {
             crossVerificationDiv.innerHTML = `
                 <div class="status-error">
-                    Could not cross-verify locations: ${error.message}
+                    Could not cross-verify locations: ${escapeHtml(error.message)}
                 </div>
             `;
         }
@@ -595,7 +595,7 @@ window.getCurrentLocation = function() {
                     document.getElementById('coords-verification').innerHTML = `
                         <div class="status-success">
                             These coordinates point to:<br>
-                            ${location.display_name}
+                            ${escapeHtml(location.display_name)}
                         </div>
                     `;
                 }
@@ -604,7 +604,7 @@ window.getCurrentLocation = function() {
                 if (document.getElementById('coords-verification')) {
                     document.getElementById('coords-verification').innerHTML = `
                         <div class="status-error">
-                            Could not verify these coordinates: ${error.message}
+                            Could not verify these coordinates: ${escapeHtml(error.message)}
                         </div>
                     `;
                 }

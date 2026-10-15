@@ -146,7 +146,7 @@
                         <div class="input-group">
                             <label>URL:</label>
                             <input type="url" id="url" placeholder="Product page URL">
-                            <button type="button" class="button" onclick="window.open(document.getElementById('url').value, '_blank')" style="width: auto; margin-top: 5px;">
+                            <button type="button" class="button" onclick="testDisplayUrl()" style="width: auto; margin-top: 5px;">
                                 Test URL
                             </button>
                         </div>
@@ -171,8 +171,14 @@
         </div>
     </div>
 
+    <script src="../setup/js/safe_dom.js"></script>
     <script>
         let currentData = null;
+
+        function testDisplayUrl() {
+            const url = safeUrl(document.getElementById('url').value);
+            if (url) window.open(url, '_blank', 'noopener');
+        }
 
         // Load the current database
         fetch('../data/displays.json')
@@ -187,28 +193,28 @@
             .catch(error => {
                 console.error('Error loading database:', error);
                 document.getElementById('validationMessage').innerHTML = 
-                    `<div class="error">Error loading database: ${error.message}</div>`;
+                    `<div class="error">Error loading database: ${escapeHtml(error.message)}</div>`;
             });
 
         function populateFormSelections(data) {
             // Populate manufacturers
             const manufacturerSelect = document.getElementById('manufacturer');
             manufacturerSelect.innerHTML = data.categories.manufacturers.map(m => 
-                `<option value="${m}">${m}</option>`
+                `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`
             ).join('');
 
             // Populate sizes
             const sizeSelect = document.getElementById('size');
             sizeSelect.innerHTML = data.categories.sizes.map(s => 
-                `<option value="${s}">${s}"</option>`
+                `<option value="${escapeHtml(s)}">${escapeHtml(s)}"</option>`
             ).join('');
 
             // Populate colors
             const colorsDiv = document.getElementById('colors');
             colorsDiv.innerHTML = data.categories.colors.map(c => `
                 <label>
-                    <input type="checkbox" value="${c}">
-                    ${c}
+                    <input type="checkbox" value="${escapeHtml(c)}">
+                    ${escapeHtml(c)}
                 </label>
             `).join('');
         }
@@ -260,12 +266,12 @@
             const imageUrls = e.target.value.split(',').map(s => s.trim()).filter(s => s);
             const previewDiv = document.getElementById('imagePreview');
             previewDiv.innerHTML = imageUrls.map(url => {
-                const imgSrc = url.match(/^(https?:)?\/\//) ? url : `/${url}`;
+                const imgSrc = safeUrl(url.match(/^(https?:)?\/\//) ? url : `/${url}`);
                 return `
                     <div style="margin: 5px 0;">
-                        <img src="${imgSrc}" alt="Preview" style="max-width: 200px; max-height: 100px; object-fit: contain;">
+                        <img src="${escapeHtml(imgSrc)}" alt="Preview" style="max-width: 200px; max-height: 100px; object-fit: contain;">
                         <br>
-                        <a href="${imgSrc}" target="_blank" style="font-size: 12px;">Test image link</a>
+                        <a href="${escapeHtml(imgSrc)}" target="_blank" style="font-size: 12px;">Test image link</a>
                     </div>
                 `;
             }).join('');
@@ -282,7 +288,7 @@
                 updatePreview(json);
                 populateFormSelections(json);
             } catch (error) {
-                validationMessage.innerHTML = `<div class="error">Invalid JSON: ${error.message}</div>`;
+                validationMessage.innerHTML = `<div class="error">Invalid JSON: ${escapeHtml(error.message)}</div>`;
             }
         }
 
@@ -293,7 +299,7 @@
                 editor.value = JSON.stringify(json, null, 4);
                 validationMessage.innerHTML = '<div class="success">JSON formatted ✓</div>';
             } catch (error) {
-                validationMessage.innerHTML = `<div class="error">Invalid JSON: ${error.message}</div>`;
+                validationMessage.innerHTML = `<div class="error">Invalid JSON: ${escapeHtml(error.message)}</div>`;
             }
         }
 
@@ -311,7 +317,7 @@
                 URL.revokeObjectURL(url);
             } catch (error) {
                 document.getElementById('validationMessage').innerHTML = 
-                    `<div class="error">Invalid JSON: ${error.message}</div>`;
+                    `<div class="error">Invalid JSON: ${escapeHtml(error.message)}</div>`;
             }
         }
 
@@ -325,7 +331,7 @@
                 <h3>Categories</h3>
                 <ul>
                     ${Object.entries(data.categories).map(([key, values]) => `
-                        <li><strong>${key}:</strong> ${values.join(', ')}</li>
+                        <li><strong>${escapeHtml(key)}:</strong> ${escapeHtml(values.join(', '))}</li>
                     `).join('')}
                 </ul>
             `;
@@ -337,26 +343,26 @@
                 <h3>Displays (${data.displays.length})</h3>
                 ${data.displays.map(display => `
                     <div class="display-card">
-                        <h4>${display.name}</h4>
-                        <p><strong>ID:</strong> ${display.id}</p>
-                        <p><strong>Driver:</strong> ${display.driver}</p>
-                        <p><strong>Manufacturer:</strong> ${display.manufacturer}</p>
-                        <p><strong>Size:</strong> ${display.size}"</p>
-                        <p><strong>Resolution:</strong> ${display.resolution.width}x${display.resolution.height}</p>
-                        <p><strong>Colors:</strong> ${display.colors.join(', ')}</p>
-                        <p><strong>Features:</strong> ${Object.entries(display.features)
+                        <h4>${escapeHtml(display.name)}</h4>
+                        <p><strong>ID:</strong> ${escapeHtml(display.id)}</p>
+                        <p><strong>Driver:</strong> ${escapeHtml(display.driver)}</p>
+                        <p><strong>Manufacturer:</strong> ${escapeHtml(display.manufacturer)}</p>
+                        <p><strong>Size:</strong> ${escapeHtml(display.size)}"</p>
+                        <p><strong>Resolution:</strong> ${escapeHtml(display.resolution.width)}x${escapeHtml(display.resolution.height)}</p>
+                        <p><strong>Colors:</strong> ${escapeHtml(display.colors.join(', '))}</p>
+                        <p><strong>Features:</strong> ${escapeHtml(Object.entries(display.features)
                             .filter(([_, value]) => value)
                             .map(([key, _]) => key.replace('_', ' '))
-                            .join(', ')}</p>
-                        <p><strong>URL:</strong> <a href="${display.url}" target="_blank">${display.url}</a></p>
-                        ${display.notes ? `<p><strong>Notes:</strong> ${display.notes}</p>` : ''}
+                            .join(', '))}</p>
+                        <p><strong>URL:</strong> <a href="${escapeHtml(safeUrl(display.url))}" target="_blank">${escapeHtml(display.url)}</a></p>
+                        ${display.notes ? `<p><strong>Notes:</strong> ${escapeHtml(display.notes)}</p>` : ''}
                         ${display.images.map(img => {
-                            const imgSrc = img.match(/^(https?:)?\/\//) ? img : `/${img}`;
+                            const imgSrc = safeUrl(img.match(/^(https?:)?\/\//) ? img : `/${img}`);
                             return `
                                 <div style="margin: 5px 0;">
-                                    <img src="${imgSrc}" alt="Display image" style="max-width: 200px; max-height: 150px; object-fit: contain;">
+                                    <img src="${escapeHtml(imgSrc)}" alt="Display image" style="max-width: 200px; max-height: 150px; object-fit: contain;">
                                     <br>
-                                    <a href="${imgSrc}" target="_blank" style="font-size: 12px;">View full image</a>
+                                    <a href="${escapeHtml(imgSrc)}" target="_blank" style="font-size: 12px;">View full image</a>
                                 </div>
                             `;
                         }).join('')}
@@ -395,13 +401,13 @@
                 const result = await response.json();
                 if (result.status === 'success') {
                     document.getElementById('validationMessage').innerHTML = 
-                        `<div class="success">${result.message || 'Database saved successfully'} ✓</div>`;
+                        `<div class="success">${escapeHtml(result.message || 'Database saved successfully')} ✓</div>`;
                 } else {
                     throw new Error(result.message || 'Failed to save database');
                 }
             } catch (error) {
                 document.getElementById('validationMessage').innerHTML = 
-                    `<div class="error">Failed to save database: ${error.message}</div>`;
+                    `<div class="error">Failed to save database: ${escapeHtml(error.message)}</div>`;
             }
         }
     </script>

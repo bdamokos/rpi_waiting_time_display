@@ -1,6 +1,7 @@
 .git
 .github
 .venv
+node_modules/
 __pycache__
 .pytest_cache
 htmlcov

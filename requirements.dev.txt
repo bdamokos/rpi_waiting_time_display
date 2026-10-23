@@ -1,12 +1,12 @@
 #As certain packages don't seem to work, these ones should be available in a dev environment on a Mac
-certifi>=2026.7.22
+certifi>=2026.10.19
 defusedxml>=0.7.1
 charset-normalizer>=3.5.2
 colorzero>=2.0
 gpiozero>=2.0.1
 idna>=3.20
 # lgpio==0.2.2.0
-pillow>=12.3.0
+pillow>=13.0.0
 python-dotenv>=1.2.4
 requests>=2.34.2
 websocket-client>=1.8.0

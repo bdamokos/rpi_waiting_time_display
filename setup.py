@@ -25,12 +25,13 @@ setup(
         "version",
     ],
     install_requires=[
+        "certifi>=2026.10.19",
         "requests>=2.34.2",
         "urllib3>=2.8.0",
         "pydantic>=2.5.0",
         "python-dotenv>=1.2.4",
         "cairosvg>=2.9.1",
         "defusedxml>=0.7.1",
-        "Pillow>=12.3.0",
+        "Pillow>=13.0.0",
     ],
 )
